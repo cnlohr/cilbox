@@ -1,2 +1,3 @@
-# cil-cs-emu
-CIL emulator wirtten in C &amp; C#
+# cilly
+
+CIL emulator wirtten in C#
