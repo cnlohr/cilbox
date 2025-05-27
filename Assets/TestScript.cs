@@ -11,7 +11,7 @@ public class TestScript : MonoBehaviour
 	TestScript() { Debug.Log( "XXX TestScript .ctor()" ); framenoPrivate = 10; }
     void Start(){ framenoPublic++; framenoPrivate+=2; Debug.Log( $"XXX TestScript Start() {framenoPublic} {framenoPrivate}" ); }
     void Awake(){ Debug.Log( "XXX TestScript Awake()" ); }
-    void Update() { /*Debug.Log( "XXX TestScript Update()" );*/ }
+    void Update() { /*Debug.Log( "XXX TestScript Update()" );*/ framenoPrivate = 123456; }
     public void PublicFunction() { Debug.Log( "Public Function" ); }
     public void PublicStaticFunction() { Debug.Log( "Public Staic Function" ); }
     private void PrivateStaticFunction() { Debug.Log( "Private Static Function" ); }

@@ -1,6 +1,8 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System;
+using System.Collections.Specialized;
+using System.Collections;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -18,68 +20,292 @@ namespace Cilbox
 		public String stringData;
 	}
 
+	public class CilboxMethod
+	{
+		public void Load( CilboxClass cclass, String name, String payload )
+		{
+			methodName = name;
+			parentClass = cclass;
+			OrderedDictionary methodProps = CilboxUtil.DeserializeDict( payload );
+
+			var vl = CilboxUtil.DeserializeDict( (String)methodProps["locals"] );
+			methodLocals = new String[vl.Count];
+			methodLocalTypes = new String[vl.Count];
+			int iid = 0;
+			foreach( DictionaryEntry ln in vl )
+			{
+				methodLocals[iid] = (String)ln.Key;
+				methodLocalTypes[iid] = (String)ln.Key;
+			}
+
+			var pl = (String)methodProps["body"];
+			int bl = pl.Length/2;
+			byteCode = new byte[bl];
+
+			//Debug.Log( methodName + " " + pl );
+			for( int i = 0; i < bl; i++ )
+			{
+				int v = CilboxUtil.IntFromHexChar( pl[i*2+0] );
+				if( v < 0 ) break;
+				byte b = (byte)v;
+				v = CilboxUtil.IntFromHexChar( pl[i*2+1] );
+				if( v < 0 ) break;
+				b = (byte)(v | (b<<4));
+				byteCode[i] = b;
+			}
+
+			MaxStackSize = Convert.ToInt32(((String)methodProps["maxStack"]));
+			isStatic = Convert.ToInt32(((String)methodProps["isStatic"])) != 0;
+		}
+		public void Breakwarn( String message, int bytecodeplace )
+		{
+			// TODO: Add debugging info.
+			Debug.Log( $"Breakwarn: {message} Class: {parentClass.className}, Function: {methodName}, Bytecode: {bytecodeplace}" );
+		}
+
+		public object Interpret( CilboxProxy ths, object [] parametersIn )
+		{
+			if( byteCode == null || byteCode.Length == 0 || disabled ) return null;
+	
+			// Do the magic.
+
+			int i;
+
+			i = 0;
+			String stbc = "";
+			for( i = 0; i < byteCode.Length; i++ )
+				stbc += byteCode[i].ToString("X2") + " ";
+			Debug.Log( "VALS:" + stbc + " MAX: " + MaxStackSize );
+
+			Debug.Log( ths.fields );
+
+// Start 02/02/7b01000004/17/58/7d0100000402027b0200000418587d02000004722f000070027b01000004//8c1f000001027b020000048c1f000001280c00000a280b00000a2a
+
+
+			object [] stack = new object[MaxStackSize+512/*XXX TODO WHY*/];
+			object [] localVars = new object[methodLocals.Length];
+			int sp = 0;
+
+			object [] parameters;
+			if( isStatic )
+				parameters = parametersIn;
+			else
+			{
+				int plen = 0;
+				if( parametersIn != null ) plen = parametersIn.Length;
+				parameters = new object[plen+1];
+				parameters[0] = ths;
+			}
+
+			bool cont = true;
+			int ctr = 0;
+			i = 0;
+			try
+			{
+				do
+				{
+					byte b = byteCode[i++];
+					String stackSt = "";
+					for( int sk = 0; sk < stack.Length; sk++ )
+					{
+						if( stack[sk] != null )
+							stackSt += "/" + stack[sk].ToString();
+						else
+							stackSt += "/null";
+					}
+					Debug.Log( "Bytecode " + b.ToString("X2") + " @ " + (i-1) + " " + stackSt);
+
+					switch( b )
+					{
+					case 0x00: break; // nop
+					case 0x01: cont = false; Breakwarn( "Debug Break", i ); break; // break
+					case 0x02: stack[sp++] = parameters[0]; break; //ldarg.0
+					case 0x03: stack[sp++] = parameters[1]; break; //ldarg.1
+					case 0x04: stack[sp++] = parameters[2]; break; //ldarg.2
+					case 0x05: stack[sp++] = parameters[3]; break; //ldarg.3
+					case 0x06: stack[sp++] = localVars[0]; break; //ldloc.0
+					case 0x07: stack[sp++] = localVars[1]; break; //ldloc.1
+					case 0x08: stack[sp++] = localVars[2]; break; //ldloc.2
+					case 0x09: stack[sp++] = localVars[3]; break; //ldloc.3
+					case 0x0a: localVars[0] = stack[--sp]; break; //stloc.0
+					case 0x0b: localVars[1] = stack[--sp]; break; //stloc.1
+					case 0x0c: localVars[2] = stack[--sp]; break; //stloc.2
+					case 0x0d: localVars[3] = stack[--sp]; break; //stloc.3
+					//case 0x0e: stack[sp++] = parameters[byteCode[i++]]; break; //ldarg.0
+					//case 0x0e: stack[sp++] = parameters[byteCode[i++]]; break; //ldarg.0
+					// Some more...
+					case 0x14: stack[sp++] = null; break; // ldnull
+					case 0x15: stack[sp++] = (Int32)(-1); break; // ldc.i4.m1
+					case 0x16: stack[sp++] = (Int32)(0); break; // ldc.i4.0
+					case 0x17: stack[sp++] = (Int32)(1); break; // ldc.i4.1
+					case 0x18: stack[sp++] = (Int32)(2); break; // ldc.i4.2
+					case 0x19: stack[sp++] = (Int32)(3); break; // ldc.i4.3
+					case 0x1a: stack[sp++] = (Int32)(4); break; // ldc.i4.4
+					case 0x1b: stack[sp++] = (Int32)(5); break; // ldc.i4.5
+					case 0x1c: stack[sp++] = (Int32)(6); break; // ldc.i4.6
+					case 0x1d: stack[sp++] = (Int32)(7); break; // ldc.i4.7
+					case 0x1e: stack[sp++] = (Int32)(8); break; // ldc.i4.8
+
+					case 0x1f: stack[sp++] = parameters[byteCode[i++]]; break; // ldc.i4.s <int8>
+					case 0x20: stack[sp++] = BytecodeAs32( ref i ); break; // ldc.i4.s <int8>
+					case 0x28: 
+					{
+						// Call
+						int bc = BytecodeAs32( ref i );
+						MethodBase st = typeof(TestScript).Module.ResolveMethod(bc);
+						ParameterInfo [] pa = st.GetParameters();
+						//MethodInfo mi = (MethodInfo)st;
+						int numFields = pa.Length;
+						object callthis = null;
+						object [] callpar = new object[numFields];
+						int ik;
+						for( ik = 0; ik < numFields; ik++ )
+						{
+							callpar[numFields-ik-1] = stack[--sp];
+							Debug.Log( "VAL:" + callpar[ik] );
+						}
+						if( !st.IsStatic )
+							callthis = stack[--sp];
+						Debug.Log( " " + ((st.IsStatic)?"STATIC":"INSTANCE") + " / " + st.Name + " / " + callthis + " / fields=" + numFields );
+						stack[sp++] = st.Invoke( callthis, callpar );
+						break;
+					}
+					case 0x2a: cont = false; break; // ret
+
+					case 0x58: stack[sp-2] = (Int32)stack[sp-1] + (Int32)stack[sp-2]; sp--; break; //add
+
+					case 0x72:
+					{
+						// This is wrong.  We need to pull strings out in advance.
+						int bc = BytecodeAs32( ref i );
+						String st = typeof(TestScript).Module.ResolveString(bc);
+						stack[sp++] = st;
+						Debug.Log( "STRING: " + st + " from " + bc.ToString("X8") );
+						break; //ldfld
+					}
+						
+
+					case 0x7b: 
+					{
+						--sp; // Should be "This" XXX WRONG
+						int mi;
+						int bc = BytecodeAs32( ref i );
+						if( !parentClass.instanceMetadataIdToFieldID.TryGetValue( bc, out mi ) )
+							Breakwarn( $"Could not get field ID {bc} from metadata.", i );
+						stack[sp++] = ths.fields[mi];
+						break; //ldfld
+					}
+					case 0x7d:
+					{
+						//--sp; // Should be "This" XXX WRONG
+						int mi;
+						int bc = BytecodeAs32( ref i );
+						if( !parentClass.instanceMetadataIdToFieldID.TryGetValue( bc, out mi ) )
+							Breakwarn( $"Could not get field ID {bc} from metadata.", i );
+						ths.fields[mi] = stack[--sp];
+						break; //stfld
+					}
+
+					case 0x8C: BytecodeAs32( ref i ); break; // box (This pulls off a type, but I think everything is boxed, so no big deal)
+
+					default: Breakwarn( $"Opcode {b} unimplemented", i ); disabled = true; cont = false; break;
+
+					}
+					//Update 022040e201007d020000042a
+
+					ctr++;
+					if( ctr > 10000 )
+					{
+						Breakwarn( "Infinite Loop", i );
+						disabled = true;
+						break;
+					}
+				}
+				while( cont );
+			}
+			catch( Exception e )
+			{
+				disabled = true;
+				Breakwarn( e.ToString(), i );
+			}
+
+			return null;
+		}
+
+		int BytecodeAs32( ref int i )
+		{
+			int ret = byteCode[i] |
+				(byteCode[i+1]<<8) |
+				(byteCode[i+2]<<16) |
+				(byteCode[i+3]<<24);
+			i+=4;
+			return ret;
+		}
+
+		public bool disabled;
+		public CilboxClass parentClass;
+		public int MaxStackSize;
+		public String methodName;
+		public String[] methodLocals;
+		public String[] methodLocalTypes;
+		public byte[] byteCode;
+		public bool isStatic;
+	}
+
 	public class CilboxClass
 	{
 		public CilboxClass( String className, String classData )
 		{
 			this.className = className;
-			Dictionary< String, String > classProps = CilboxUtil.DeserializeDict( classData );
+			OrderedDictionary classProps = CilboxUtil.DeserializeDict( classData );
 			metadatas = new Dictionary< String, int >();
-			foreach( var k in CilboxUtil.DeserializeDict( classProps["metadatas"] ) )
+			foreach( DictionaryEntry k in CilboxUtil.DeserializeDict( (String)classProps["metadatas"] ) )
 			{
-				metadatas[k.Key] = Convert.ToInt32( k.Value );
+				metadatas[(String)k.Key] = Convert.ToInt32( (String)k.Value );
 			}
 
 			int id = 0;
-			Dictionary< String, String > staticFields = CilboxUtil.DeserializeDict( classProps["staticFields"] );
+			OrderedDictionary staticFields = CilboxUtil.DeserializeDict( (String)classProps["staticFields"] );
 			int sfnum = staticFields.Count;
 			staticObjects = new object[sfnum];
 			staticFieldNames = new String[sfnum];
 			staticFieldTypes = new Type[sfnum];
 			staticFieldIDs = new int[sfnum];
-			foreach( var k in staticFields )
+			foreach( DictionaryEntry k in staticFields )
 			{
-				staticFieldNames[id] = k.Key;
-				staticFieldTypes[id] = Type.GetType( k.Value );
-				staticFieldIDs[id] = metadatas[k.Key];
+				staticFieldNames[id] = (String)k.Key;
+				Type t = staticFieldTypes[id] = Type.GetType( (String)k.Value );
+				staticFieldIDs[id] = metadatas[(String)k.Key];
+				staticObjects[id] = CilboxUtil.FillPossibleSystemType( t );
 				id++;
 			}
 
-			Dictionary< String, String > instanceFields = CilboxUtil.DeserializeDict( classProps["instanceFields"] );
+			OrderedDictionary instanceFields = CilboxUtil.DeserializeDict( (String)classProps["instanceFields"] );
 			int ifnum = instanceFields.Count;
 			instanceFieldNames = new String[ifnum];
 			instanceFieldTypes = new Type[ifnum];
-			staticFieldIDs = new int[ifnum];
+			instanceFieldIDs = new int[ifnum];
+			instanceMetadataIdToFieldID = new Dictionary< int, int >();
 			id = 0;
-			foreach( var k in instanceFields )
+			foreach( DictionaryEntry k in instanceFields )
 			{
-				instanceFieldNames[id] = k.Key;
-				instanceFieldTypes[id] = Type.GetType( k.Value );
-				staticFieldIDs[id] = metadatas[k.Key];
+				instanceFieldNames[id] = (String)k.Key;
+				instanceFieldTypes[id] = Type.GetType( (String)k.Value );
+				instanceFieldIDs[id] = metadatas[(String)k.Key];
+				instanceMetadataIdToFieldID[metadatas[(String)k.Key]] = id;
 				id++;
 			}
 
 			id = 0;
-			Dictionary< String, String > methods = CilboxUtil.DeserializeDict( classProps["methods"] );
-			int mnum = methods.Count;
+			OrderedDictionary deserMethods = CilboxUtil.DeserializeDict( (String)classProps["methods"] );
+			int mnum = deserMethods.Count;
+			methods = new CilboxMethod[mnum];
 			methodNameToIndex = new Dictionary< String, int >();
-			methodNames = new String[mnum];
-			methodData = new byte[mnum][];
-			foreach( var k in methods )
+			foreach( DictionaryEntry k in deserMethods )
 			{
-				methodNames[id] = k.Key;
-				int bl = k.Value.Length/2;
-				methodData[id] = new byte[bl];
-				for( int i = 0; i < bl; i++ )
-				{
-					int v = CilboxUtil.IntFromHexChar( k.Value[i*2+0] );
-					if( v < 0 ) break;
-					byte b = (byte)v;
-					v = CilboxUtil.IntFromHexChar( k.Value[i*2+0] );
-					if( v < 0 ) break;
-					methodData[id][i] = (byte)(v | (b<<4));
-				}
-				methodNameToIndex[k.Key] = id;
+				methods[id] = new CilboxMethod();
+				methods[id].Load( this, (String)k.Key, (String)k.Value );
+				methodNameToIndex[(String)k.Key] = id;
 				id++;
 			}
 
@@ -95,7 +321,7 @@ namespace Cilbox
 			// Go back and fixup the first.
 			methodNameToIndex.TryGetValue( ".ctor", out importFunctionToId[(int)ImportFunctionID.dotCtor] );
 			
-			Debug.Log( classProps["metadatas"] );
+			//Debug.Log( classProps["metadatas"] );
 		}
 
 		public String className;
@@ -108,14 +334,15 @@ namespace Cilbox
 		public String[] instanceFieldNames;
 		public Type[] instanceFieldTypes;
 		public int[] instanceFieldIDs;
+		public Dictionary< int, int > instanceMetadataIdToFieldID;
 
 		// Conversion from name to metadata id.
 		public Dictionary< String, int > metadatas;
-
 		public Dictionary< String, int > methodNameToIndex;
-		public String[] methodNames;
-		public byte[][] methodData;
-		public int[]    importFunctionToId; // from ImportFunctionID
+
+		public CilboxMethod [] methods;
+
+		public int [] importFunctionToId; // from ImportFunctionID
 	}
 
 	public static class Cilbox
@@ -135,11 +362,11 @@ namespace Cilbox
 				return;
 			}
 
-			Dictionary< String, String> classData = CilboxUtil.DeserializeDict( se[0].stringData );
+			OrderedDictionary classData = CilboxUtil.DeserializeDict( se[0].stringData );
 
-			foreach( var v in classData )
+			foreach( DictionaryEntry v in classData )
 			{
-				classes[v.Key] = new CilboxClass( v.Key, v.Value );
+				classes[(String)v.Key] = new CilboxClass( (String)v.Key, (String)v.Value );
 			}
 		}
 
@@ -151,22 +378,12 @@ namespace Cilbox
 			return null;
 		}
 
-		public static object Interpret( CilboxClass cls, object ths, ImportFunctionID iid, object [] parameters )
+		public static object InterpretIID( CilboxClass cls, CilboxProxy ths, ImportFunctionID iid, object [] parameters )
 		{
 			if( cls == null ) return null;
-
 			int index = cls.importFunctionToId[(int)iid];
-
 			if( index < 0 ) return null;
-
-			byte [] bytecode = cls.methodData[index];
-
-			if( bytecode == null || bytecode.Length == 0 ) return null;
-
-			Debug.Log( bytecode );
-			// Do the magic.
-
-			return null;
+			return cls.methods[index].Interpret( ths, parameters );
 		}
 	}
 
@@ -179,20 +396,20 @@ namespace Cilbox
 
 			Assembly mscorlib = typeof(CilboxProxy).Assembly;
 
-			Dictionary < String, String > classes = new Dictionary< String, String >();
+			OrderedDictionary classes = new OrderedDictionary();
 			foreach (Type type in mscorlib.GetTypes())
 			{
 				if( type.GetCustomAttributes(typeof(CilboxableAttribute), true).Length <= 0 )
 					continue;
 
-				Dictionary < String, String > metadatas = new Dictionary< String, String> ();
+				OrderedDictionary metadatas = new OrderedDictionary();
 
-				Dictionary < String, String > methods = new Dictionary< String, String> ();
-				MethodInfo[] me = type.GetMethods( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance );
+				OrderedDictionary methods = new OrderedDictionary();
+				MethodInfo[] me = type.GetMethods( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
 				foreach( var m in me )
 				{
 					String methodName = m.Name;
-					Dictionary< String, String > MethodProps = new Dictionary< String, String >();
+					OrderedDictionary MethodProps = new OrderedDictionary();
 
 					MethodBody mb = m.GetMethodBody();
 					if( mb == null )
@@ -202,9 +419,9 @@ namespace Cilbox
 						continue;
 					}
 
-					Dictionary< String, String > localVars = new Dictionary< String, String >();
+					OrderedDictionary localVars = new OrderedDictionary();
 					foreach (LocalVariableInfo lvi in mb.LocalVariables)
-						localVars[lvi.ToString()] = lvi.GetType().ToString();
+						localVars[lvi.ToString()] = lvi.GetType().FullName;
 					MethodProps["locals"] = CilboxUtil.SerializeDict( localVars );
 
 					String byteCode = "";
@@ -215,20 +432,34 @@ namespace Cilbox
 						byteCode += CilboxUtil.HexFromNum( b>>4 ) + CilboxUtil.HexFromNum( b&0xf );
 					}
 					MethodProps["body"] = byteCode;
+
+					ParameterInfo [] parameters = m.GetParameters();
+
+					OrderedDictionary argVars = new OrderedDictionary();
+					foreach (ParameterInfo p in parameters)
+					{
+						argVars[p.Name] = p.ParameterType.ToString();
+					}
+					MethodProps["parameters"] = CilboxUtil.SerializeDict( argVars );
+
+					//Debug.Log( "STACKSIZE" + m.Name + " / " + mb.MaxStackSize + " / " + byteCode );
+					MethodProps["maxStack"] = mb.MaxStackSize.ToString();
+					MethodProps["isStatic"] = m.IsStatic ? "1" : "0";
+
 					metadatas[methodName] = m.MetadataToken.ToString(); // There's also MethodHandle
 					methods[methodName] = CilboxUtil.SerializeDict( MethodProps );
 				}
 
-				Dictionary < String, String > staticFields = new Dictionary< String, String> ();
+				OrderedDictionary staticFields = new OrderedDictionary();
 				FieldInfo[] fi = type.GetFields( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static );
 				foreach( var f in fi )
 				{
-					Debug.Log( $"Found static field {f.Name} of type {f.FieldType.FullName}" );
+					//Debug.Log( $"Found static field {f.Name} of type {f.FieldType.FullName}" );
 					staticFields[f.Name] = f.FieldType.FullName;
 					metadatas[f.Name] = f.MetadataToken.ToString();
 				}
 
-				Dictionary < String, String > instanceFields = new Dictionary< String, String> ();
+				OrderedDictionary instanceFields = new OrderedDictionary();
 				fi = type.GetFields( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance );
 				foreach( var f in fi )
 				{
@@ -237,7 +468,7 @@ namespace Cilbox
 					metadatas[f.Name] = f.MetadataToken.ToString();
 				}
 
-				Dictionary < String, String > classProps = new Dictionary< String, String> ();
+				OrderedDictionary classProps = new OrderedDictionary();
 				classProps["methods"] = CilboxUtil.SerializeDict( methods );
 				classProps["metadatas"] = CilboxUtil.SerializeDict( metadatas );
 				classProps["staticFields"] = CilboxUtil.SerializeDict( staticFields );
@@ -249,16 +480,16 @@ namespace Cilbox
 
 			/* Test
 			Debug.Log( CilboxUtil.SerializeDict( classes ) );
-			Dictionary< String, String > classTest = CilboxUtil.DeserializeDict( sAllClassData );
-			foreach( var v in classTest )
+			OrderedDictionary classTest = CilboxUtil.DeserializeDict( sAllClassData );
+			foreach( DictionaryEntry v in classTest )
 			{
 				Debug.Log( "CLASS" + v.Key + "=" + v.Value );
-				Dictionary< String, String > testClassProps = CilboxUtil.DeserializeDict( v.Value );
-				foreach( var ve in testClassProps )
+				OrderedDictionary testClassProps = CilboxUtil.DeserializeDict( v.Value );
+				foreach( DictionaryEntry ve in testClassProps )
 				{
 					Debug.Log( "PROPS" + ve.Key + "=" + ve.Value );
-					Dictionary< String, String > testClassPropsMethods = CilboxUtil.DeserializeDict( ve.Value );
-					foreach( var vee in testClassPropsMethods )
+					OrderedDictionary testClassPropsMethods = CilboxUtil.DeserializeDict( ve.Value );
+					foreach( DictionaryEntry vee in testClassPropsMethods )
 					{
 						Debug.Log( "METHOD" + vee.Key + "=" + vee.Value );
 					}
@@ -311,6 +542,14 @@ namespace Cilbox
 
 	public static class CilboxUtil
 	{
+		static public object FillPossibleSystemType( Type t )
+		{
+			if( t == typeof(System.Int32) )
+				return new System.Int32();
+			else
+				return null;
+		}
+
 		static public int IntFromHexChar( char c )
 		{
 			if( c >= '0' && c <= '9' )
@@ -405,12 +644,12 @@ namespace Cilbox
 			//Debug.Log( "PAX: " + poserror + " / " + hexmode );
 			return ret;
 		}
-		static public String SerializeDict( Dictionary< String, String > dict )
+		static public String SerializeDict( OrderedDictionary dict )
 		{
 			String ret = "";
-			foreach( var s in dict )
+			foreach( DictionaryEntry s in dict )
 			{
-				ret += "\t" + Escape(s.Key) + "\t" + Escape(s.Value);
+				ret += "\t" + Escape((String)s.Key) + "\t" + Escape((String)s.Value);
 			}
 			return ret + "\n";
 		}
@@ -440,11 +679,11 @@ namespace Cilbox
 			}
 			return ret.ToArray();
 		}*/
-		static public Dictionary < String, String > DeserializeDict( String s )
+		static public OrderedDictionary DeserializeDict( String s )
 		{
 			int poserror = -1;
 			int pos = 0;
-			Dictionary < String, String > ret = new Dictionary< String, String >();
+			OrderedDictionary ret = new OrderedDictionary();
 			int mode = 0;
 			String key = "";
 			poserror = -1;

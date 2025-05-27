@@ -2,6 +2,8 @@ using UnityEngine;
 using System;
 
 #if UNITY_EDITOR
+using System.Collections;
+using System.Collections.Specialized;
 using System.Collections.Generic;
 using System.Reflection;
 #endif
@@ -24,7 +26,7 @@ namespace Cilbox
 			Debug.Log( $"CilboxProxy.ctor() ClassName:{className}" );
 			cls = Cilbox.GetClass( className );
 
-			Dictionary < String, String > instanceFields = new Dictionary< String, String> ();
+			OrderedDictionary instanceFields = new OrderedDictionary();
 			FieldInfo[] fi = mToSteal.GetType().GetFields( BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance );
 			foreach( var f in fi )
 			{
@@ -47,17 +49,22 @@ namespace Cilbox
 			if( string.IsNullOrEmpty( className ) ) return;
 
 			// Populate fields[]
-			if( cls == null )
+			if( fields == null )
 			{
 				cls = Cilbox.GetClass( className );
 				fields = new object[cls.instanceFieldNames.Length];
+				for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
+				{
+					fields[i] = CilboxUtil.FillPossibleSystemType( cls.instanceFieldTypes[i] );
+				}
 			}
 
-			Cilbox.Interpret( cls, this, ImportFunctionID.Awake, null );
+			Cilbox.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
+			Cilbox.InterpretIID( cls, this, ImportFunctionID.Awake, null );
 		}
 
-		void Start()  { if( cls != null ) Cilbox.Interpret( cls, this, ImportFunctionID.Start, null ); }
-		void Update() { if( cls != null ) Cilbox.Interpret( cls, this, ImportFunctionID.Update, null ); }
+		void Start()  { if( cls != null ) Cilbox.InterpretIID( cls, this, ImportFunctionID.Start, null ); }
+		//void Update() { if( cls != null ) Cilbox.InterpretIID( cls, this, ImportFunctionID.Update, null ); }
 	}
 }
 
