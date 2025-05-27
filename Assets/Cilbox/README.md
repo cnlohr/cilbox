@@ -12,5 +12,5 @@ Cilbox has:
  * Support ref.
  * Make mechanism to extract strings as metadata's
  * Make all metadata's patchable.
-
+ * Store type'd ctor / methods
  * The Cilbox should probably be able to exist one per user, instead of static.

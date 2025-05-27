@@ -146,7 +146,7 @@ namespace Cilbox
 					case 0x1d: stack[sp++] = (Int32)(7); break; // ldc.i4.7
 					case 0x1e: stack[sp++] = (Int32)(8); break; // ldc.i4.8
 
-					case 0x1f: stack[sp++] = parameters[byteCode[i++]]; break; // ldc.i4.s <int8>
+					case 0x1f: Debug.Log( "ldc " + byteCode[i] ); stack[sp++] = byteCode[i++]; break; // ldc.i4.s <int8>
 					case 0x20: stack[sp++] = BytecodeAs32( ref i ); break; // ldc.i4.s <int8>
 					case 0x28: 
 					{
@@ -172,7 +172,8 @@ namespace Cilbox
 					}
 					case 0x2a: cont = false; break; // ret
 
-					case 0x58: stack[sp-2] = (Int32)stack[sp-1] + (Int32)stack[sp-2]; sp--; break; //add
+					// XXX This is wrong.  Need to learn how to unbox correctly.
+					case 0x58: Debug.Log( "Add: " + sp  ); Debug.Log( stack[sp-1].GetType() + " + " + stack[sp-2].GetType() ); stack[sp-2] = Convert.ToInt32(stack[sp-1]) + Convert.ToInt32(stack[sp-2]); sp--; break; //add
 
 					case 0x72:
 					{
@@ -406,49 +407,58 @@ namespace Cilbox
 				OrderedDictionary metadatas = new OrderedDictionary();
 
 				OrderedDictionary methods = new OrderedDictionary();
-				MethodInfo[] me = type.GetMethods( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
-				foreach( var m in me )
+				int mtyp;
+				for( mtyp = 0; mtyp < 2; mtyp++ )
 				{
-					String methodName = m.Name;
-					OrderedDictionary MethodProps = new OrderedDictionary();
+					MethodBase[] me;
+					if( mtyp == 0 )
+						me = type.GetMethods( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
+					else
+						me = type.GetConstructors( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
 
-					MethodBody mb = m.GetMethodBody();
-					if( mb == null )
+					foreach( var m in me )
 					{
-						//Debug.Log( $"NOTE: {m.Name} does not have a body" );
-						// Things like MemberwiseClone, etc.
-						continue;
+						String methodName = m.Name;
+						OrderedDictionary MethodProps = new OrderedDictionary();
+						Debug.Log( type + " / " + m.Name );
+						MethodBody mb = m.GetMethodBody();
+						if( mb == null )
+						{
+							//Debug.Log( $"NOTE: {m.Name} does not have a body" );
+							// Things like MemberwiseClone, etc.
+							continue;
+						}
+
+						OrderedDictionary localVars = new OrderedDictionary();
+						foreach (LocalVariableInfo lvi in mb.LocalVariables)
+							localVars[lvi.ToString()] = lvi.GetType().FullName;
+						MethodProps["locals"] = CilboxUtil.SerializeDict( localVars );
+
+						String byteCode = "";
+						byte [] ba = mb.GetILAsByteArray();
+						for( int i = 0; i < ba.Length; i++ )
+						{
+							int b = ba[i];
+							byteCode += CilboxUtil.HexFromNum( b>>4 ) + CilboxUtil.HexFromNum( b&0xf );
+						}
+						MethodProps["body"] = byteCode;
+
+						ParameterInfo [] parameters = m.GetParameters();
+
+						OrderedDictionary argVars = new OrderedDictionary();
+						foreach (ParameterInfo p in parameters)
+						{
+							argVars[p.Name] = p.ParameterType.ToString();
+						}
+						MethodProps["parameters"] = CilboxUtil.SerializeDict( argVars );
+
+						//Debug.Log( "STACKSIZE" + m.Name + " / " + mb.MaxStackSize + " / " + byteCode );
+						MethodProps["maxStack"] = mb.MaxStackSize.ToString();
+						MethodProps["isStatic"] = m.IsStatic ? "1" : "0";
+
+						metadatas[methodName] = m.MetadataToken.ToString(); // There's also MethodHandle
+						methods[methodName] = CilboxUtil.SerializeDict( MethodProps );
 					}
-
-					OrderedDictionary localVars = new OrderedDictionary();
-					foreach (LocalVariableInfo lvi in mb.LocalVariables)
-						localVars[lvi.ToString()] = lvi.GetType().FullName;
-					MethodProps["locals"] = CilboxUtil.SerializeDict( localVars );
-
-					String byteCode = "";
-					byte [] ba = mb.GetILAsByteArray();
-					for( int i = 0; i < ba.Length; i++ )
-					{
-						int b = ba[i];
-						byteCode += CilboxUtil.HexFromNum( b>>4 ) + CilboxUtil.HexFromNum( b&0xf );
-					}
-					MethodProps["body"] = byteCode;
-
-					ParameterInfo [] parameters = m.GetParameters();
-
-					OrderedDictionary argVars = new OrderedDictionary();
-					foreach (ParameterInfo p in parameters)
-					{
-						argVars[p.Name] = p.ParameterType.ToString();
-					}
-					MethodProps["parameters"] = CilboxUtil.SerializeDict( argVars );
-
-					//Debug.Log( "STACKSIZE" + m.Name + " / " + mb.MaxStackSize + " / " + byteCode );
-					MethodProps["maxStack"] = mb.MaxStackSize.ToString();
-					MethodProps["isStatic"] = m.IsStatic ? "1" : "0";
-
-					metadatas[methodName] = m.MetadataToken.ToString(); // There's also MethodHandle
-					methods[methodName] = CilboxUtil.SerializeDict( MethodProps );
 				}
 
 				OrderedDictionary staticFields = new OrderedDictionary();
