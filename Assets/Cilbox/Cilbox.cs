@@ -75,14 +75,14 @@ namespace Cilbox
 			String stbc = "";
 			for( i = 0; i < byteCode.Length; i++ )
 				stbc += byteCode[i].ToString("X2") + " ";
-			Debug.Log( "VALS:" + stbc + " MAX: " + MaxStackSize );
+			Debug.Log( "INTERPRETING " + methodName + " VALS:" + stbc + " MAX: " + MaxStackSize );
 
 			Debug.Log( ths.fields );
 
 // Start 02/02/7b01000004/17/58/7d0100000402027b0200000418587d02000004722f000070027b01000004//8c1f000001027b020000048c1f000001280c00000a280b00000a2a
 
 
-			object [] stack = new object[MaxStackSize+512/*XXX TODO WHY*/];
+			object [] stack = new object[MaxStackSize];
 			object [] localVars = new object[methodLocals.Length];
 			int sp = 0;
 
@@ -183,7 +183,6 @@ namespace Cilbox
 						Debug.Log( "STRING: " + st + " from " + bc.ToString("X8") );
 						break; //ldfld
 					}
-						
 
 					case 0x7b: 
 					{
@@ -197,12 +196,12 @@ namespace Cilbox
 					}
 					case 0x7d:
 					{
-						//--sp; // Should be "This" XXX WRONG
 						int mi;
 						int bc = BytecodeAs32( ref i );
 						if( !parentClass.instanceMetadataIdToFieldID.TryGetValue( bc, out mi ) )
 							Breakwarn( $"Could not get field ID {bc} from metadata.", i );
 						ths.fields[mi] = stack[--sp];
+						--sp; // Should be "This" XXX WRONG
 						break; //stfld
 					}
 
@@ -314,13 +313,15 @@ namespace Cilbox
 			for( int i = 0; i < numImportFunctions; i++ )
 			{
 				String fn = Enum.GetName(typeof(ImportFunctionID), i);
+				if( i == 0 ) fn = ".ctor";
+				int idx = 0;
 				importFunctionToId[i] = -1;
-				methodNameToIndex.TryGetValue(fn, out importFunctionToId[i]);
+				if( methodNameToIndex.TryGetValue(fn, out idx ) )
+				{
+					importFunctionToId[i] = idx;
+				}
+				Debug.Log( "MATCHING + " + fn + " : " + i + " " + importFunctionToId[i] );
 			}
-
-			// Go back and fixup the first.
-			methodNameToIndex.TryGetValue( ".ctor", out importFunctionToId[(int)ImportFunctionID.dotCtor] );
-			
 			//Debug.Log( classProps["metadatas"] );
 		}
 

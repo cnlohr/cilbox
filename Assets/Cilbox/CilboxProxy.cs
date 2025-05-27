@@ -39,7 +39,6 @@ namespace Cilbox
 			serializedObjectData = CilboxUtil.SerializeDict( instanceFields );
 			Debug.Log( "Serializing: " + serializedObjectData );
 
-
 			Awake();
 		}
 #endif
@@ -59,8 +58,11 @@ namespace Cilbox
 				}
 			}
 
+			Debug.Log( "Awake -> dotCtor" );
 			Cilbox.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
+			Debug.Log( "Awake -> Awake" );
 			Cilbox.InterpretIID( cls, this, ImportFunctionID.Awake, null );
+			Debug.Log( "Awake Done" );
 		}
 
 		void Start()  { if( cls != null ) Cilbox.InterpretIID( cls, this, ImportFunctionID.Start, null ); }
