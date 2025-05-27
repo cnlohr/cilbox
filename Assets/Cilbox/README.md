@@ -8,9 +8,11 @@ Cilbox has:
 
 ## TODO
  * Use Harmony to prevent execution of original script .ctor and Awake() i.e. near `CilboxScenePostprocessor` https://github.com/MerlinVR/UdonSharp/blob/master/Packages/com.merlin.UdonSharp/Editor/UdonSharpEditorManager.cs#L145
-
  * Support ref.
  * Make mechanism to extract strings as metadata's
  * Make all metadata's patchable.
- * Store type'd ctor / methods
+
+## TODO, more immediate approaches:
  * The Cilbox should probably be able to exist one per user, instead of static.
+ * When exporting, find all METAs and make a dictionary of what they mean.  Potentially replace them with dictionaries of what they mean and/or rewrite them to be sequentially indexed.  Then they can be straight up interpreted.
+ * Hold over the arithmatic by handling promotion to int32.
