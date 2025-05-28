@@ -30,3 +30,4 @@
  * Make all metadata's patchable.
  * Fixup arithmatic functions to do the right thing.
  * Do the rest of the opcodes.
+ * Write a good version of `DeserializeDataForProxyField` that can handle various data types, like Vector3, etc...
