@@ -367,7 +367,7 @@ namespace Cilbox
 			metadatas[0] = "INVALID METADATA";
 			foreach( DictionaryEntry v in metaData )
 			{
-				metadatas[Convert.ToInt32((String)v.Key, 16)] = (String)v.Value;
+				metadatas[Convert.ToInt32((String)v.Key)] = (String)v.Value;
 			}
 			
 
@@ -570,8 +570,11 @@ namespace Cilbox
 					ulong operand = CilboxUtil.BytecodePullLiteral( byteCode, ref i, opLen );
 					bool changeOperand = true;
 					uint mdpos = (uint)mdcount;
+
+					// Check to see if this is a meta that we care about.  Then rewrite in a new identifier.
+					// ResolveField, ResolveMember, ResolveMethod, ResolveSignature, ResolveString, ResolveType
 					if( oc.OperandType == CilboxUtil.OpCodes.OperandType.InlineString )
-						od[(mdcount++).ToString("X6")] = proxyAssembly.ManifestModule.ResolveString( (int)operand );
+						od[(mdcount++).ToString()] = proxyAssembly.ManifestModule.ResolveString( (int)operand );
 					else
 						changeOperand = false;
 
