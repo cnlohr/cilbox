@@ -17,8 +17,7 @@ namespace Cilbox
 {
 	public class CilboxEnvironmentHolder : MonoBehaviour
 	{
-		public String classData;
-		public String stringData;
+		public String assemblyData;
 	}
 
 	public class CilboxMethod
@@ -366,8 +365,9 @@ namespace Cilbox
 				return;
 			}
 
-			OrderedDictionary classData = CilboxUtil.DeserializeDict( se[0].classData );
-			OrderedDictionary stringData = CilboxUtil.DeserializeDict( se[0].stringData );
+			OrderedDictionary assemblyData = CilboxUtil.DeserializeDict( se[0].assemblyData );
+			OrderedDictionary classData = CilboxUtil.DeserializeDict( (String)assemblyData["classes"] );
+			OrderedDictionary stringData = CilboxUtil.DeserializeDict( (String)assemblyData["stringData"] );
 
 			foreach( DictionaryEntry v in classData )
 			{
@@ -513,11 +513,15 @@ namespace Cilbox
 				classes[type.FullName] = CilboxUtil.SerializeDict( classProps );
 			}
 
-			String sAllClassData = CilboxUtil.SerializeDict( classes );
+			OrderedDictionary assemblyData = new OrderedDictionary();
+			assemblyData["classes"] = CilboxUtil.SerializeDict( classes );
+			assemblyData["stringData"] = CilboxUtil.SerializeDict( strings );
+
+			String sAllAssemblyData = CilboxUtil.SerializeDict( assemblyData );
 
 			/* Test
 			Debug.Log( CilboxUtil.SerializeDict( classes ) );
-			OrderedDictionary classTest = CilboxUtil.DeserializeDict( sAllClassData );
+			OrderedDictionary classTest = CilboxUtil.DeserializeDict( sAllAssemblyData );
 			foreach( DictionaryEntry v in classTest )
 			{
 				Debug.Log( "CLASS" + v.Key + "=" + v.Value );
@@ -545,8 +549,7 @@ namespace Cilbox
 				cillyDataObject.hideFlags = HideFlags.HideAndDontSave;
 				tac = cillyDataObject.AddComponent( typeof(CilboxEnvironmentHolder) ) as CilboxEnvironmentHolder;
 			}
-			tac.classData = sAllClassData;
-			tac.stringData = CilboxUtil.SerializeDict( strings );
+			tac.assemblyData = sAllAssemblyData;
 			//cube.transform.position = new Vector3(0.0f, 0.5f, 0.0f);
 
 			// Iterate over all GameObjects, and find the ones that have Cilboxable scripts.
