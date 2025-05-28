@@ -26,11 +26,11 @@
 ## TODO
  * Use Harmony to prevent execution of original script .ctor and Awake() i.e. near `CilboxScenePostprocessor` https://github.com/MerlinVR/UdonSharp/blob/master/Packages/com.merlin.UdonSharp/Editor/UdonSharpEditorManager.cs#L145
  * Support ref.
- * Make mechanism to extract strings as metadata's
- * Make all metadata's patchable.
  * Fixup arithmatic functions to do the right thing.
  * Do the rest of the opcodes.
  * Write a good version of `DeserializeDataForProxyField` that can handle various data types, like Vector3, etc...
  * Make it so you can access fields from the proxy object, like "transform" etc.
  * Make it so you can call other functions within the emulated environment.
  * Add a bunch more opcodes.
+
+ * WRITE LOTS OF TESTS
