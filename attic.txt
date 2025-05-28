@@ -1,0 +1,39 @@
+
+			/* Test
+			Debug.Log( CilboxUtil.SerializeDict( classes ) );
+			OrderedDictionary classTest = CilboxUtil.DeserializeDict( sAllAssemblyData );
+			foreach( DictionaryEntry v in classTest )
+			{
+				Debug.Log( "CLASS" + v.Key + "=" + v.Value );
+				OrderedDictionary testClassProps = CilboxUtil.DeserializeDict( v.Value );
+				foreach( DictionaryEntry ve in testClassProps )
+				{
+					Debug.Log( "PROPS" + ve.Key + "=" + ve.Value );
+					OrderedDictionary testClassPropsMethods = CilboxUtil.DeserializeDict( ve.Value );
+					foreach( DictionaryEntry vee in testClassPropsMethods )
+					{
+						Debug.Log( "METHOD" + vee.Key + "=" + vee.Value );
+					}
+				}
+			} */
+
+
+			/*
+			OrderedDictionary strings = new OrderedDictionary();
+			// 256 ^ 3 - 1 = max value of a 3-byte uint.
+			// start at 1 since 0 is always not found.
+			for (int i = 1; i < (256 * 256 * 256); i++)
+			{
+				try
+				{
+					int tok = 0x70_000000 | i;
+					String str = proxyAssembly.ManifestModule.ResolveString(tok);
+					// Debug.Log("String Found: " + str + " At: " + tok.ToString("X8"));
+					strings[tok.ToString()] = str;
+				}
+				catch (Exception) // end of valid strings
+				{
+					break;
+				}
+			}
+			*/

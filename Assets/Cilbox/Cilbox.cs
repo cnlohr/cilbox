@@ -151,8 +151,8 @@ namespace Cilbox
 					case 0x28: 
 					{
 						// Call
-						int bc = BytecodeAs32( ref i );
-						MethodBase st = typeof(TestScript).Module.ResolveMethod(bc);
+						uint bc = BytecodeAs32( ref i );
+						MethodBase st = typeof(TestScript).Module.ResolveMethod((int)bc);
 						ParameterInfo [] pa = st.GetParameters();
 						//MethodInfo mi = (MethodInfo)st;
 						int numFields = pa.Length;
@@ -177,18 +177,18 @@ namespace Cilbox
 
 					case 0x72:
 					{
-						int bc = BytecodeAs32( ref i );
-						ths.cls.metadataIdToString.TryGetValue(bc, out String st);
-						stack[sp++] = st;
-						Debug.Log( "STRING: " + st + " from " + bc.ToString("X8") );
+						uint bc = BytecodeAs32( ref i );
+						Debug.Log( "STRING IN: " + bc );
+						stack[sp++] = Cilbox.metadatas[bc];
+						Debug.Log( "STRING: " + stack[sp-1] );
 						break; //ldfld
 					}
 
 					case 0x7b: 
 					{
 						--sp; // Should be "This" XXX WRONG
-						int mi;
-						int bc = BytecodeAs32( ref i );
+						uint mi;
+						uint bc = BytecodeAs32( ref i );
 						if( !parentClass.instanceMetadataIdToFieldID.TryGetValue( bc, out mi ) )
 							Breakwarn( $"Could not get field ID {bc} from metadata.", i );
 						stack[sp++] = ths.fields[mi];
@@ -196,8 +196,8 @@ namespace Cilbox
 					}
 					case 0x7d:
 					{
-						int mi;
-						int bc = BytecodeAs32( ref i );
+						uint mi;
+						uint bc = BytecodeAs32( ref i );
 						if( !parentClass.instanceMetadataIdToFieldID.TryGetValue( bc, out mi ) )
 							Breakwarn( $"Could not get field ID {bc} from metadata.", i );
 						ths.fields[mi] = stack[--sp];
@@ -231,14 +231,9 @@ namespace Cilbox
 			return null;
 		}
 
-		int BytecodeAs32( ref int i )
+		uint BytecodeAs32( ref int i )
 		{
-			int ret = byteCode[i] |
-				(byteCode[i+1]<<8) |
-				(byteCode[i+2]<<16) |
-				(byteCode[i+3]<<24);
-			i+=4;
-			return ret;
+			return (uint)CilboxUtil.BytecodePullLiteral( byteCode, ref i, 4 );
 		}
 
 		public bool disabled;
@@ -257,20 +252,19 @@ namespace Cilbox
 		{
 			this.className = className;
 			OrderedDictionary classProps = CilboxUtil.DeserializeDict( classData );
-			metadatas = new Dictionary< String, int >();
-			metadataIdToString = new Dictionary< int, String >();
+			metadatas = new Dictionary< String, uint >();
 			foreach( DictionaryEntry k in CilboxUtil.DeserializeDict( (String)classProps["metadatas"] ) )
 			{
-				metadatas[(String)k.Key] = Convert.ToInt32( (String)k.Value );
+				metadatas[(String)k.Key] = Convert.ToUInt32( (String)k.Value );
 			}
 
-			int id = 0;
+			uint id = 0;
 			OrderedDictionary staticFields = CilboxUtil.DeserializeDict( (String)classProps["staticFields"] );
 			int sfnum = staticFields.Count;
 			staticObjects = new object[sfnum];
 			staticFieldNames = new String[sfnum];
 			staticFieldTypes = new Type[sfnum];
-			staticFieldIDs = new int[sfnum];
+			staticFieldIDs = new uint[sfnum];
 			foreach( DictionaryEntry k in staticFields )
 			{
 				staticFieldNames[id] = (String)k.Key;
@@ -284,8 +278,8 @@ namespace Cilbox
 			int ifnum = instanceFields.Count;
 			instanceFieldNames = new String[ifnum];
 			instanceFieldTypes = new Type[ifnum];
-			instanceFieldIDs = new int[ifnum];
-			instanceMetadataIdToFieldID = new Dictionary< int, int >();
+			instanceFieldIDs = new uint[ifnum];
+			instanceMetadataIdToFieldID = new Dictionary< uint, uint >();
 			id = 0;
 			foreach( DictionaryEntry k in instanceFields )
 			{
@@ -300,7 +294,7 @@ namespace Cilbox
 			OrderedDictionary deserMethods = CilboxUtil.DeserializeDict( (String)classProps["methods"] );
 			int mnum = deserMethods.Count;
 			methods = new CilboxMethod[mnum];
-			methodNameToIndex = new Dictionary< String, int >();
+			methodNameToIndex = new Dictionary< String, uint >();
 			foreach( DictionaryEntry k in deserMethods )
 			{
 				methods[id] = new CilboxMethod();
@@ -310,13 +304,13 @@ namespace Cilbox
 			}
 
 			int numImportFunctions = Enum.GetNames(typeof(ImportFunctionID)).Length;
-			importFunctionToId = new int[numImportFunctions];
+			importFunctionToId = new uint[numImportFunctions];
 			for( int i = 0; i < numImportFunctions; i++ )
 			{
 				String fn = Enum.GetName(typeof(ImportFunctionID), i);
 				if( i == 0 ) fn = ".ctor";
-				int idx = 0;
-				importFunctionToId[i] = -1;
+				uint idx = 0;
+				importFunctionToId[i] = 0xffffffff;
 				if( methodNameToIndex.TryGetValue(fn, out idx ) )
 				{
 					importFunctionToId[i] = idx;
@@ -331,26 +325,26 @@ namespace Cilbox
 		public object[] staticObjects;
 		public String[] staticFieldNames;
 		public Type[] staticFieldTypes;
-		public int[] staticFieldIDs;
+		public uint[] staticFieldIDs;
 
 		public String[] instanceFieldNames;
 		public Type[] instanceFieldTypes;
-		public int[] instanceFieldIDs;
-		public Dictionary< int, int > instanceMetadataIdToFieldID;
+		public uint[] instanceFieldIDs;
+		public Dictionary< uint, uint > instanceMetadataIdToFieldID;
 
 		// Conversion from name to metadata id.
-		public Dictionary< String, int > metadatas;
-		public Dictionary< String, int > methodNameToIndex;
-		public Dictionary< int, String > metadataIdToString;
+		public Dictionary< String, uint > metadatas;
+		public Dictionary< String, uint > methodNameToIndex;
 
 		public CilboxMethod [] methods;
 
-		public int [] importFunctionToId; // from ImportFunctionID
+		public uint [] importFunctionToId; // from ImportFunctionID
 	}
 
 	public static class Cilbox
 	{
 		public static Dictionary< String, CilboxClass > classes;
+		public static String [] metadatas;
 
 		static Cilbox()
 		{
@@ -367,15 +361,19 @@ namespace Cilbox
 
 			OrderedDictionary assemblyData = CilboxUtil.DeserializeDict( se[0].assemblyData );
 			OrderedDictionary classData = CilboxUtil.DeserializeDict( (String)assemblyData["classes"] );
-			OrderedDictionary stringData = CilboxUtil.DeserializeDict( (String)assemblyData["stringData"] );
+			OrderedDictionary metaData = CilboxUtil.DeserializeDict( (String)assemblyData["metadata"] );
+
+			metadatas = new String[metaData.Count+1]; // element 0 is invalid.
+			metadatas[0] = "INVALID METADATA";
+			foreach( DictionaryEntry v in metaData )
+			{
+				metadatas[Convert.ToInt32((String)v.Key, 16)] = (String)v.Value;
+			}
+			
 
 			foreach( DictionaryEntry v in classData )
 			{
 				CilboxClass cls = new CilboxClass( (String)v.Key, (String)v.Value );
-				foreach( DictionaryEntry s in stringData )
-				{
-					cls.metadataIdToString[Convert.ToInt32((String)s.Key)] = (String)s.Value;
-				}
 				classes[(String)v.Key] = cls;
 			}
 		}
@@ -391,11 +389,19 @@ namespace Cilbox
 		public static object InterpretIID( CilboxClass cls, CilboxProxy ths, ImportFunctionID iid, object [] parameters )
 		{
 			if( cls == null ) return null;
-			int index = cls.importFunctionToId[(int)iid];
+			uint index = cls.importFunctionToId[(uint)iid];
 			if( index < 0 ) return null;
 			return cls.methods[index].Interpret( ths, parameters );
 		}
 	}
+
+
+
+	///////////////////////////////////////////////////////////////////////////
+	//  EXPORTING  ////////////////////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////
+
+
 
 	#if UNITY_EDITOR
 	public class CilboxScenePostprocessor {
@@ -404,33 +410,18 @@ namespace Cilbox
 		public static void OnPostprocessScene() {
 			Debug.Log( "Postprocessing scene." );
 
-			Assembly mscorlib = typeof(CilboxProxy).Assembly;
+			Assembly proxyAssembly = typeof(CilboxProxy).Assembly;
 
-			OrderedDictionary strings = new OrderedDictionary();
-			// 256 ^ 3 - 1 = max value of a 3-byte uint.
-			// start at 1 since 0 is always not found.
-			for (int i = 1; i < (256 * 256 * 256); i++)
-			{
-				try
-				{
-					int tok = 0x70_000000 | i;
-					String str = mscorlib.ManifestModule.ResolveString(tok);
-					// Debug.Log("String Found: " + str + " At: " + tok.ToString("X8"));
-					strings[tok.ToString()] = str;
-				}
-				catch (Exception) // end of valid strings
-				{
-					break;
-				}
-			}
+			OrderedDictionary assemblyMetadata = new OrderedDictionary();
 
 			OrderedDictionary classes = new OrderedDictionary();
-			foreach (Type type in mscorlib.GetTypes())
+			foreach (Type type in proxyAssembly.GetTypes())
 			{
 				if( type.GetCustomAttributes(typeof(CilboxableAttribute), true).Length <= 0 )
 					continue;
 
 				OrderedDictionary metadatas = new OrderedDictionary();
+				int mdcount = 1; // token 0 is invalid.
 
 				OrderedDictionary methods = new OrderedDictionary();
 				int mtyp;
@@ -444,6 +435,12 @@ namespace Cilbox
 
 					foreach( var m in me )
 					{
+						if( m.DeclaringType.Assembly != proxyAssembly )
+						{
+							// We can't export things that are part of Unity.
+							continue;
+						}
+
 						String methodName = m.Name;
 						OrderedDictionary MethodProps = new OrderedDictionary();
 						Debug.Log( type + " / " + m.Name );
@@ -455,19 +452,23 @@ namespace Cilbox
 							continue;
 						}
 
-						OrderedDictionary localVars = new OrderedDictionary();
-						foreach (LocalVariableInfo lvi in mb.LocalVariables)
-							localVars[lvi.ToString()] = lvi.GetType().FullName;
-						MethodProps["locals"] = CilboxUtil.SerializeDict( localVars );
-
 						String byteCode = "";
 						byte [] ba = mb.GetILAsByteArray();
+
+						if( !ExtractAndTransformMetas( proxyAssembly, ref ba, ref assemblyMetadata, ref mdcount ) ) continue;
+
 						for( int i = 0; i < ba.Length; i++ )
 						{
 							int b = ba[i];
 							byteCode += CilboxUtil.HexFromNum( b>>4 ) + CilboxUtil.HexFromNum( b&0xf );
 						}
+
 						MethodProps["body"] = byteCode;
+
+						OrderedDictionary localVars = new OrderedDictionary();
+						foreach (LocalVariableInfo lvi in mb.LocalVariables)
+							localVars[lvi.ToString()] = lvi.GetType().FullName;
+						MethodProps["locals"] = CilboxUtil.SerializeDict( localVars );
 
 						ParameterInfo [] parameters = m.GetParameters();
 
@@ -478,7 +479,6 @@ namespace Cilbox
 						}
 						MethodProps["parameters"] = CilboxUtil.SerializeDict( argVars );
 
-						//Debug.Log( "STACKSIZE" + m.Name + " / " + mb.MaxStackSize + " / " + byteCode );
 						MethodProps["maxStack"] = mb.MaxStackSize.ToString();
 						MethodProps["isStatic"] = m.IsStatic ? "1" : "0";
 
@@ -515,27 +515,9 @@ namespace Cilbox
 
 			OrderedDictionary assemblyData = new OrderedDictionary();
 			assemblyData["classes"] = CilboxUtil.SerializeDict( classes );
-			assemblyData["stringData"] = CilboxUtil.SerializeDict( strings );
+			assemblyData["metadata"] = CilboxUtil.SerializeDict( assemblyMetadata );
 
 			String sAllAssemblyData = CilboxUtil.SerializeDict( assemblyData );
-
-			/* Test
-			Debug.Log( CilboxUtil.SerializeDict( classes ) );
-			OrderedDictionary classTest = CilboxUtil.DeserializeDict( sAllAssemblyData );
-			foreach( DictionaryEntry v in classTest )
-			{
-				Debug.Log( "CLASS" + v.Key + "=" + v.Value );
-				OrderedDictionary testClassProps = CilboxUtil.DeserializeDict( v.Value );
-				foreach( DictionaryEntry ve in testClassProps )
-				{
-					Debug.Log( "PROPS" + ve.Key + "=" + ve.Value );
-					OrderedDictionary testClassPropsMethods = CilboxUtil.DeserializeDict( ve.Value );
-					foreach( DictionaryEntry vee in testClassPropsMethods )
-					{
-						Debug.Log( "METHOD" + vee.Key + "=" + vee.Value );
-					}
-				}
-			} */
 
 			CilboxEnvironmentHolder [] se = Resources.FindObjectsOfTypeAll(typeof(CilboxEnvironmentHolder)) as CilboxEnvironmentHolder [];
 			CilboxEnvironmentHolder tac;
@@ -574,200 +556,43 @@ namespace Cilbox
 				}
 			}
 		}
+
+		static bool ExtractAndTransformMetas( Assembly proxyAssembly, ref byte [] byteCode, ref OrderedDictionary od, ref int mdcount )
+		{
+			int i = 0;
+			i = 0;
+			try {
+				do
+				{
+					CilboxUtil.OpCodes.OpCode oc = CilboxUtil.OpCodes.ReadOpCode( byteCode, ref i );
+					int opLen = CilboxUtil.OpCodes.OperandLength[(int)oc.OperandType];
+					int backupi = i;
+					ulong operand = CilboxUtil.BytecodePullLiteral( byteCode, ref i, opLen );
+					bool changeOperand = true;
+					uint mdpos = (uint)mdcount;
+					if( oc.OperandType == CilboxUtil.OpCodes.OperandType.InlineString )
+						od[(mdcount++).ToString("X6")] = proxyAssembly.ManifestModule.ResolveString( (int)operand );
+					else
+						changeOperand = false;
+
+					if( changeOperand )
+					{
+						i = backupi;
+						CilboxUtil.BytecodeReplaceLiteral( ref byteCode, ref i, opLen, mdpos );
+					}
+					if( i >= byteCode.Length ) break;
+				} while( true );
+			}
+			catch( Exception e )
+			{
+				Debug.LogWarning( e );
+				return false;
+			}
+			String stop = ""; for( i = 0; i < byteCode.Length; i++ ) stop += byteCode[i].ToString("X2") + " "; Debug.Log( stop );
+			return true;
+		}
 	}
 	#endif
-
-
-
-
-
-
-
-
-
-	public static class CilboxUtil
-	{
-		static public object FillPossibleSystemType( Type t )
-		{
-			if( t == typeof(System.Int32) )
-				return new System.Int32();
-			else
-				return null;
-		}
-
-		static public int IntFromHexChar( char c )
-		{
-			if( c >= '0' && c <= '9' )
-				return c - '0';
-			else if( c >= 'a' & c <= 'f' )
-				return c - 'a' + 10;
-			else
-				return -1;
-		}
-
-		static public String HexFromNum( int n )
-		{
-			char c = (char) ( '0' + (n & 0xf));
-			if( c > '9' ) c = (char)( c + 'a' - '9' - 1);
-			return "" + c;
-		}
-		static public String Escape( String s )
-		{
-			String ret = "";
-			foreach( char c in s )
-			{
-				if( c == '\\' )
-					ret += "\\\\";
-				else if( c == '\t' )
-					ret += "\\t";
-				else if( c == '\n' )
-					ret += "\\n";
-				else if( c > 0x7f || c < 20 )
-					ret += "\\" + HexFromNum( c>>12 ) + HexFromNum( c >> 8 ) + HexFromNum( c >> 4 ) + HexFromNum( c >> 0 );
-				else
-					ret += c;
-			}
-			return ret;
-		}
-		// \tkey\tvalue\tkey\tvalue\tkey\tvalue\n
-		static public String ParseString( String s, ref int pos, ref int poserror )
-		{
-			String ret = "";
-			int hexmode = 0;
-			int hexchar = 0;
-			for( ; pos < s.Length; pos++ )
-			{
-				char c = s[pos];
-				if( hexmode != 0 )
-				{
-					//Debug.Log( "TEX: " + (int)c + "/" + hexmode );
-					if( c == '\\' && hexmode == 1 )
-					{
-						ret += (char)'\\';
-						hexchar = 0; hexmode = 0;
-					}
-					else if( c == 't' && hexmode == 1 )
-					{
-						ret += (char)'\t';
-						hexchar = 0; hexmode = 0;
-					}
-					else if( c == 'n' && hexmode == 1 )
-					{
-						ret += (char)'\n';
-						hexchar = 0; hexmode = 0;
-					}
-					else
-					{
-						hexchar = hexchar << 4;
-						int v = IntFromHexChar( c );
-						if( v < 0 ) break;
-						hexchar |= v;
-						hexmode++;
-						if( hexmode == 4 )
-						{
-							ret += (char)hexchar;
-							hexchar = 0;
-							hexmode = 0;
-						}
-					}
-				}
-				else
-				{
-					//Debug.Log( c + " " + (c == '\t' || c == '\n') );
-					if( c == '\\' )
-						hexmode = 1;
-					else if( c == '\t' || c == '\n' )
-						break;
-					else
-						ret += c;
-				}
-			}
-			if( hexmode != 0 )
-			{
-				poserror = pos;
-			}
-			//Debug.Log( "PAX: " + poserror + " / " + hexmode );
-			return ret;
-		}
-		static public String SerializeDict( OrderedDictionary dict )
-		{
-			String ret = "";
-			foreach( DictionaryEntry s in dict )
-			{
-				ret += "\t" + Escape((String)s.Key) + "\t" + Escape((String)s.Value);
-			}
-			return ret + "\n";
-		}
-
-		/*
-		// Turns out we didn't need this yet.
-		static public String [] DeserializeArray( String s )
-		{
-			int poserror = -1;
-			int pos = 0;
-			List< String > ret = new List< String >();
-			poserror = -1;
-
-			for( ; pos < s.Length; pos++ )
-			{
-				char c = s[pos];
-				if( c == '\n' ) break;
-				if( c == '\t' ) continue;
-				pos--;
-				ret.Add( ParseString( s, ref pos, ref poserror ) );
-				if( poserror >= 0 )
-					break;
-			}
-			if( poserror >= 0 )
-			{
-				Debug.LogError( $"Erorr parsing dictionary at char {poserror}\n{s}" );
-			}
-			return ret.ToArray();
-		}*/
-		static public OrderedDictionary DeserializeDict( String s )
-		{
-			int poserror = -1;
-			int pos = 0;
-			OrderedDictionary ret = new OrderedDictionary();
-			int mode = 0;
-			String key = "";
-			poserror = -1;
-
-			for( ; pos < s.Length; pos++ )
-			{
-				char c = s[pos];
-				if( mode == 0 )
-				{
-					//Debug.Log( "NEXT" + (int)c );
-					if( c == '\n' ) { pos++; break; }
-					else if( c == '\t' ) { /* OK */ }
-					else { poserror = pos; break; }
-				}
-				else if( mode == 1 )
-				{
-					key = ParseString( s, ref pos, ref poserror );
-					pos--;
-				}
-				else if( mode == 2 )
-				{
-					if( c != '\t' ) { poserror = pos; break; }
-				}
-				else if( mode == 3 )
-				{
-					ret[key] = ParseString( s, ref pos, ref poserror );
-					pos--;
-				}
-				mode = (mode+1) % 4;
-				if( poserror >= 0 )
-					break;
-			}
-			if( poserror >= 0 )
-			{
-				Debug.LogError( $"Erorr parsing dictionary at char {poserror}\n{s}" );
-			}
-			return ret;
-		}
-	}
 
 	public enum ImportFunctionID
 	{
