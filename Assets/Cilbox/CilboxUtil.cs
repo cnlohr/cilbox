@@ -116,6 +116,7 @@ namespace Cilbox
 			//Debug.Log( "PAX: " + poserror + " / " + hexmode );
 			return ret;
 		}
+
 		static public String SerializeDict( OrderedDictionary dict )
 		{
 			String ret = "";
@@ -126,8 +127,6 @@ namespace Cilbox
 			return ret + "\n";
 		}
 
-		/*
-		// Turns out we didn't need this yet.
 		static public String [] DeserializeArray( String s )
 		{
 			int poserror = -1;
@@ -140,7 +139,6 @@ namespace Cilbox
 				char c = s[pos];
 				if( c == '\n' ) break;
 				if( c == '\t' ) continue;
-				pos--;
 				ret.Add( ParseString( s, ref pos, ref poserror ) );
 				if( poserror >= 0 )
 					break;
@@ -150,7 +148,7 @@ namespace Cilbox
 				Debug.LogError( $"Erorr parsing dictionary at char {poserror}\n{s}" );
 			}
 			return ret.ToArray();
-		}*/
+		}
 		static public OrderedDictionary DeserializeDict( String s )
 		{
 			if( s == null ) return null;

@@ -72,15 +72,8 @@ namespace Cilbox
 			int i;
 
 			i = 0;
-			String stbc = "";
-			for( i = 0; i < byteCode.Length; i++ )
-				stbc += byteCode[i].ToString("X2") + " ";
-			Debug.Log( "INTERPRETING " + methodName + " VALS:" + stbc + " MAX: " + MaxStackSize );
-
-			Debug.Log( ths.fields );
-
-// Start 02/02/7b01000004/17/58/7d0100000402027b0200000418587d02000004722f000070027b01000004//8c1f000001027b020000048c1f000001280c00000a280b00000a2a
-
+			String stbc = ""; for( i = 0; i < byteCode.Length; i++ ) stbc += byteCode[i].ToString("X2") + " "; Debug.Log( "INTERPRETING " + methodName + " VALS:" + stbc + " MAX: " + MaxStackSize );
+			//Debug.Log( ths.fields );
 
 			object [] stack = new object[MaxStackSize];
 			object [] localVars = new object[methodLocals.Length];
@@ -113,7 +106,7 @@ namespace Cilbox
 						else
 							stackSt += "/null";
 					}
-					Debug.Log( "Bytecode " + b.ToString("X2") + " @ " + (i-1) + " " + stackSt);
+					//Debug.Log( "Bytecode " + b.ToString("X2") + " @ " + (i-1) + " " + stackSt);
 
 					switch( b )
 					{
@@ -152,22 +145,29 @@ namespace Cilbox
 					{
 						// Call
 						uint bc = BytecodeAs32( ref i );
-						MethodBase st = typeof(TestScript).Module.ResolveMethod((int)bc);
-						ParameterInfo [] pa = st.GetParameters();
-						//MethodInfo mi = (MethodInfo)st;
-						int numFields = pa.Length;
-						object callthis = null;
-						object [] callpar = new object[numFields];
-						int ik;
-						for( ik = 0; ik < numFields; ik++ )
+						CilMetadataTokenInfo dt = Cilbox.metadatas[bc];
+						if( dt.nativeToken != 0 )
 						{
-							callpar[numFields-ik-1] = stack[--sp];
-							Debug.Log( "VAL:" + callpar[ik] );
+							MethodBase st = dt.assembly.ManifestModule.ResolveMethod((int)dt.nativeToken);
+							ParameterInfo [] pa = st.GetParameters();
+							//MethodInfo mi = (MethodInfo)st;
+							int numFields = pa.Length;
+							object callthis = null;
+							object [] callpar = new object[numFields];
+							int ik;
+							for( ik = 0; ik < numFields; ik++ )
+							{
+								callpar[numFields-ik-1] = stack[--sp];
+							}
+							if( !st.IsStatic )
+								callthis = stack[--sp];
+							//Debug.Log( " " + ((st.IsStatic)?"STATIC":"INSTANCE") + " / " + st.Name + " / " + callthis + " / fields=" + numFields );
+							stack[sp++] = st.Invoke( callthis, callpar );
 						}
-						if( !st.IsStatic )
-							callthis = stack[--sp];
-						Debug.Log( " " + ((st.IsStatic)?"STATIC":"INSTANCE") + " / " + st.Name + " / " + callthis + " / fields=" + numFields );
-						stack[sp++] = st.Invoke( callthis, callpar );
+						else
+						{
+							Breakwarn( $"Function {dt.fields[2]} not found", i );
+						}
 						break;
 					}
 					case 0x2a: cont = false; break; // ret
@@ -179,7 +179,7 @@ namespace Cilbox
 					{
 						uint bc = BytecodeAs32( ref i );
 						Debug.Log( "STRING IN: " + bc );
-						stack[sp++] = Cilbox.metadatas[bc];
+						stack[sp++] = Cilbox.metadatas[bc].fields[0];
 						Debug.Log( "STRING: " + stack[sp-1] );
 						break; //ldfld
 					}
@@ -187,22 +187,22 @@ namespace Cilbox
 					case 0x7b: 
 					{
 						--sp; // Should be "This" XXX WRONG
-						uint mi;
 						uint bc = BytecodeAs32( ref i );
-						if( !parentClass.instanceMetadataIdToFieldID.TryGetValue( bc, out mi ) )
-							Breakwarn( $"Could not get field ID {bc} from metadata.", i );
-						stack[sp++] = ths.fields[mi];
+						stack[sp++] = ths.fields[Cilbox.metadatas[bc].fieldIndex];
 						break; //ldfld
 					}
 					case 0x7d:
 					{
-						uint mi;
 						uint bc = BytecodeAs32( ref i );
-						if( !parentClass.instanceMetadataIdToFieldID.TryGetValue( bc, out mi ) )
-							Breakwarn( $"Could not get field ID {bc} from metadata.", i );
-						ths.fields[mi] = stack[--sp];
+						ths.fields[Cilbox.metadatas[bc].fieldIndex] = stack[--sp];
 						--sp; // Should be "This" XXX WRONG
 						break; //stfld
+					}
+					case 0x7e: 
+					{
+						uint bc = BytecodeAs32( ref i );
+						stack[sp++] = parentClass.staticFields[Cilbox.metadatas[bc].fieldIndex];
+						break; //ldsfld
 					}
 
 					case 0x8C: BytecodeAs32( ref i ); break; // box (This pulls off a type, but I think everything is boxed, so no big deal)
@@ -252,25 +252,20 @@ namespace Cilbox
 		{
 			this.className = className;
 			OrderedDictionary classProps = CilboxUtil.DeserializeDict( classData );
-			metadatas = new Dictionary< String, uint >();
-			foreach( DictionaryEntry k in CilboxUtil.DeserializeDict( (String)classProps["metadatas"] ) )
-			{
-				metadatas[(String)k.Key] = Convert.ToUInt32( (String)k.Value );
-			}
 
 			uint id = 0;
 			OrderedDictionary staticFields = CilboxUtil.DeserializeDict( (String)classProps["staticFields"] );
 			int sfnum = staticFields.Count;
-			staticObjects = new object[sfnum];
+			this.staticFields = new object[sfnum];
 			staticFieldNames = new String[sfnum];
 			staticFieldTypes = new Type[sfnum];
-			staticFieldIDs = new uint[sfnum];
 			foreach( DictionaryEntry k in staticFields )
 			{
-				staticFieldNames[id] = (String)k.Key;
+				String fieldName = staticFieldNames[id] = (String)k.Key;
 				Type t = staticFieldTypes[id] = Type.GetType( (String)k.Value );
-				staticFieldIDs[id] = metadatas[(String)k.Key];
-				staticObjects[id] = CilboxUtil.FillPossibleSystemType( t );
+
+				//staticFieldIDs[id] = Cilbox.FindInternalMetadataID( className, 4, fieldName );
+				this.staticFields[id] = CilboxUtil.FillPossibleSystemType( t );
 				id++;
 			}
 
@@ -278,15 +273,13 @@ namespace Cilbox
 			int ifnum = instanceFields.Count;
 			instanceFieldNames = new String[ifnum];
 			instanceFieldTypes = new Type[ifnum];
-			instanceFieldIDs = new uint[ifnum];
-			instanceMetadataIdToFieldID = new Dictionary< uint, uint >();
+			//instanceFieldIDs = new uint[ifnum];
 			id = 0;
 			foreach( DictionaryEntry k in instanceFields )
 			{
-				instanceFieldNames[id] = (String)k.Key;
+				String fieldName = instanceFieldNames[id] = (String)k.Key;
 				instanceFieldTypes[id] = Type.GetType( (String)k.Value );
-				instanceFieldIDs[id] = metadatas[(String)k.Key];
-				instanceMetadataIdToFieldID[metadatas[(String)k.Key]] = id;
+				//instanceFieldIDs[id] = Cilbox.FindInternalMetadataID( className, 4, fieldName );
 				id++;
 			}
 
@@ -315,25 +308,21 @@ namespace Cilbox
 				{
 					importFunctionToId[i] = idx;
 				}
-				Debug.Log( "MATCHING + " + fn + " : " + i + " " + importFunctionToId[i] );
+				//Debug.Log( "MATCHING + " + fn + " : " + i + " " + importFunctionToId[i] );
 			}
-			//Debug.Log( classProps["metadatas"] );
 		}
 
 		public String className;
 
-		public object[] staticObjects;
+		public object[] staticFields;
 		public String[] staticFieldNames;
 		public Type[] staticFieldTypes;
-		public uint[] staticFieldIDs;
 
 		public String[] instanceFieldNames;
 		public Type[] instanceFieldTypes;
-		public uint[] instanceFieldIDs;
-		public Dictionary< uint, uint > instanceMetadataIdToFieldID;
 
 		// Conversion from name to metadata id.
-		public Dictionary< String, uint > metadatas;
+		//public Dictionary< String, uint > metadatas;
 		public Dictionary< String, uint > methodNameToIndex;
 
 		public CilboxMethod [] methods;
@@ -341,10 +330,31 @@ namespace Cilbox
 		public uint [] importFunctionToId; // from ImportFunctionID
 	}
 
+	public class CilMetadataTokenInfo
+	{
+		public CilMetadataTokenInfo( MetaTokenType type, String [] fields ) { this.type = type; this.fields = fields; }
+		public MetaTokenType type;
+		public int fieldIndex; // Only used for fields.
+		public int nativeToken; // Only used for native function calls.
+		public Assembly assembly; // Only used for native function calls.
+
+		// For string, type = 7, string is in fields[0]
+		// For methods, type = 10, Declaring Type is in fields[0], Method is in fields[1], Full name is in fields[2] assembly name is in fields[3]
+		// For fields, type = 4, Declaring Type is in fields[0], Name is in fields[1], Type is in fields[2]
+		public String [] fields;
+	}
+
+	public enum MetaTokenType
+	{
+		mtField = 4,
+		mtString = 7,
+		mtMethod = 10,
+	}
+
 	public static class Cilbox
 	{
 		public static Dictionary< String, CilboxClass > classes;
-		public static String [] metadatas;
+		public static CilMetadataTokenInfo [] metadatas;
 
 		static Cilbox()
 		{
@@ -363,11 +373,76 @@ namespace Cilbox
 			OrderedDictionary classData = CilboxUtil.DeserializeDict( (String)assemblyData["classes"] );
 			OrderedDictionary metaData = CilboxUtil.DeserializeDict( (String)assemblyData["metadata"] );
 
-			metadatas = new String[metaData.Count+1]; // element 0 is invalid.
-			metadatas[0] = "INVALID METADATA";
+			metadatas = new CilMetadataTokenInfo[metaData.Count+1]; // element 0 is invalid.
+			metadatas[0] = new CilMetadataTokenInfo( 0, new String[]{ "INVALID METADATA" } );
+
 			foreach( DictionaryEntry v in metaData )
 			{
-				metadatas[Convert.ToInt32((String)v.Key)] = (String)v.Value;
+				int mid = Convert.ToInt32((String)v.Key);
+				String [] st = CilboxUtil.DeserializeArray( (String)v.Value );
+
+				//Debug.Log( $"ST {(String)v.Value} => {st.Length} from {(String)v.Key}" );
+				if( st.Length < 2 )
+				{
+					Debug.LogWarning( "Metadata read error. Could not interpret " + (String)v.Value );
+					continue;
+				}
+				String [] fields = new String[st.Length-1];
+				Array.Copy( st, 1, fields, 0, st.Length-1 );
+				MetaTokenType metatype = (MetaTokenType)Convert.ToInt32(st[0]);
+				CilMetadataTokenInfo t = metadatas[mid] = new CilMetadataTokenInfo( metatype, fields );
+
+				if( metatype == MetaTokenType.mtField && st.Length > 4 )
+				{
+					// The type has been "sealed" so-to-speak. In that we have an index for it.
+					metadatas[mid].fieldIndex = Convert.ToInt32(st[4]);
+				}
+
+				if( metatype == MetaTokenType.mtMethod )
+				{
+					// Function call
+					// TODO: Need to figure out if this is an interpreted call or a native call.
+					// (Or a please explode, for instance if you violate security rules)
+					String parentType = st[1];
+					String fullSignature = st[3];
+					String useAssembly = st[4];
+
+					foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+					{
+						if( assembly.GetName().ToString() != useAssembly ) continue;
+						var tt = assembly.GetType( parentType );
+						if (tt != null)
+						{
+							MethodBase[] methods = tt.GetMethods( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
+							foreach( MethodBase m in methods )
+							{
+								if( m.ToString() == fullSignature )
+								{
+									Debug.Log( "Found " + m.ToString() + " in " + assembly + "; token " + m.MetadataToken.ToString("X8") );
+									t.nativeToken = m.MetadataToken;
+									t.assembly = assembly;
+									break;
+								}
+							}
+
+							if( t.nativeToken == 0 )
+							{
+								methods = tt.GetConstructors( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
+								foreach( MethodBase m in methods )
+								{
+									Debug.Log( "Comparing \"" + fullSignature + "\" to \"" + m.ToString() + "\"" );
+									if( m.ToString() == fullSignature )
+									{
+										Debug.Log( "Found " + m.ToString() + " in " + assembly + "; token " + m.MetadataToken.ToString("X8") );
+										t.nativeToken = m.MetadataToken;
+										t.assembly = assembly;
+										break;
+									}
+								}
+							}
+						}
+					}
+				}
 			}
 			
 
@@ -376,6 +451,18 @@ namespace Cilbox
 				CilboxClass cls = new CilboxClass( (String)v.Key, (String)v.Value );
 				classes[(String)v.Key] = cls;
 			}
+		}
+
+		public static int FindInternalMetadataID( String soruceName, MetaTokenType type, String name )
+		{
+			int i;
+			for( i = 0; i < metadatas.Length; i++ )
+			{
+				CilMetadataTokenInfo ci = metadatas[i];
+				if( ci.type == type && ci.fields.Length > 1 && ci.fields[1] == name )
+					return i;
+			}
+			return -1;
 		}
 
 		public static CilboxClass GetClass( String className )
@@ -390,7 +477,7 @@ namespace Cilbox
 		{
 			if( cls == null ) return null;
 			uint index = cls.importFunctionToId[(uint)iid];
-			if( index < 0 ) return null;
+			if( index == 0xffffffff ) return null;
 			return cls.methods[index].Interpret( ths, parameters );
 		}
 	}
@@ -400,8 +487,6 @@ namespace Cilbox
 	///////////////////////////////////////////////////////////////////////////
 	//  EXPORTING  ////////////////////////////////////////////////////////////
 	///////////////////////////////////////////////////////////////////////////
-
-
 
 	#if UNITY_EDITOR
 	public class CilboxScenePostprocessor {
@@ -413,18 +498,23 @@ namespace Cilbox
 			Assembly proxyAssembly = typeof(CilboxProxy).Assembly;
 
 			OrderedDictionary assemblyMetadata = new OrderedDictionary();
+			Dictionary< int, uint> assemblyMetadataReverseOriginal = new Dictionary< int, uint >();
+
+			int mdcount = 1; // token 0 is invalid.
 
 			OrderedDictionary classes = new OrderedDictionary();
+			Dictionary< String, OrderedDictionary > allClassMethods = new Dictionary< String, OrderedDictionary>();
+
 			foreach (Type type in proxyAssembly.GetTypes())
 			{
 				if( type.GetCustomAttributes(typeof(CilboxableAttribute), true).Length <= 0 )
 					continue;
 
-				OrderedDictionary metadatas = new OrderedDictionary();
-				int mdcount = 1; // token 0 is invalid.
-
 				OrderedDictionary methods = new OrderedDictionary();
-				int mtyp;
+
+				int mtyp; // Which round of methods are we getting.
+
+				// Iterate twice. Once for methods, then for constructors.
 				for( mtyp = 0; mtyp < 2; mtyp++ )
 				{
 					MethodBase[] me;
@@ -443,7 +533,7 @@ namespace Cilbox
 
 						String methodName = m.Name;
 						OrderedDictionary MethodProps = new OrderedDictionary();
-						Debug.Log( type + " / " + m.Name );
+						//Debug.Log( type + " / " + m.Name );
 						MethodBody mb = m.GetMethodBody();
 						if( mb == null )
 						{
@@ -452,18 +542,82 @@ namespace Cilbox
 							continue;
 						}
 
-						String byteCode = "";
-						byte [] ba = mb.GetILAsByteArray();
+						byte [] byteCode = mb.GetILAsByteArray();
 
-						if( !ExtractAndTransformMetas( proxyAssembly, ref ba, ref assemblyMetadata, ref mdcount ) ) continue;
-
-						for( int i = 0; i < ba.Length; i++ )
+						//if( !ExtractAndTransformMetas( proxyAssembly, ref ba, ref assemblyMetadata, ref assemblyMetadataReverseOriginal, ref mdcount ) ) continue;
+						//static bool ExtractAndTransformMetas( Assembly proxyAssembly, ref byte [] byteCode, ref OrderedDictionary od, ref Dictionary< uint, uint > assemblyMetadataReverseOriginal, ref int mdcount )
 						{
-							int b = ba[i];
-							byteCode += CilboxUtil.HexFromNum( b>>4 ) + CilboxUtil.HexFromNum( b&0xf );
+							int i = 0;
+							i = 0;
+							try {
+								do
+								{
+									CilboxUtil.OpCodes.OpCode oc = CilboxUtil.OpCodes.ReadOpCode( byteCode, ref i );
+									int opLen = CilboxUtil.OpCodes.OperandLength[(int)oc.OperandType];
+									int backupi = i;
+									uint operand = (uint)CilboxUtil.BytecodePullLiteral( byteCode, ref i, opLen );
+									bool changeOperand = true;
+									uint writebackToken = (uint)mdcount;
+
+									// Check to see if this is a meta that we care about.  Then rewrite in a new identifier.
+									// ResolveField, ResolveMember, ResolveMethod, ResolveSignature, ResolveString, ResolveType
+									// We sort of want to let the other end know what they are. So we mark them with the code
+									// from here: https://github.com/jbevain/cecil/blob/master/Mono.Cecil.Metadata/TableHeap.cs#L16
+
+									if( oc.OperandType == CilboxUtil.OpCodes.OperandType.InlineString )
+									{
+										if( !assemblyMetadataReverseOriginal.TryGetValue( (int)operand, out writebackToken ) )
+										{
+											writebackToken = (uint)mdcount;
+											assemblyMetadata[(mdcount++).ToString()] = ((int)MetaTokenType.mtString) + "\t" + proxyAssembly.ManifestModule.ResolveString( (int)operand );
+										}
+									}
+									else if( oc.OperandType == CilboxUtil.OpCodes.OperandType.InlineMethod )
+									{
+										if( !assemblyMetadataReverseOriginal.TryGetValue( (int)operand, out writebackToken ) )
+										{
+											writebackToken = (uint)mdcount;
+											MethodBase tmb = proxyAssembly.ManifestModule.ResolveMethod( (int)operand );
+											assemblyMetadata[(mdcount++).ToString()] = ((int)MetaTokenType.mtMethod) + "\t" + tmb.DeclaringType + "\t" + tmb.Name + "\t" + tmb + "\t" + tmb.DeclaringType.Assembly.GetName();
+										}
+									}
+									else if( oc.OperandType == CilboxUtil.OpCodes.OperandType.InlineField )
+									{
+										if( !assemblyMetadataReverseOriginal.TryGetValue( (int)operand, out writebackToken ) )
+										{
+											writebackToken = (uint)mdcount;
+											FieldInfo rf = proxyAssembly.ManifestModule.ResolveField( (int)operand );
+											assemblyMetadata[(mdcount++).ToString()] = ((int)MetaTokenType.mtField) + "\t" + rf.DeclaringType + "\t" + rf.Name + "\t" + rf.FieldType;
+										}
+									}
+									else
+										changeOperand = false;
+
+									if( changeOperand )
+									{
+										i = backupi;
+										//Debug.Log( "MDC: " + mdcount + "Found OP:" + operand.ToString( "X8" ) + " WBT: " + writebackToken + " VALUE:" + assemblyMetadata[(writebackToken).ToString()] );
+										assemblyMetadataReverseOriginal[(int)operand] = writebackToken;
+										CilboxUtil.BytecodeReplaceLiteral( ref byteCode, ref i, opLen, writebackToken );
+									}
+									if( i >= byteCode.Length ) break;
+								} while( true );
+							}
+							catch( Exception e )
+							{
+								Debug.LogWarning( e );
+								continue;
+							}
 						}
 
-						MethodProps["body"] = byteCode;
+						String byteCodeStr = "";
+						for( int i = 0; i < byteCode.Length; i++ )
+						{
+							int b = byteCode[i];
+							byteCodeStr += CilboxUtil.HexFromNum( b>>4 ) + CilboxUtil.HexFromNum( b&0xf );
+						}
+
+						MethodProps["body"] = byteCodeStr;
 
 						OrderedDictionary localVars = new OrderedDictionary();
 						foreach (LocalVariableInfo lvi in mb.LocalVariables)
@@ -482,32 +636,55 @@ namespace Cilbox
 						MethodProps["maxStack"] = mb.MaxStackSize.ToString();
 						MethodProps["isStatic"] = m.IsStatic ? "1" : "0";
 
-						metadatas[methodName] = m.MetadataToken.ToString(); // There's also MethodHandle
+						//metadatas[methodName] = m.MetadataToken.ToString(); // There's also MethodHandle
 						methods[methodName] = CilboxUtil.SerializeDict( MethodProps );
 					}
 				}
 
+				allClassMethods[type.FullName] = methods;
+			}
+
+			// Now that we've iterated through all classes, and collected all possible uses of field IDs,
+			// go through the classes again, collecting the fields themselves.
+
+			foreach (Type type in proxyAssembly.GetTypes())
+			{
+				if( type.GetCustomAttributes(typeof(CilboxableAttribute), true).Length <= 0 )
+					continue;
+
 				OrderedDictionary staticFields = new OrderedDictionary();
+				int sfid = 0;
 				FieldInfo[] fi = type.GetFields( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static );
 				foreach( var f in fi )
 				{
-					//Debug.Log( $"Found static field {f.Name} of type {f.FieldType.FullName}" );
 					staticFields[f.Name] = f.FieldType.FullName;
-					metadatas[f.Name] = f.MetadataToken.ToString();
+
+					// Fill in our metadata with a class-specific field ID, if this field ID was used in code anywhere.
+					uint mdid;
+					if( assemblyMetadataReverseOriginal.TryGetValue(f.MetadataToken, out mdid) )
+					{
+						assemblyMetadata[mdid.ToString()] += "\t" + sfid;
+					}
+					sfid++;
 				}
 
 				OrderedDictionary instanceFields = new OrderedDictionary();
 				fi = type.GetFields( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance );
+				int ifid = 0;
 				foreach( var f in fi )
 				{
-					//Debug.Log( $"Found field {f.Name} of type {f.FieldType}" );
 					instanceFields[f.Name] = f.FieldType.FullName;
-					metadatas[f.Name] = f.MetadataToken.ToString();
+					// Fill in our metadata with a class-specific field ID, if this field ID was used in code anywhere.
+					uint mdid;
+					if( assemblyMetadataReverseOriginal.TryGetValue(f.MetadataToken, out mdid) )
+					{
+						assemblyMetadata[mdid.ToString()] += "\t" + ifid;
+					}
+					ifid++;
 				}
 
 				OrderedDictionary classProps = new OrderedDictionary();
-				classProps["methods"] = CilboxUtil.SerializeDict( methods );
-				classProps["metadatas"] = CilboxUtil.SerializeDict( metadatas );
+				classProps["methods"] = CilboxUtil.SerializeDict( allClassMethods[type.FullName] );
 				classProps["staticFields"] = CilboxUtil.SerializeDict( staticFields );
 				classProps["instanceFields"] = CilboxUtil.SerializeDict( instanceFields );
 				classes[type.FullName] = CilboxUtil.SerializeDict( classProps );
@@ -555,44 +732,6 @@ namespace Cilbox
 					UnityEngine.Object.DestroyImmediate( m );
 				}
 			}
-		}
-
-		static bool ExtractAndTransformMetas( Assembly proxyAssembly, ref byte [] byteCode, ref OrderedDictionary od, ref int mdcount )
-		{
-			int i = 0;
-			i = 0;
-			try {
-				do
-				{
-					CilboxUtil.OpCodes.OpCode oc = CilboxUtil.OpCodes.ReadOpCode( byteCode, ref i );
-					int opLen = CilboxUtil.OpCodes.OperandLength[(int)oc.OperandType];
-					int backupi = i;
-					ulong operand = CilboxUtil.BytecodePullLiteral( byteCode, ref i, opLen );
-					bool changeOperand = true;
-					uint mdpos = (uint)mdcount;
-
-					// Check to see if this is a meta that we care about.  Then rewrite in a new identifier.
-					// ResolveField, ResolveMember, ResolveMethod, ResolveSignature, ResolveString, ResolveType
-					if( oc.OperandType == CilboxUtil.OpCodes.OperandType.InlineString )
-						od[(mdcount++).ToString()] = proxyAssembly.ManifestModule.ResolveString( (int)operand );
-					else
-						changeOperand = false;
-
-					if( changeOperand )
-					{
-						i = backupi;
-						CilboxUtil.BytecodeReplaceLiteral( ref byteCode, ref i, opLen, mdpos );
-					}
-					if( i >= byteCode.Length ) break;
-				} while( true );
-			}
-			catch( Exception e )
-			{
-				Debug.LogWarning( e );
-				return false;
-			}
-			String stop = ""; for( i = 0; i < byteCode.Length; i++ ) stop += byteCode[i].ToString("X2") + " "; Debug.Log( stop );
-			return true;
 		}
 	}
 	#endif

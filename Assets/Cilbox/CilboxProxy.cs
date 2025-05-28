@@ -45,6 +45,7 @@ namespace Cilbox
 
 		void Awake()
 		{
+			Debug.Log( "Proxy Class Name: " + className );
 			if( string.IsNullOrEmpty( className ) ) return;
 
 			// Populate fields[]
