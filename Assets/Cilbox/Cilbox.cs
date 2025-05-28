@@ -17,6 +17,7 @@ namespace Cilbox
 {
 	public class CilboxEnvironmentHolder : MonoBehaviour
 	{
+		public String classData;
 		public String stringData;
 	}
 
@@ -177,9 +178,8 @@ namespace Cilbox
 
 					case 0x72:
 					{
-						// This is wrong.  We need to pull strings out in advance.
 						int bc = BytecodeAs32( ref i );
-						String st = typeof(TestScript).Module.ResolveString(bc);
+						ths.cls.metadataIdToString.TryGetValue(bc, out String st);
 						stack[sp++] = st;
 						Debug.Log( "STRING: " + st + " from " + bc.ToString("X8") );
 						break; //ldfld
@@ -259,6 +259,7 @@ namespace Cilbox
 			this.className = className;
 			OrderedDictionary classProps = CilboxUtil.DeserializeDict( classData );
 			metadatas = new Dictionary< String, int >();
+			metadataIdToString = new Dictionary< int, String >();
 			foreach( DictionaryEntry k in CilboxUtil.DeserializeDict( (String)classProps["metadatas"] ) )
 			{
 				metadatas[(String)k.Key] = Convert.ToInt32( (String)k.Value );
@@ -341,6 +342,7 @@ namespace Cilbox
 		// Conversion from name to metadata id.
 		public Dictionary< String, int > metadatas;
 		public Dictionary< String, int > methodNameToIndex;
+		public Dictionary< int, String > metadataIdToString;
 
 		public CilboxMethod [] methods;
 
@@ -364,11 +366,17 @@ namespace Cilbox
 				return;
 			}
 
-			OrderedDictionary classData = CilboxUtil.DeserializeDict( se[0].stringData );
+			OrderedDictionary classData = CilboxUtil.DeserializeDict( se[0].classData );
+			OrderedDictionary stringData = CilboxUtil.DeserializeDict( se[0].stringData );
 
 			foreach( DictionaryEntry v in classData )
 			{
-				classes[(String)v.Key] = new CilboxClass( (String)v.Key, (String)v.Value );
+				CilboxClass cls = new CilboxClass( (String)v.Key, (String)v.Value );
+				foreach( DictionaryEntry s in stringData )
+				{
+					cls.metadataIdToString[Convert.ToInt32((String)s.Key)] = (String)s.Value;
+				}
+				classes[(String)v.Key] = cls;
 			}
 		}
 
@@ -397,6 +405,24 @@ namespace Cilbox
 			Debug.Log( "Postprocessing scene." );
 
 			Assembly mscorlib = typeof(CilboxProxy).Assembly;
+
+			OrderedDictionary strings = new OrderedDictionary();
+			// 256 ^ 3 - 1 = max value of a 3-byte uint.
+			// start at 1 since 0 is always not found.
+			for (int i = 1; i < (256 * 256 * 256); i++)
+			{
+				try
+				{
+					int tok = 0x70_000000 | i;
+					String str = mscorlib.ManifestModule.ResolveString(tok);
+					// Debug.Log("String Found: " + str + " At: " + tok.ToString("X8"));
+					strings[tok.ToString()] = str;
+				}
+				catch (Exception) // end of valid strings
+				{
+					break;
+				}
+			}
 
 			OrderedDictionary classes = new OrderedDictionary();
 			foreach (Type type in mscorlib.GetTypes())
@@ -519,7 +545,8 @@ namespace Cilbox
 				cillyDataObject.hideFlags = HideFlags.HideAndDontSave;
 				tac = cillyDataObject.AddComponent( typeof(CilboxEnvironmentHolder) ) as CilboxEnvironmentHolder;
 			}
-			tac.stringData = sAllClassData;
+			tac.classData = sAllClassData;
+			tac.stringData = CilboxUtil.SerializeDict( strings );
 			//cube.transform.position = new Vector3(0.0f, 0.5f, 0.0f);
 
 			// Iterate over all GameObjects, and find the ones that have Cilboxable scripts.
@@ -530,8 +557,12 @@ namespace Cilbox
 				MonoBehaviour [] scripts = g.GetComponents<MonoBehaviour>();
 				foreach (MonoBehaviour m in scripts )
 				{
+					// Skip null objects.
+					if (m == null)
+						continue;
+					object[] attribs = m.GetType().GetCustomAttributes(typeof(CilboxableAttribute), true);
 					// Not a proxiable script.
-					if (m.GetType().GetCustomAttributes(typeof(CilboxableAttribute), true).Length <= 0)
+					if (attribs == null || attribs.Length <= 0)
 						continue;
 
 					CilboxProxy p = g.AddComponent<CilboxProxy>();
