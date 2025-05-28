@@ -18,8 +18,8 @@
 7. The bytecode emulator can make all needed decisions about proper sandboxing, infinte loop termination, etc. But for the most part, my intent is to just disable any code that's doing something that could be usnafeish.
 
 ## Cleanup
- * Make function for constructors and methods, so we can get both at once.
- * Improve the definitions for serializing the list of data for Methods, Fields, and Strings.  Maybe encapsulate again.
+ * Make function for constructors and methods, so we can get both at once.  Calling GetMethods and GetConstructors everywher eis ugly.
+ * Improve the definitions for serializing the list of data for Methods, Fields, and Strings in the `assemblyRoot["metadata"]`. Maybe encapsulate again.  
  * Make it so we can initialize before Start.  Waiting til Start is very depressing.
  * Figure out where "The referenced script (Unknown) on this Behaviour is missing!" is coming from.
 
