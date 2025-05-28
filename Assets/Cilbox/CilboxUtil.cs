@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System;
 using System.Collections.Specialized;
 using System.Collections;
+using System.ComponentModel;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -14,12 +15,17 @@ namespace Cilbox
 {
 	public static class CilboxUtil
 	{
-		static public object FillPossibleSystemType( Type t )
+		static public object DeserializeDataForProxyField( Type t, String sInitialize )
 		{
-			if( t == typeof(System.Int32) )
-				return new System.Int32();
+			if( sInitialize != null && sInitialize.Length > 0 )
+				return TypeDescriptor.GetConverter(t).ConvertFrom(sInitialize);
 			else
-				return null;
+			{
+				if( !t.IsPrimitive ) 
+					return null;
+				else
+					return Activator.CreateInstance(t);
+			}
 		}
 
 		static public int IntFromHexChar( char c )

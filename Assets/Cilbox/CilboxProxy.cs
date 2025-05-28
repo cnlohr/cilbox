@@ -63,17 +63,19 @@ namespace Cilbox
 			{
 				cls = box.GetClass( className );
 				fields = new object[cls.instanceFieldNames.Length];
+				OrderedDictionary d = CilboxUtil.DeserializeDict( serializedObjectData );
 				for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
 				{
-					fields[i] = CilboxUtil.FillPossibleSystemType( cls.instanceFieldTypes[i] );
+					String fieldValue = (String)d[cls.instanceFieldNames[i]];
+					fields[i] = CilboxUtil.DeserializeDataForProxyField( cls.instanceFieldTypes[i], fieldValue );
 				}
 			}
 
 			box.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
 			box.InterpretIID( cls, this, ImportFunctionID.Awake, null );
-			if( cls != null ) box.InterpretIID( cls, this, ImportFunctionID.Start, null );
+			box.InterpretIID( cls, this, ImportFunctionID.Start, null );
 		}
-		//void Update() { if( cls != null ) Cilbox.InterpretIID( cls, this, ImportFunctionID.Update, null ); }
+		void Update() { if( box != null ) box.InterpretIID( cls, this, ImportFunctionID.Update, null ); }
 	}
 }
 

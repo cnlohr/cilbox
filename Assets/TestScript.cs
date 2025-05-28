@@ -8,9 +8,9 @@ public class TestScript : MonoBehaviour
 	[SerializeField] private int framenoPrivateButSerialize;
 	static public int framenoPublicStatic;
 	static private int framenoPrivateStatic;
-	TestScript() { Debug.Log( "XXX TestScript .ctor()" ); framenoPrivate = 10; framenoPrivateStatic = 14; framenoPrivateStatic = 32; }
+	TestScript() { framenoPrivate = 10; framenoPrivateStatic = 14; framenoPrivateStatic = 32; }
     void Start(){ framenoPublic++; framenoPrivate+=2; Debug.Log( $"XXX TestScript Start() {framenoPublic} {framenoPrivate} {framenoPrivateStatic}" ); }
-    void Awake(){ Debug.Log( "XXX TestScript Awake()" ); }
+    void Awake(){ }
     void Update() { /*Debug.Log( "XXX TestScript Update()" );*/ framenoPrivate = 123456; }
     public void PublicFunction() { Debug.Log( "Public Function" ); }
     public void PublicStaticFunction() { Debug.Log( "Public Staic Function" ); }

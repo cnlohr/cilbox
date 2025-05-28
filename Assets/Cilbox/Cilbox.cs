@@ -68,7 +68,9 @@ namespace Cilbox
 			int i;
 
 			i = 0;
-			String stbc = ""; for( i = 0; i < byteCode.Length; i++ ) stbc += byteCode[i].ToString("X2") + " "; Debug.Log( "INTERPRETING " + methodName + " VALS:" + stbc + " MAX: " + MaxStackSize );
+
+			// Uncomment for debug.
+			//String stbc = ""; for( i = 0; i < byteCode.Length; i++ ) stbc += byteCode[i].ToString("X2") + " "; Debug.Log( "INTERPRETING " + methodName + " VALS:" + stbc + " MAX: " + MaxStackSize );
 			//Debug.Log( ths.fields );
 
 			object [] stack = new object[MaxStackSize];
@@ -135,7 +137,7 @@ namespace Cilbox
 					case 0x1d: stack[sp++] = (Int32)(7); break; // ldc.i4.7
 					case 0x1e: stack[sp++] = (Int32)(8); break; // ldc.i4.8
 
-					case 0x1f: Debug.Log( "ldc " + byteCode[i] ); stack[sp++] = byteCode[i++]; break; // ldc.i4.s <int8>
+					case 0x1f: stack[sp++] = byteCode[i++]; break; // ldc.i4.s <int8>
 					case 0x20: stack[sp++] = BytecodeAs32( ref i ); break; // ldc.i4.s <int8>
 					case 0x28: 
 					{
@@ -278,7 +280,7 @@ namespace Cilbox
 				Type t = staticFieldTypes[id] = Type.GetType( (String)k.Value );
 
 				//staticFieldIDs[id] = Cilbox.FindInternalMetadataID( className, 4, fieldName );
-				this.staticFields[id] = CilboxUtil.FillPossibleSystemType( t );
+				this.staticFields[id] = CilboxUtil.DeserializeDataForProxyField( t, "" );
 				id++;
 			}
 
