@@ -49,7 +49,7 @@ namespace Cilbox
 
 		void Awake()
 		{
-			// Tricky: Stuff really isn't even ready here :(
+			// Tricky: Stuff really isn't even ready here :(  I don't know if we can try to get this going.
 		}
 
 		void Start()  {
@@ -59,6 +59,8 @@ namespace Cilbox
 			if( string.IsNullOrEmpty( className ) ) return;
 
 			// Populate fields[]
+			box.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
+
 			if( fields == null )
 			{
 				cls = box.GetClass( className );
@@ -71,7 +73,6 @@ namespace Cilbox
 				}
 			}
 
-			box.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
 			box.InterpretIID( cls, this, ImportFunctionID.Awake, null );
 			box.InterpretIID( cls, this, ImportFunctionID.Start, null );
 		}
