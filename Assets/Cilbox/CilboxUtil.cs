@@ -4,6 +4,7 @@ using System;
 using System.Collections.Specialized;
 using System.Collections;
 using System.ComponentModel;
+using System.Runtime.InteropServices;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -25,6 +26,26 @@ namespace Cilbox
 					return null;
 				else
 					return Activator.CreateInstance(t);
+			}
+		}
+
+		[StructLayout(LayoutKind.Explicit)]
+		public struct IntFloatConverter
+		{
+			[FieldOffset(0)]private float f;
+			[FieldOffset(0)]private int i;
+			[FieldOffset(0)]private uint u;
+			public static float ConvertItoF(int value)
+			{
+				return new IntFloatConverter { i = value }.f;
+			}
+			public static float ConvertUtoF(uint value)
+			{
+				return new IntFloatConverter { u = value }.f;
+			}
+			public static int ConvertFtoI(float value)
+			{
+				return new IntFloatConverter { f = value }.i;
 			}
 		}
 

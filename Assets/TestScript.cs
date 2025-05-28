@@ -1,4 +1,5 @@
 using UnityEngine;
+using System;
 
 [Cilboxable]
 public class TestScript : MonoBehaviour
@@ -11,7 +12,14 @@ public class TestScript : MonoBehaviour
 	TestScript() { framenoPrivate = 10; framenoPrivateStatic = 14; framenoPrivateStatic = 32; }
     void Start(){ framenoPublic++; framenoPrivate+=2; Debug.Log( $"XXX TestScript Start() {framenoPublic} {framenoPrivate} {framenoPrivateStatic}" ); }
     void Awake(){ }
-    void Update() { /*Debug.Log( "XXX TestScript Update()" );*/ framenoPrivate = 123456; }
+    void Update() {
+		framenoPrivate++;
+		float f = Time.time;//framenoPrivate / 100.0f;
+		float x = MathF.Sin( f );
+		float z = MathF.Cos( f );
+		Debug.Log( $"XXX TestScript Update() {x} {z} {f}" );
+		transform.position = new Vector3(x, 2, z);
+	}
     public void PublicFunction() { Debug.Log( "Public Function" ); }
     public void PublicStaticFunction() { Debug.Log( "Public Staic Function" ); }
     private void PrivateStaticFunction() { Debug.Log( "Private Static Function" ); }

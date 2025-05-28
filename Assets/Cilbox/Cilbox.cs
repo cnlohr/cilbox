@@ -139,14 +139,22 @@ namespace Cilbox
 
 					case 0x1f: stack[sp++] = byteCode[i++]; break; // ldc.i4.s <int8>
 					case 0x20: stack[sp++] = BytecodeAs32( ref i ); break; // ldc.i4.s <int8>
-					case 0x28: 
+					case 0x22: stack[sp++] = CilboxUtil.IntFloatConverter.ConvertUtoF(BytecodeAs32( ref i ) ); break; // ldc.r4 <float32 (num)>
+					case 0x25: stack[sp++] = stack[sp-1]; break; //dup XXX This is mega susssssssss
+					case 0x28: //call
+					case 0x73: //newobj
+					case 0x6F: //callvirt
 					{
-						// Call
 						uint bc = BytecodeAs32( ref i );
 						CilMetadataTokenInfo dt = box.metadatas[bc];
 						if( dt.nativeToken != 0 )
 						{
-							MethodBase st = dt.assembly.ManifestModule.ResolveMethod((int)dt.nativeToken);
+							bool isVoid = false;
+							MethodBase st;
+							st = dt.assembly.ManifestModule.ResolveMethod((int)dt.nativeToken);
+							if( st is MethodInfo )
+								isVoid = ((MethodInfo)st).ReturnType == typeof(void);
+
 							ParameterInfo [] pa = st.GetParameters();
 							//MethodInfo mi = (MethodInfo)st;
 							int numFields = pa.Length;
@@ -157,10 +165,20 @@ namespace Cilbox
 							{
 								callpar[numFields-ik-1] = stack[--sp];
 							}
-							if( !st.IsStatic )
+							if( st.IsConstructor )
+							{
+								callthis = Activator.CreateInstance(st.DeclaringType);
+							}
+							else if( !st.IsStatic )
 								callthis = stack[--sp];
-							//Debug.Log( " " + ((st.IsStatic)?"STATIC":"INSTANCE") + " / " + st.Name + " / " + callthis + " / fields=" + numFields );
-							stack[sp++] = st.Invoke( callthis, callpar );
+							//Debug.Log( " " + ((st.IsStatic)?"STATIC":"INSTANCE") + " / " + st.Name + "/" + (callthis==null) + " / " + callthis + " / fields=" + numFields + "/"+st );
+							object iko;
+							if( st.IsConstructor )
+								iko = ((ConstructorInfo)st).Invoke( callpar );
+							else
+								iko = st.Invoke( callthis, callpar );
+							//Debug.Log( "ISVOID:" + isVoid+ " IKO:" + iko );
+							if( !isVoid ) stack[sp++] = iko;
 						}
 						else
 						{
@@ -171,7 +189,11 @@ namespace Cilbox
 					case 0x2a: cont = false; break; // ret
 
 					// XXX This is wrong.  Need to learn how to unbox correctly.
-					case 0x58: Debug.Log( "Add: " + sp  ); Debug.Log( stack[sp-1].GetType() + " + " + stack[sp-2].GetType() ); stack[sp-2] = Convert.ToInt32(stack[sp-1]) + Convert.ToInt32(stack[sp-2]); sp--; break; //add
+					case 0x58: stack[sp-2] = Convert.ToInt32(stack[sp-2]) + Convert.ToInt32(stack[sp-1]); sp--; break; //add
+
+					// XXX THIS IS ALSO WRONG.
+					case 0x5B: stack[sp-2] = Convert.ToSingle(stack[sp-2]) / Convert.ToSingle(stack[sp-1]); sp--; break; //add
+					case 0x6B: stack[sp-1] = Convert.ToSingle(stack[sp-1]); break; // conv.r4
 
 					case 0x72:
 					{
@@ -190,6 +212,8 @@ namespace Cilbox
 					case 0x7d:
 					{
 						uint bc = BytecodeAs32( ref i );
+						//Debug.Log( bc );
+						//Debug.Log( box.metadatas[bc].fieldIndex );
 						ths.fields[box.metadatas[bc].fieldIndex] = stack[--sp];
 						--sp; // Should be "This" XXX WRONG
 						break; //stfld
@@ -203,7 +227,7 @@ namespace Cilbox
 
 					case 0x8C: BytecodeAs32( ref i ); break; // box (This pulls off a type, but I think everything is boxed, so no big deal)
 
-					default: Breakwarn( $"Opcode {b} unimplemented", i ); disabled = true; cont = false; break;
+					default: Breakwarn( $"Opcode 0x{b.ToString("X2")} unimplemented", i ); disabled = true; cont = false; break;
 
 					}
 					//Update 022040e201007d020000042a
