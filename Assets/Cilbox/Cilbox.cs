@@ -15,11 +15,6 @@ public class CilboxableAttribute : Attribute { }
 
 namespace Cilbox
 {
-	public class CilboxEnvironmentHolder : MonoBehaviour
-	{
-		public String assemblyData;
-	}
-
 	public class CilboxMethod
 	{
 		public void Load( CilboxClass cclass, String name, String payload )
@@ -66,6 +61,7 @@ namespace Cilbox
 		public object Interpret( CilboxProxy ths, object [] parametersIn )
 		{
 			if( byteCode == null || byteCode.Length == 0 || disabled ) return null;
+			Cilbox box = parentClass.box;
 	
 			// Do the magic.
 
@@ -145,7 +141,7 @@ namespace Cilbox
 					{
 						// Call
 						uint bc = BytecodeAs32( ref i );
-						CilMetadataTokenInfo dt = Cilbox.metadatas[bc];
+						CilMetadataTokenInfo dt = box.metadatas[bc];
 						if( dt.nativeToken != 0 )
 						{
 							MethodBase st = dt.assembly.ManifestModule.ResolveMethod((int)dt.nativeToken);
@@ -178,9 +174,7 @@ namespace Cilbox
 					case 0x72:
 					{
 						uint bc = BytecodeAs32( ref i );
-						Debug.Log( "STRING IN: " + bc );
-						stack[sp++] = Cilbox.metadatas[bc].fields[0];
-						Debug.Log( "STRING: " + stack[sp-1] );
+						stack[sp++] = box.metadatas[bc].fields[0];
 						break; //ldfld
 					}
 
@@ -188,20 +182,20 @@ namespace Cilbox
 					{
 						--sp; // Should be "This" XXX WRONG
 						uint bc = BytecodeAs32( ref i );
-						stack[sp++] = ths.fields[Cilbox.metadatas[bc].fieldIndex];
+						stack[sp++] = ths.fields[box.metadatas[bc].fieldIndex];
 						break; //ldfld
 					}
 					case 0x7d:
 					{
 						uint bc = BytecodeAs32( ref i );
-						ths.fields[Cilbox.metadatas[bc].fieldIndex] = stack[--sp];
+						ths.fields[box.metadatas[bc].fieldIndex] = stack[--sp];
 						--sp; // Should be "This" XXX WRONG
 						break; //stfld
 					}
 					case 0x7e: 
 					{
 						uint bc = BytecodeAs32( ref i );
-						stack[sp++] = parentClass.staticFields[Cilbox.metadatas[bc].fieldIndex];
+						stack[sp++] = parentClass.staticFields[box.metadatas[bc].fieldIndex];
 						break; //ldsfld
 					}
 
@@ -248,8 +242,27 @@ namespace Cilbox
 
 	public class CilboxClass
 	{
-		public CilboxClass( String className, String classData )
+		public Cilbox box;
+		public String className;
+
+		public object[] staticFields;
+		public String[] staticFieldNames;
+		public Type[] staticFieldTypes;
+
+		public String[] instanceFieldNames;
+		public Type[] instanceFieldTypes;
+
+		// Conversion from name to metadata id.
+		//public Dictionary< String, uint > metadatas;
+		public Dictionary< String, uint > methodNameToIndex;
+
+		public CilboxMethod [] methods;
+
+		public uint [] importFunctionToId; // from ImportFunctionID
+
+		public CilboxClass( Cilbox box, String className, String classData )
 		{
+			this.box = box;
 			this.className = className;
 			OrderedDictionary classProps = CilboxUtil.DeserializeDict( classData );
 
@@ -311,23 +324,6 @@ namespace Cilbox
 				//Debug.Log( "MATCHING + " + fn + " : " + i + " " + importFunctionToId[i] );
 			}
 		}
-
-		public String className;
-
-		public object[] staticFields;
-		public String[] staticFieldNames;
-		public Type[] staticFieldTypes;
-
-		public String[] instanceFieldNames;
-		public Type[] instanceFieldTypes;
-
-		// Conversion from name to metadata id.
-		//public Dictionary< String, uint > metadatas;
-		public Dictionary< String, uint > methodNameToIndex;
-
-		public CilboxMethod [] methods;
-
-		public uint [] importFunctionToId; // from ImportFunctionID
 	}
 
 	public class CilMetadataTokenInfo
@@ -351,27 +347,38 @@ namespace Cilbox
 		mtMethod = 10,
 	}
 
-	public static class Cilbox
+	public class Cilbox : MonoBehaviour
 	{
-		public static Dictionary< String, CilboxClass > classes;
-		public static CilMetadataTokenInfo [] metadatas;
+		public Dictionary< String, CilboxClass > classes;
+		public CilMetadataTokenInfo [] metadatas;
+		public String assemblyData;
+		public bool initialized;
 
-		static Cilbox()
+		Cilbox()
 		{
+			initialized = false;
+		}
+
+		public void BoxInitialize()
+		{
+			Debug.Log( $"Cilbox Initialize called {initialized}" );
+			if( initialized ) return;
+			initialized = true;
+
 			Debug.Log( "Cilbox Initialize" );
 			classes = new Dictionary< String, CilboxClass >();
 
 			//CilboxEnvironmentHolder [] se = UnityEngine.Object.FindObjectsByType<CilboxEnvironmentHolder>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-			CilboxEnvironmentHolder [] se = Resources.FindObjectsOfTypeAll(typeof(CilboxEnvironmentHolder)) as CilboxEnvironmentHolder [];
-			if( se.Length == 0 )
-			{
-				Debug.LogError( "Can't find cilly environment holder. Something went wrong with CilboxScenePostprocessor" );
-				return;
-			}
+			//CilboxEnvironmentHolder [] se = Resources.FindObjectsOfTypeAll(typeof(CilboxEnvironmentHolder)) as CilboxEnvironmentHolder [];
+			//if( se.Length == 0 )
+			//{
+			//	Debug.LogError( "Can't find cilly environment holder. Something went wrong with CilboxScenePostprocessor" );
+			//	return;
+			//}
 
-			OrderedDictionary assemblyData = CilboxUtil.DeserializeDict( se[0].assemblyData );
-			OrderedDictionary classData = CilboxUtil.DeserializeDict( (String)assemblyData["classes"] );
-			OrderedDictionary metaData = CilboxUtil.DeserializeDict( (String)assemblyData["metadata"] );
+			OrderedDictionary assemblyRoot = CilboxUtil.DeserializeDict( assemblyData );
+			OrderedDictionary classData = CilboxUtil.DeserializeDict( (String)assemblyRoot["classes"] );
+			OrderedDictionary metaData = CilboxUtil.DeserializeDict( (String)assemblyRoot["metadata"] );
 
 			metadatas = new CilMetadataTokenInfo[metaData.Count+1]; // element 0 is invalid.
 			metadatas[0] = new CilMetadataTokenInfo( 0, new String[]{ "INVALID METADATA" } );
@@ -418,7 +425,6 @@ namespace Cilbox
 							{
 								if( m.ToString() == fullSignature )
 								{
-									Debug.Log( "Found " + m.ToString() + " in " + assembly + "; token " + m.MetadataToken.ToString("X8") );
 									t.nativeToken = m.MetadataToken;
 									t.assembly = assembly;
 									break;
@@ -430,10 +436,8 @@ namespace Cilbox
 								methods = tt.GetConstructors( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
 								foreach( MethodBase m in methods )
 								{
-									Debug.Log( "Comparing \"" + fullSignature + "\" to \"" + m.ToString() + "\"" );
 									if( m.ToString() == fullSignature )
 									{
-										Debug.Log( "Found " + m.ToString() + " in " + assembly + "; token " + m.MetadataToken.ToString("X8") );
 										t.nativeToken = m.MetadataToken;
 										t.assembly = assembly;
 										break;
@@ -448,24 +452,12 @@ namespace Cilbox
 
 			foreach( DictionaryEntry v in classData )
 			{
-				CilboxClass cls = new CilboxClass( (String)v.Key, (String)v.Value );
+				CilboxClass cls = new CilboxClass( this, (String)v.Key, (String)v.Value );
 				classes[(String)v.Key] = cls;
 			}
 		}
 
-		public static int FindInternalMetadataID( String soruceName, MetaTokenType type, String name )
-		{
-			int i;
-			for( i = 0; i < metadatas.Length; i++ )
-			{
-				CilMetadataTokenInfo ci = metadatas[i];
-				if( ci.type == type && ci.fields.Length > 1 && ci.fields[1] == name )
-					return i;
-			}
-			return -1;
-		}
-
-		public static CilboxClass GetClass( String className )
+		public CilboxClass GetClass( String className )
 		{
 			if( className == null ) return null;
 			CilboxClass ret;
@@ -473,7 +465,7 @@ namespace Cilbox
 			return null;
 		}
 
-		public static object InterpretIID( CilboxClass cls, CilboxProxy ths, ImportFunctionID iid, object [] parameters )
+		public object InterpretIID( CilboxClass cls, CilboxProxy ths, ImportFunctionID iid, object [] parameters )
 		{
 			if( cls == null ) return null;
 			uint index = cls.importFunctionToId[(uint)iid];
@@ -690,26 +682,26 @@ namespace Cilbox
 				classes[type.FullName] = CilboxUtil.SerializeDict( classProps );
 			}
 
-			OrderedDictionary assemblyData = new OrderedDictionary();
-			assemblyData["classes"] = CilboxUtil.SerializeDict( classes );
-			assemblyData["metadata"] = CilboxUtil.SerializeDict( assemblyMetadata );
+			OrderedDictionary assemblyRoot = new OrderedDictionary();
+			assemblyRoot["classes"] = CilboxUtil.SerializeDict( classes );
+			assemblyRoot["metadata"] = CilboxUtil.SerializeDict( assemblyMetadata );
 
-			String sAllAssemblyData = CilboxUtil.SerializeDict( assemblyData );
+			String sAllAssemblyData = CilboxUtil.SerializeDict( assemblyRoot );
 
-			CilboxEnvironmentHolder [] se = Resources.FindObjectsOfTypeAll(typeof(CilboxEnvironmentHolder)) as CilboxEnvironmentHolder [];
-			CilboxEnvironmentHolder tac;
+			Cilbox [] se = Resources.FindObjectsOfTypeAll(typeof(Cilbox)) as Cilbox [];
+			Cilbox tac;
 			if( se.Length != 0 )
 			{
 				tac = se[0];
 			}
 			else
 			{
-				GameObject cillyDataObject = new GameObject("CilboxData");
-				cillyDataObject.hideFlags = HideFlags.HideAndDontSave;
-				tac = cillyDataObject.AddComponent( typeof(CilboxEnvironmentHolder) ) as CilboxEnvironmentHolder;
+				GameObject cilboxDataObject = new GameObject("CilboxData");
+				cilboxDataObject.hideFlags = HideFlags.HideAndDontSave;
+				tac = cilboxDataObject.AddComponent( typeof(Cilbox) ) as Cilbox;
 			}
 			tac.assemblyData = sAllAssemblyData;
-			//cube.transform.position = new Vector3(0.0f, 0.5f, 0.0f);
+			tac.initialized = false; // Force reinitializaiton.
 
 			// Iterate over all GameObjects, and find the ones that have Cilboxable scripts.
 			object[] obj = GameObject.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
@@ -728,7 +720,7 @@ namespace Cilbox
 						continue;
 
 					CilboxProxy p = g.AddComponent<CilboxProxy>();
-					p.SetupProxy( m );
+					p.SetupProxy( tac, m );
 					UnityEngine.Object.DestroyImmediate( m );
 				}
 			}

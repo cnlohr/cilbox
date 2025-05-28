@@ -14,17 +14,21 @@ namespace Cilbox
 	{
 		public object [] fields;
 		public CilboxClass cls;
+		public Cilbox box;
 		public String className;
 		public String serializedObjectData;
 
 		CilboxProxy() { }
 
 #if UNITY_EDITOR
-		public void SetupProxy( MonoBehaviour mToSteal )
+		public void SetupProxy( Cilbox box, MonoBehaviour mToSteal )
 		{
+			this.box = box;
 			this.className = mToSteal.GetType().ToString();
-			Debug.Log( $"CilboxProxy.ctor() ClassName:{className}" );
-			cls = Cilbox.GetClass( className );
+			Debug.Log( $"CilboxProxy.ctor() ClassName:{className} Box:{box}" );
+
+			box.BoxInitialize();
+			cls = box.GetClass( className );
 
 			OrderedDictionary instanceFields = new OrderedDictionary();
 			FieldInfo[] fi = mToSteal.GetType().GetFields( BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance );
@@ -45,13 +49,19 @@ namespace Cilbox
 
 		void Awake()
 		{
+			// Tricky: Stuff really isn't even ready here :(
+		}
+
+		void Start()  {
 			Debug.Log( "Proxy Class Name: " + className );
+			box.BoxInitialize(); // In case it is not yet initialized.
+
 			if( string.IsNullOrEmpty( className ) ) return;
 
 			// Populate fields[]
 			if( fields == null )
 			{
-				cls = Cilbox.GetClass( className );
+				cls = box.GetClass( className );
 				fields = new object[cls.instanceFieldNames.Length];
 				for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
 				{
@@ -59,14 +69,10 @@ namespace Cilbox
 				}
 			}
 
-			Debug.Log( "Awake -> dotCtor" );
-			Cilbox.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
-			Debug.Log( "Awake -> Awake" );
-			Cilbox.InterpretIID( cls, this, ImportFunctionID.Awake, null );
-			Debug.Log( "Awake Done" );
+			box.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
+			box.InterpretIID( cls, this, ImportFunctionID.Awake, null );
+			if( cls != null ) box.InterpretIID( cls, this, ImportFunctionID.Start, null );
 		}
-
-		void Start()  { if( cls != null ) Cilbox.InterpretIID( cls, this, ImportFunctionID.Start, null ); }
 		//void Update() { if( cls != null ) Cilbox.InterpretIID( cls, this, ImportFunctionID.Update, null ); }
 	}
 }

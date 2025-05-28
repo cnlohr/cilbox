@@ -17,14 +17,16 @@
 6. Whenever `Start` or `Update` is called, the `CilboxProxy` will ask `Cilbox` to emulate the bytecode associated with that method.
 7. The bytecode emulator can make all needed decisions about proper sandboxing, infinte loop termination, etc. But for the most part, my intent is to just disable any code that's doing something that could be usnafeish.
 
+## Cleanup
+ * Make function for constructors and methods, so we can get both at once.
+ * Improve the definitions for serializing the list of data for Methods, Fields, and Strings.  Maybe encapsulate again.
+ * Make it so we can initialize before Start.  Waiting til Start is very depressing.
+ * Figure out where "The referenced script (Unknown) on this Behaviour is missing!" is coming from.
 
 ## TODO
  * Use Harmony to prevent execution of original script .ctor and Awake() i.e. near `CilboxScenePostprocessor` https://github.com/MerlinVR/UdonSharp/blob/master/Packages/com.merlin.UdonSharp/Editor/UdonSharpEditorManager.cs#L145
  * Support ref.
  * Make mechanism to extract strings as metadata's
  * Make all metadata's patchable.
-
-## TODO, more immediate approaches:
- * The Cilbox should probably be able to exist one per user, instead of static.
- * When exporting, find all METAs and make a dictionary of what they mean.  Potentially replace them with dictionaries of what they mean and/or rewrite them to be sequentially indexed.  Then they can be straight up interpreted.
- * Hold over the arithmatic by handling promotion to int32.
+ * Fixup arithmatic functions to do the right thing.
+ * Do the rest of the opcodes.

@@ -37,3 +37,26 @@
 				}
 			}
 			*/
+
+
+
+
+
+
+
+
+
+
+
+		public int FindInternalMetadataID( String soruceName, MetaTokenType type, String name )
+		{
+			int i;
+			for( i = 0; i < metadatas.Length; i++ )
+			{
+				CilMetadataTokenInfo ci = metadatas[i];
+				if( ci.type == type && ci.fields.Length > 1 && ci.fields[1] == name )
+					return i;
+			}
+			return -1;
+		}
+
