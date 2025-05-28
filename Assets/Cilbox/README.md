@@ -31,3 +31,6 @@
  * Fixup arithmatic functions to do the right thing.
  * Do the rest of the opcodes.
  * Write a good version of `DeserializeDataForProxyField` that can handle various data types, like Vector3, etc...
+ * Make it so you can access fields from the proxy object, like "transform" etc.
+ * Make it so you can call other functions within the emulated environment.
+ * Add a bunch more opcodes.
