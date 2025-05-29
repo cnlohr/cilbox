@@ -21,10 +21,11 @@
  * Make function for constructors and methods, so we can get both at once.  Calling GetMethods and GetConstructors everywher eis ugly.
  * Improve the definitions for serializing the list of data for Methods, Fields, and Strings in the `assemblyRoot["metadata"]`. Maybe encapsulate again.  
  * Make it so we can initialize before Start.  Waiting til Start is very depressing.
+ * Try to make sense of when we should be init/start/awakening'ing.
  * Figure out where "The referenced script (Unknown) on this Behaviour is missing!" is coming from.
 
 ## TODO
- * Use Harmony to prevent execution of original script .ctor and Awake() i.e. near `CilboxScenePostprocessor` https://github.com/MerlinVR/UdonSharp/blob/master/Packages/com.merlin.UdonSharp/Editor/UdonSharpEditorManager.cs#L145
+ * Use Harmony or something to prevent execution of original script .ctor and Awake() i.e. near `CilboxScenePostprocessor` https://github.com/MerlinVR/UdonSharp/blob/master/Packages/com.merlin.UdonSharp/Editor/UdonSharpEditorManager.cs#L145
  * Support ref.
  * Fixup arithmatic functions to do the right thing.
  * Do the rest of the opcodes.
@@ -32,5 +33,6 @@
  * Make it so you can access fields from the proxy object, like "transform" etc.
  * Make it so you can call other functions within the emulated environment.
  * Add a bunch more opcodes.
-
+ * Need types to also be searched out and destroyed, for things like unbox, etc.  So we need a new section in metadata for types.
  * WRITE LOTS OF TESTS
+
