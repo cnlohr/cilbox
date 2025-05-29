@@ -12,6 +12,8 @@ public class TestScript : MonoBehaviour
 	TestScript() { framenoPrivate = 10; framenoPrivateStatic = 14; framenoPrivateStatic = 32; }
     void Start(){ framenoPublic++; framenoPrivate+=2; Debug.Log( $"XXX TestScript Start() {framenoPublic} {framenoPrivate} {framenoPrivateStatic}" ); }
     void Awake(){ }
+	//public int Fib( int n ) { Debug.Log( "FIB:" + n ); return Fib(n-1) * Fib(n-2); }
+	object SubFunction( int a, int b ) { return a + b; }
     void Update() {
 		framenoPrivate++;
 		float f = Time.time / .4f;//framenoPrivate / 100.0f;
@@ -23,7 +25,7 @@ public class TestScript : MonoBehaviour
 		if( o1 == o2 ) Debug.Log( "ILLEGAL MATCH" );
 		for( i = 0; i < 10; i++ )
 		{
-			x++;
+			x = (int)SubFunction( (int)x, 1 );
 		}
 		Debug.Log( $"XXX TestScript Update() {x} {z} {f}" );
 		transform.position = new Vector3(x, 2, z);

@@ -58,13 +58,15 @@ namespace Cilbox
 
 			if( string.IsNullOrEmpty( className ) ) return;
 
-			// Populate fields[]
-			box.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
-
 			if( fields == null )
 			{
 				cls = box.GetClass( className );
+				// Populate fields[]
 				fields = new object[cls.instanceFieldNames.Length];
+
+				// Call interpreted constructor.
+				box.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
+
 				OrderedDictionary d = CilboxUtil.DeserializeDict( serializedObjectData );
 				for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
 				{
@@ -73,7 +75,7 @@ namespace Cilbox
 				}
 			}
 
-			box.InterpretIID( cls, this, ImportFunctionID.Awake, null );
+			box.InterpretIID( cls, this, ImportFunctionID.Awake, null ); // Does this go before or after initialized fields.
 			box.InterpretIID( cls, this, ImportFunctionID.Start, null );
 		}
 		void Update() { if( box != null ) box.InterpretIID( cls, this, ImportFunctionID.Update, null ); }

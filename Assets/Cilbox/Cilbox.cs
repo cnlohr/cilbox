@@ -18,6 +18,18 @@ namespace Cilbox
 {
 	public class CilboxMethod
 	{
+		public bool disabled;
+		public CilboxClass parentClass;
+		public int MaxStackSize;
+		public String methodName;
+		public String fullSignature;
+		public String[] methodLocals;
+		public String[] methodLocalTypes;
+		public byte[] byteCode;
+		public bool isStatic;
+		public String[] signatureParameters;
+		public String[] signatureParameterTypes;
+
 		public void Load( CilboxClass cclass, String name, String payload )
 		{
 			methodName = name;
@@ -52,6 +64,17 @@ namespace Cilbox
 
 			MaxStackSize = Convert.ToInt32(((String)methodProps["maxStack"]));
 			isStatic = Convert.ToInt32(((String)methodProps["isStatic"])) != 0;
+			fullSignature = (String)methodProps["fullSignature"];
+			OrderedDictionary od = CilboxUtil.DeserializeDict( (String)methodProps["parameters"] );
+			signatureParameters = new String[od.Count];
+			signatureParameterTypes = new String[od.Count];
+			int sn = 0;
+			foreach( DictionaryEntry v in od )
+			{
+				signatureParameters[sn] = (String)v.Key;
+				signatureParameterTypes[sn] = (String)v.Value;
+				sn++;
+			}
 		}
 		public void Breakwarn( String message, int bytecodeplace )
 		{
@@ -123,6 +146,8 @@ namespace Cilbox
 			}
 
 			public StackElement LoadObject( object o ) { this.o = o; type = StackType.Object; return this; }
+			public StackElement LoadUshort( uint u ) { this.u = u; type = StackType.Ushort; return this; }
+			public StackElement LoadByte( uint u ) { this.u = u; type = StackType.Byte; return this; }
 			public StackElement LoadInt( int i ) { this.i = i; type = StackType.Int; return this; }
 			public StackElement LoadUint( uint u ) { this.u = u; type = StackType.Uint; return this; }
 			public StackElement LoadLong( long l ) { this.l = l; type = StackType.Long; return this; }
@@ -186,6 +211,9 @@ namespace Cilbox
 				if( parametersIn != null ) plen = parametersIn.Length;
 				parameters = new object[plen+1];
 				parameters[0] = ths;
+				int p;
+				for( p = 0; p < plen; p++ )
+					parameters[p+1] = parametersIn[p];
 			}
 
 			bool cont = true;
@@ -255,37 +283,69 @@ namespace Cilbox
 					case 0x6F: //callvirt
 					{
 						uint bc = (b == 0x29) ? stack[--sp].u : BytecodeAs32( ref pc );
+						object iko = null; // Returned value.
 						CilMetadataTokenInfo dt = box.metadatas[bc];
 						if( dt.nativeToken != 0 )
 						{
 							bool isVoid = false;
 							MethodBase st;
-							st = dt.assembly.ManifestModule.ResolveMethod((int)dt.nativeToken);
-							if( st is MethodInfo )
-								isVoid = ((MethodInfo)st).ReturnType == typeof(void);
 
-							ParameterInfo [] pa = st.GetParameters();
-							//MethodInfo mi = (MethodInfo)st;
-							int numFields = pa.Length;
-							object callthis = null;
-							object [] callpar = new object[numFields];
-							int ik;
-							for( ik = 0; ik < numFields; ik++ )
+							if( dt.nativeToken == 0 )
 							{
-								callpar[numFields-ik-1] = stack[--sp].AsObject();
+								// Faulty: Can't execute.
+								Breakwarn( $"Attempting to execute non-existent function in {fullSignature}", pc );
 							}
-							if( st.IsConstructor )
+							else if( dt.nativeToken == 1 )
 							{
-								callthis = Activator.CreateInstance(st.DeclaringType);
+								// Sentinel.  interpretiveMethod will contain what method to interpret.
+								// interpretiveMethodClass
+								CilboxClass targetClass = box.classesList[dt.interpretiveMethodClass];
+								CilboxMethod targetMethod = targetClass.methods[dt.interpretiveMethod];
+
+								int numParams = targetMethod.signatureParameters.Length;
+								object [] cparameters = new object[numParams];
+								int i;
+								for( i = 0; i < numParams; i++ )
+								{
+									cparameters[i] = stack[--sp].AsObject();
+								}
+								CilboxProxy callThis = null;
+								if( !targetMethod.isStatic )
+								{
+									callThis = (CilboxProxy)stack[--sp].AsObject();
+								}
+								iko = targetMethod.Interpret( callThis, cparameters );
+								//public object Interpret( CilboxProxy ths, object [] parametersIn )
+								//signatureParameters // count
 							}
-							else if( !st.IsStatic )
-								callthis = stack[--sp].AsObject();
-							//Debug.Log( " " + ((st.IsStatic)?"STATIC":"INSTANCE") + " / " + st.Name + "/" + (callthis==null) + " / " + callthis + " / fields=" + numFields + "/"+st );
-							object iko;
-							if( st.IsConstructor )
-								iko = ((ConstructorInfo)st).Invoke( callpar );
 							else
-								iko = st.Invoke( callthis, callpar );
+							{
+								st = dt.assembly.ManifestModule.ResolveMethod((int)dt.nativeToken);
+								if( st is MethodInfo )
+									isVoid = ((MethodInfo)st).ReturnType == typeof(void);
+
+								ParameterInfo [] pa = st.GetParameters();
+								//MethodInfo mi = (MethodInfo)st;
+								int numFields = pa.Length;
+								object callthis = null;
+								object [] callpar = new object[numFields];
+								int ik;
+								for( ik = 0; ik < numFields; ik++ )
+								{
+									callpar[numFields-ik-1] = stack[--sp].AsObject();
+								}
+								if( st.IsConstructor )
+								{
+									callthis = Activator.CreateInstance(st.DeclaringType);
+								}
+								else if( !st.IsStatic )
+									callthis = stack[--sp].AsObject();
+								//Debug.Log( " " + ((st.IsStatic)?"STATIC":"INSTANCE") + " / " + st.Name + "/" + (callthis==null) + " / " + callthis + " / fields=" + numFields + "/"+st );
+								if( st.IsConstructor )
+									iko = ((ConstructorInfo)st).Invoke( callpar );
+								else
+									iko = st.Invoke( callthis, callpar );
+							}
 							//Debug.Log( "ISVOID:" + isVoid+ " IKO:" + iko );
 							if( !isVoid ) stack[sp++].Load( iko );
 							if( b == 0x27 )
@@ -293,8 +353,7 @@ namespace Cilbox
 								// This is returning from a jump, so immediatelb abort.
 								if( isVoid ) stack[sp++].Load( null );
 								cont = false;
-							}
-						}
+							}						}
 						else
 						{
 							Breakwarn( $"Function {dt.fields[2]} not found", pc );
@@ -497,12 +556,14 @@ namespace Cilbox
 
 					case 0x65: stack[sp].l = -stack[sp].l; break;
 					case 0x66: stack[sp].e ^= 0xffffffffffffffff; break;
-					case 0x67: stack[sp-1].LoadInt( (int)(stack[sp-1].u&0xff) ); break; // conv.i1
-					case 0x68: stack[sp-1].LoadInt( (int)(stack[sp-1].u&0xffff) ); break; // conv.i2
-					case 0x69: stack[sp-1].LoadInt( (int)(stack[sp-1].u) ); break; // conv.i4
-					case 0x6A: stack[sp-1].LoadLong( stack[sp-1].l ); break; // conv.i8
-					case 0x6B: stack[sp-1].LoadFloat( Convert.ToSingle(stack[sp-1].i) ); break; // conv.r4
-					case 0x6C: stack[sp-1].LoadDouble( Convert.ToDouble(stack[sp-1].e) ); break; // conv.r8
+
+					// TODO: All these conversions are sus.
+					case 0x67: stack[sp-1].LoadByte( Convert.ToUInt32(stack[sp-1].AsObject())&0xff ); break; // conv.i1
+					case 0x68: stack[sp-1].LoadUshort( Convert.ToUInt32(stack[sp-1].AsObject())&0xffff ); break; // conv.i2
+					case 0x69: stack[sp-1].LoadInt( Convert.ToInt32(stack[sp-1].AsObject()) ); break; // conv.i4
+					case 0x6A: stack[sp-1].LoadLong( Convert.ToInt64(stack[sp-1].AsObject()) ); break; // conv.i8
+					case 0x6B: stack[sp-1].LoadFloat( Convert.ToSingle(stack[sp-1].AsObject()) ); break; // conv.r4
+					case 0x6C: stack[sp-1].LoadDouble( Convert.ToDouble(stack[sp-1].AsObject()) ); break; // conv.r8
 
 					case 0x72:
 					{
@@ -521,8 +582,11 @@ namespace Cilbox
 					case 0x7d:
 					{
 						uint bc = BytecodeAs32( ref pc );
-						//Debug.Log( bc );
-						//Debug.Log( box.metadatas[bc].fieldIndex );
+						Debug.Log( bc );
+						Debug.Log( ths );
+						Debug.Log( ths.fields );
+						Debug.Log( ths.fields.Length );
+						Debug.Log( box.metadatas[bc].fieldIndex );
 						ths.fields[box.metadatas[bc].fieldIndex] = stack[--sp].AsObject();
 						--sp; // Should be "This" XXX WRONG
 						break; //stfld
@@ -535,6 +599,12 @@ namespace Cilbox
 					}
 
 					case 0x8C: BytecodeAs32( ref pc ); break; // box (This pulls off a type, but I think everything is boxed, so no big deal)
+
+					case 0xA5:
+						uint tokType = BytecodeAs32( ref pc ); // Let's hope that somehow this isn't needed?
+						StackElement e = stack[sp-1];
+						Debug.Log( "Scary Unbox (that we don't have code for) from " + e.type + " to " +tokType.ToString("X8") );
+						break; // unbox.any
 
 					default: Breakwarn( $"Opcode 0x{b.ToString("X2")} unimplemented", pc ); disabled = true; cont = false; break;
 
@@ -568,15 +638,6 @@ namespace Cilbox
 		{
 			return CilboxUtil.BytecodePullLiteral( byteCode, ref i, 8 );
 		}
-
-		public bool disabled;
-		public CilboxClass parentClass;
-		public int MaxStackSize;
-		public String methodName;
-		public String[] methodLocals;
-		public String[] methodLocalTypes;
-		public byte[] byteCode;
-		public bool isStatic;
 	}
 
 	public class CilboxClass
@@ -591,9 +652,8 @@ namespace Cilbox
 		public String[] instanceFieldNames;
 		public Type[] instanceFieldTypes;
 
-		// Conversion from name to metadata id.
-		//public Dictionary< String, uint > metadatas;
 		public Dictionary< String, uint > methodNameToIndex;
+		public Dictionary< String, uint > methodFullSignatureToIndex;
 
 		public CilboxMethod [] methods;
 
@@ -640,11 +700,13 @@ namespace Cilbox
 			int mnum = deserMethods.Count;
 			methods = new CilboxMethod[mnum];
 			methodNameToIndex = new Dictionary< String, uint >();
+			methodFullSignatureToIndex = new Dictionary< String, uint >();
 			foreach( DictionaryEntry k in deserMethods )
 			{
 				methods[id] = new CilboxMethod();
 				methods[id].Load( this, (String)k.Key, (String)k.Value );
 				methodNameToIndex[(String)k.Key] = id;
+				methodFullSignatureToIndex[methods[id].fullSignature] = id;
 				id++;
 			}
 
@@ -671,6 +733,8 @@ namespace Cilbox
 		public MetaTokenType type;
 		public int fieldIndex; // Only used for fields.
 		public int nativeToken; // Only used for native function calls.
+		public int interpretiveMethod; // If nativeToken is 1, then it's a interpreted call.
+		public int interpretiveMethodClass; // If nativeToken is 1, then it's a interpreted call class
 		public Assembly assembly; // Only used for native function calls.
 
 		// For string, type = 7, string is in fields[0]
@@ -688,7 +752,8 @@ namespace Cilbox
 
 	public class Cilbox : MonoBehaviour
 	{
-		public Dictionary< String, CilboxClass > classes;
+		public Dictionary< String, int > classes;
+		public CilboxClass [] classesList;
 		public CilMetadataTokenInfo [] metadatas;
 		public String assemblyData;
 		public bool initialized;
@@ -705,7 +770,6 @@ namespace Cilbox
 			initialized = true;
 
 			Debug.Log( "Cilbox Initialize" );
-			classes = new Dictionary< String, CilboxClass >();
 
 			//CilboxEnvironmentHolder [] se = UnityEngine.Object.FindObjectsByType<CilboxEnvironmentHolder>(FindObjectsInactive.Include, FindObjectsSortMode.None);
 			//CilboxEnvironmentHolder [] se = Resources.FindObjectsOfTypeAll(typeof(CilboxEnvironmentHolder)) as CilboxEnvironmentHolder [];
@@ -721,6 +785,17 @@ namespace Cilbox
 
 			metadatas = new CilMetadataTokenInfo[metaData.Count+1]; // element 0 is invalid.
 			metadatas[0] = new CilMetadataTokenInfo( 0, new String[]{ "INVALID METADATA" } );
+
+			int clsid = 0;
+			classes = new Dictionary< String, int >();
+			classesList = new CilboxClass[classData.Count];
+			foreach( DictionaryEntry v in classData )
+			{
+				CilboxClass cls = new CilboxClass( this, (String)v.Key, (String)v.Value );
+				classesList[clsid] = cls;
+				classes[(String)v.Key] = clsid;
+				clsid++;
+			}
 
 			foreach( DictionaryEntry v in metaData )
 			{
@@ -753,26 +828,34 @@ namespace Cilbox
 					String fullSignature = st[3];
 					String useAssembly = st[4];
 
-					foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+					// First, see if this is to a class we are responsible for.
+					int classid;
+					if( classes.TryGetValue( parentType, out classid ) )
 					{
-						if( assembly.GetName().ToString() != useAssembly ) continue;
-						var tt = assembly.GetType( parentType );
-						if (tt != null)
+						CilboxClass matchingClass = classesList[classid];
+						uint imid = 0;
+						if( matchingClass.methodFullSignatureToIndex.TryGetValue( fullSignature, out imid ) )
 						{
-							MethodBase[] methods = tt.GetMethods( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
-							foreach( MethodBase m in methods )
-							{
-								if( m.ToString() == fullSignature )
-								{
-									t.nativeToken = m.MetadataToken;
-									t.assembly = assembly;
-									break;
-								}
-							}
+							t.nativeToken = 1; // Sentinel for saying it's a local class.
+							t.interpretiveMethod = (int)imid;
+							t.interpretiveMethodClass = classid;
+						}
+						else
+						{
+							Debug.LogError( $"Error: Could not find {parentType}:{fullSignature}" );
+						}
+					}
+					else
+					{
+						// Also, if we wanted we could filter behavior out here, to restrict the user to certain classes.
 
-							if( t.nativeToken == 0 )
+						foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+						{
+							if( assembly.GetName().ToString() != useAssembly ) continue;
+							var tt = assembly.GetType( parentType );
+							if (tt != null)
 							{
-								methods = tt.GetConstructors( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
+								MethodBase[] methods = tt.GetMethods( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
 								foreach( MethodBase m in methods )
 								{
 									if( m.ToString() == fullSignature )
@@ -782,6 +865,20 @@ namespace Cilbox
 										break;
 									}
 								}
+
+								if( t.nativeToken == 0 )
+								{
+									methods = tt.GetConstructors( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
+									foreach( MethodBase m in methods )
+									{
+										if( m.ToString() == fullSignature )
+										{
+											t.nativeToken = m.MetadataToken;
+											t.assembly = assembly;
+											break;
+										}
+									}
+								}
 							}
 						}
 					}
@@ -789,18 +886,13 @@ namespace Cilbox
 			}
 			
 
-			foreach( DictionaryEntry v in classData )
-			{
-				CilboxClass cls = new CilboxClass( this, (String)v.Key, (String)v.Value );
-				classes[(String)v.Key] = cls;
-			}
 		}
 
 		public CilboxClass GetClass( String className )
 		{
 			if( className == null ) return null;
-			CilboxClass ret;
-			if( classes.TryGetValue(className, out ret)) return ret;
+			int clsid;
+			if( classes.TryGetValue(className, out clsid)) return classesList[clsid];
 			return null;
 		}
 
@@ -966,6 +1058,7 @@ namespace Cilbox
 
 						MethodProps["maxStack"] = mb.MaxStackSize.ToString();
 						MethodProps["isStatic"] = m.IsStatic ? "1" : "0";
+						MethodProps["fullSignature"] = m.ToString();
 
 						//metadatas[methodName] = m.MetadataToken.ToString(); // There's also MethodHandle
 						methods[methodName] = CilboxUtil.SerializeDict( MethodProps );
