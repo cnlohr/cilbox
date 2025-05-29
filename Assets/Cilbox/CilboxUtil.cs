@@ -33,8 +33,11 @@ namespace Cilbox
 		public struct IntFloatConverter
 		{
 			[FieldOffset(0)]private float f;
+			[FieldOffset(0)]private double d;
 			[FieldOffset(0)]private int i;
 			[FieldOffset(0)]private uint u;
+			[FieldOffset(0)]private long l;
+			[FieldOffset(0)]private ulong e;
 			public static float ConvertItoF(int value)
 			{
 				return new IntFloatConverter { i = value }.f;
@@ -46,6 +49,10 @@ namespace Cilbox
 			public static int ConvertFtoI(float value)
 			{
 				return new IntFloatConverter { f = value }.i;
+			}
+			public static double ConvertEtoD(ulong value)
+			{
+				return new IntFloatConverter { e = value }.d;
 			}
 		}
 

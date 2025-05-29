@@ -14,9 +14,17 @@ public class TestScript : MonoBehaviour
     void Awake(){ }
     void Update() {
 		framenoPrivate++;
-		float f = Time.time;//framenoPrivate / 100.0f;
+		float f = Time.time / .4f;//framenoPrivate / 100.0f;
 		float x = MathF.Sin( f );
 		float z = MathF.Cos( f );
+		int i;
+		object o1 = "hello";
+		object o2 = "world";
+		if( o1 == o2 ) Debug.Log( "ILLEGAL MATCH" );
+		for( i = 0; i < 10; i++ )
+		{
+			x++;
+		}
 		Debug.Log( $"XXX TestScript Update() {x} {z} {f}" );
 		transform.position = new Vector3(x, 2, z);
 	}
