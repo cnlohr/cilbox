@@ -38,7 +38,7 @@ public class TestScript : MonoBehaviour
 		int rc = RecursePO2( 17 );
 		stopWatch.Stop();
 		TimeSpan ts = stopWatch.Elapsed;
-		Debug.Log( $"RC: RecursionTest:{rc} Time:{ts.Milliseconds}ms" );
+		Debug.Log( $"RecursionTest :{rc} Time:{ts.Milliseconds}ms" );
 	}
 	public void PublicFunction() { Debug.Log( "Public Function" ); }
 	public void PublicStaticFunction() { Debug.Log( "Public Staic Function" ); }

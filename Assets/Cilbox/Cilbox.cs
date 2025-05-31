@@ -4,11 +4,11 @@ using System;
 using System.Collections.Specialized;
 using System.Collections;
 using System.Runtime.InteropServices;
+using System.Reflection;
 
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.Callbacks;
-using System.Reflection;
 #endif
 
 // To add [Cilboxable] to your classes that you want exported.
@@ -351,7 +351,12 @@ namespace Cilbox
 						bool isVoid = false;
 						MethodBase st;
 
-						if( dt.nativeToken == 0 )
+						if( !dt.isValid )
+						{
+							throw new Exception( "Error, function " + dt.Name + " Not found in " + parentClass.className + ":" + fullSignature );
+						}
+
+						if( !dt.isNative )
 						{
 							// Sentinel.  interpretiveMethod will contain what method to interpret.
 							// interpretiveMethodClass
@@ -379,7 +384,8 @@ namespace Cilbox
 						}
 						else
 						{
-							st = dt.assembly.ManifestModule.ResolveMethod((int)dt.nativeToken);
+							//st = dt.assembly.ManifestModule.ResolveMethod((int)dt.nativeToken);
+							st = dt.nativeMethod;
 							if( st is MethodInfo )
 								isVoid = ((MethodInfo)st).ReturnType == typeof(void);
 
@@ -414,6 +420,7 @@ namespace Cilbox
 							if( callthis_se.type == StackType.Address )
 								callthis_se.Load( callthis );
 						}
+
 						//Debug.Log( "ISVOID:" + isVoid+ " IKO:" + iko );
 						if( !isVoid ) stack[sp++].Load( iko );
 						if( b == 0x27 )
@@ -767,7 +774,7 @@ namespace Cilbox
 					throw;
 				}
 			}
-if( box.nestingDepth == 1 ) Debug.Log( box.stepsThisInvoke );
+			if( box.nestingDepth == 1 ) Debug.Log( "This invoke took: " + box.stepsThisInvoke );
 			box.nestingDepth--;
 			return ( cont || sp == 0 ) ? null : stack[--sp].AsObject();
 		}
@@ -877,6 +884,7 @@ if( box.nestingDepth == 1 ) Debug.Log( box.stepsThisInvoke );
 	{
 		public CilMetadataTokenInfo( MetaTokenType type, String [] fields ) { this.type = type; this.fields = fields; }
 		public MetaTokenType type;
+		public bool isValid;
 		public int fieldIndex; // Only used for fields.
 
 		public Type nativeType; // Used for types.
@@ -884,10 +892,12 @@ if( box.nestingDepth == 1 ) Debug.Log( box.stepsThisInvoke );
 		public StackType nativeTypeStackType;
 
 		// Todo handle interpreted types.
-		public int nativeToken; // Only used for native function calls.
+		//public int nativeToken; // Only used for native function calls.
+		public bool isNative;
+		public MethodBase nativeMethod;
 		public int interpretiveMethod; // If nativeToken is 0, then it's a interpreted call.
 		public int interpretiveMethodClass; // If nativeToken is 0, then it's a interpreted call class
-		public Assembly assembly; // Only used for native function calls.
+		//public Assembly assembly; // Only used for native function calls.
 
 		// For string, type = 7, string is in fields[0]
 		// For methods, type = 10, Declaring Type is in fields[0], Method is in fields[1], Full name is in fields[2] assembly name is in fields[3]
@@ -912,7 +922,7 @@ if( box.nestingDepth == 1 ) Debug.Log( box.stepsThisInvoke );
 		public CilboxClass [] classesList;
 		public CilMetadataTokenInfo [] metadatas;
 		public String assemblyData;
-		public bool initialized;
+		private bool initialized = false;
 
 		public int stepsThisInvoke;
 		public int nestingDepth;
@@ -921,6 +931,11 @@ if( box.nestingDepth == 1 ) Debug.Log( box.stepsThisInvoke );
 		public static readonly long timeoutLengthTicks = 50000000; // 5000ms
 
 		Cilbox()
+		{
+			initialized = false;
+		}
+
+		public void ForceReinit()
 		{
 			initialized = false;
 		}
@@ -939,7 +954,7 @@ if( box.nestingDepth == 1 ) Debug.Log( box.stepsThisInvoke );
 			//	Debug.LogError( "Can't find cilly environment holder. Something went wrong with CilboxScenePostprocessor" );
 			//	return;
 			//}
-
+Debug.Log( "Assembly data: " + assemblyData );
 			OrderedDictionary assemblyRoot = CilboxUtil.DeserializeDict( assemblyData );
 			OrderedDictionary classData = CilboxUtil.DeserializeDict( (String)assemblyRoot["classes"] );
 			OrderedDictionary metaData = CilboxUtil.DeserializeDict( (String)assemblyRoot["metadata"] );
@@ -982,6 +997,7 @@ if( box.nestingDepth == 1 ) Debug.Log( box.stepsThisInvoke );
 					// The type has been "sealed" so-to-speak. In that we have an index for it.
 					t.fieldIndex = Convert.ToInt32(st[4]);
 					t.Name = "Field: " + st[4];
+					t.isValid = true;
 				}
 				if( metatype == MetaTokenType.mtType )
 				{
@@ -995,15 +1011,17 @@ if( box.nestingDepth == 1 ) Debug.Log( box.stepsThisInvoke );
 					}
 
 					t.nativeType = null;
-
+					t.isValid = true;
 					t.Name = "Type: " + hostTypeName;
 
 					foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
 					{
-						if( assembly.GetName().ToString() != useAssembly ) continue;
+						//Debug.Log( "TYPE ASSY: \"" + assembly.GetName().Name + "\" == \"" + useAssembly + "\"" );
+						if( assembly.GetName().Name != useAssembly ) continue;
 						var tt = assembly.GetTypes();
 						foreach( Type lt in tt )
 						{
+							//Debug.Log( "TYPE c: " + lt.FullName + " / " + hostTypeName );
 							if( lt.FullName == hostTypeName )
 							{
 								t.nativeType = lt;
@@ -1014,6 +1032,7 @@ if( box.nestingDepth == 1 ) Debug.Log( box.stepsThisInvoke );
 
 					if( t.nativeType == null )
 					{
+						t.isValid = false;
 						Debug.LogError( $"Error: Could not find type: {st[1]}" );
 					}
 				}
@@ -1035,22 +1054,25 @@ if( box.nestingDepth == 1 ) Debug.Log( box.stepsThisInvoke );
 						uint imid = 0;
 						if( matchingClass.methodFullSignatureToIndex.TryGetValue( fullSignature, out imid ) )
 						{
-							t.nativeToken = 0; // Sentinel for saying it's a cilbox'd class.
+							//t.nativeToken = 0; // Sentinel for saying it's a cilbox'd class.
+							t.isNative = false;
 							t.interpretiveMethod = (int)imid;
 							t.interpretiveMethodClass = classid;
+							t.isValid = true;
 						}
 						else
 						{
+							t.isValid = false;
 							Debug.LogError( $"Error: Could not find {parentType}:{fullSignature}" );
 						}
 					}
 					else
 					{
 						// Also, if we wanted we could filter behavior out here, to restrict the user to certain classes.
-
+						// XXX Should this be reverse search?
 						foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
 						{
-							if( assembly.GetName().ToString() != useAssembly ) continue;
+							if( assembly.GetName().Name != useAssembly ) continue;
 							var tt = assembly.GetType( parentType );
 							if (tt != null)
 							{
@@ -1059,25 +1081,36 @@ if( box.nestingDepth == 1 ) Debug.Log( box.stepsThisInvoke );
 								{
 									if( m.ToString() == fullSignature )
 									{
-										t.nativeToken = m.MetadataToken;
-										t.assembly = assembly;
+										t.nativeMethod = m;
+										t.isNative = true;
+										//t.assembly = assembly;
 										break;
 									}
 								}
 
-								if( t.nativeToken == 0 )
+								if( !t.isNative )
 								{
 									methods = tt.GetConstructors( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
 									foreach( MethodBase m in methods )
 									{
 										if( m.ToString() == fullSignature )
 										{
-											t.nativeToken = m.MetadataToken;
-											t.assembly = assembly;
+											t.nativeMethod = m;
+											t.isNative = true;
+											//t.assembly = assembly;
 											break;
 										}
 									}
 								}
+							}
+							if( !t.isNative )
+							{
+								Debug.LogError( "Error: Could not find reference to: " + useAssembly + " " + fullSignature );
+								t.isValid = false;
+							}
+							else
+							{
+								t.isValid = true;
 							}
 						}
 					}
@@ -1123,7 +1156,7 @@ if( box.nestingDepth == 1 ) Debug.Log( box.stepsThisInvoke );
 			Dictionary< int, uint> assemblyMetadataReverseOriginal = new Dictionary< int, uint >();
 
 			int mdcount = 1; // token 0 is invalid.
-
+			int bytecodeLength = 0;
 			OrderedDictionary classes = new OrderedDictionary();
 			Dictionary< String, OrderedDictionary > allClassMethods = new Dictionary< String, OrderedDictionary>();
 
@@ -1166,6 +1199,7 @@ if( box.nestingDepth == 1 ) Debug.Log( box.stepsThisInvoke );
 
 						byte [] byteCode = mb.GetILAsByteArray();
 
+						String asm = "";
 						//if( !ExtractAndTransformMetas( proxyAssembly, ref ba, ref assemblyMetadata, ref assemblyMetadataReverseOriginal, ref mdcount ) ) continue;
 						//static bool ExtractAndTransformMetas( Assembly proxyAssembly, ref byte [] byteCode, ref OrderedDictionary od, ref Dictionary< uint, uint > assemblyMetadataReverseOriginal, ref int mdcount )
 						{
@@ -1174,12 +1208,15 @@ if( box.nestingDepth == 1 ) Debug.Log( box.stepsThisInvoke );
 							try {
 								do
 								{
+									int starti = i;
 									CilboxUtil.OpCodes.OpCode oc = CilboxUtil.OpCodes.ReadOpCode( byteCode, ref i );
 									int opLen = CilboxUtil.OpCodes.OperandLength[(int)oc.OperandType];
 									int backupi = i;
 									uint operand = (uint)CilboxUtil.BytecodePullLiteral( byteCode, ref i, opLen );
 									bool changeOperand = true;
 									uint writebackToken = (uint)mdcount;
+
+									asm += starti + ":" + oc.ToString() + "\n";
 
 									// Check to see if this is a meta that we care about.  Then rewrite in a new identifier.
 									// ResolveField, ResolveMember, ResolveMethod, ResolveSignature, ResolveString, ResolveType
@@ -1200,7 +1237,7 @@ if( box.nestingDepth == 1 ) Debug.Log( box.stepsThisInvoke );
 										{
 											writebackToken = (uint)mdcount;
 											MethodBase tmb = proxyAssembly.ManifestModule.ResolveMethod( (int)operand );
-											assemblyMetadata[(mdcount++).ToString()] = ((int)MetaTokenType.mtMethod) + "\t" + tmb.DeclaringType + "\t" + tmb.Name + "\t" + tmb + "\t" + tmb.DeclaringType.Assembly.GetName();
+											assemblyMetadata[(mdcount++).ToString()] = ((int)MetaTokenType.mtMethod) + "\t" + tmb.DeclaringType + "\t" + tmb.Name + "\t" + tmb + "\t" + tmb.DeclaringType.Assembly.GetName().Name;
 										}
 									}
 									else if( oc.OperandType == CilboxUtil.OpCodes.OperandType.InlineField )
@@ -1218,7 +1255,7 @@ if( box.nestingDepth == 1 ) Debug.Log( box.stepsThisInvoke );
 										{
 											writebackToken = (uint)mdcount;
 											Type ty = proxyAssembly.ManifestModule.ResolveType( (int)operand );
-											assemblyMetadata[(mdcount++).ToString()] = ((int)MetaTokenType.mtType) + "\t" + ty.FullName + "\t" + ty.Assembly.GetName();
+											assemblyMetadata[(mdcount++).ToString()] = ((int)MetaTokenType.mtType) + "\t" + ty.FullName + "\t" + ty.Assembly.GetName().Name;
 										}
 									}
 									else
@@ -1243,11 +1280,11 @@ if( box.nestingDepth == 1 ) Debug.Log( box.stepsThisInvoke );
 
 						String byteCodeStr = "";
 						for( int i = 0; i < byteCode.Length; i++ )
-						{
-							int b = byteCode[i];
-							byteCodeStr += CilboxUtil.HexFromNum( b>>4 ) + CilboxUtil.HexFromNum( b&0xf );
-						}
+							byteCodeStr += byteCode[i].ToString( "x2" );
 
+						Debug.Log( type.FullName + ":" + methodName + " (" + byteCode.Length + ")\n" + asm );
+
+						bytecodeLength += byteCode.Length;
 						MethodProps["body"] = byteCodeStr;
 
 						OrderedDictionary localVars = new OrderedDictionary();
@@ -1336,13 +1373,20 @@ if( box.nestingDepth == 1 ) Debug.Log( box.stepsThisInvoke );
 			}
 			else
 			{
-				GameObject cilboxDataObject = new GameObject("CilboxData");
-				cilboxDataObject.hideFlags = HideFlags.HideAndDontSave;
+				GameObject cilboxDataObject = new GameObject("CilboxData " + new System.Random().Next(0,10000000));
+				//cilboxDataObject.hideFlags = HideFlags.HideInHierarchy;
 				tac = cilboxDataObject.AddComponent( typeof(Cilbox) ) as Cilbox;
 			}
-			tac.assemblyData = sAllAssemblyData;
-			tac.initialized = false; // Force reinitializaiton.
-
+			if( bytecodeLength == 0 )
+			{
+				Debug.Log( "No bytecode available in this build. Falling back to last build." );
+			}
+			else
+			{
+				tac.assemblyData = sAllAssemblyData;
+				tac.ForceReinit();
+				Debug.Log( "Outputting Assembly Data: " + sAllAssemblyData + " byteCode: " + bytecodeLength + " bytes " );
+			}
 			// Iterate over all GameObjects, and find the ones that have Cilboxable scripts.
 			object[] obj = GameObject.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
 			foreach (object o in obj)
