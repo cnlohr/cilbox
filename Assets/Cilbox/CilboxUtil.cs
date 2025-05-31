@@ -151,6 +151,20 @@ namespace Cilbox
 			return ret;
 		}
 
+		public static readonly Dictionary< String, StackType > TypeToStackType = new Dictionary<String, StackType>(){
+			{ "System.Boolean", StackType.Boolean },
+			{ "System.SByte", StackType.Sbyte },
+			{ "System.Byte", StackType.Byte },
+			{ "System.Int16", StackType.Short },
+			{ "System.UInt16", StackType.Ushort },
+			{ "System.Int32", StackType.Int },
+			{ "System.UInt32", StackType.Uint },
+			{ "System.Int64", StackType.Long },
+			{ "System.UInt64", StackType.Ulong },
+			{ "System.Single", StackType.Float },
+			{ "System.Dobule", StackType.Double },
+			{ "object", StackType.Object } };
+
 		static public String SerializeDict( OrderedDictionary dict )
 		{
 			String ret = "";

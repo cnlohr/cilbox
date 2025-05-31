@@ -16,6 +16,24 @@ public class CilboxableAttribute : Attribute { }
 
 namespace Cilbox
 {
+
+	public enum StackType
+	{
+		Boolean,
+		Sbyte,
+		Byte,
+		Short,
+		Ushort,
+		Int,
+		Uint,
+		Long,
+		Ulong,
+		Float,
+		Double,
+		Object,
+		Address,
+	}
+
 	public class CilboxMethod
 	{
 		public bool disabled;
@@ -79,23 +97,7 @@ namespace Cilbox
 		public void Breakwarn( String message, int bytecodeplace )
 		{
 			// TODO: Add debugging info.
-			Debug.Log( $"Breakwarn: {message} Class: {parentClass.className}, Function: {methodName}, Bytecode: {bytecodeplace}" );
-		}
-
-		public enum StackType
-		{
-			Boolean,
-			Sbyte,
-			Byte,
-			Short,
-			Ushort,
-			Int,
-			Uint,
-			Long,
-			Ulong,
-			Float,
-			Double,
-			Object,
+			Debug.LogWarning( $"Breakwarn: {message} Class: {parentClass.className}, Function: {methodName}, Bytecode: {bytecodeplace}" );
 		}
 
 		// This logic is probably incorrect.
@@ -129,16 +131,16 @@ namespace Cilbox
 			{
 				switch( o )
 				{
-				case sbyte t0: i = (sbyte)o;		type = StackType.Sbyte; break;
+				case sbyte t0: i = (sbyte)o;	type = StackType.Sbyte; break;
 				case byte  t1: i = (byte)o;		type = StackType.Byte; break;
-				case short t2: i = (short)o;		type = StackType.Short; break;
+				case short t2: i = (short)o;	type = StackType.Short; break;
 				case ushort t3: i = (ushort)o;	type = StackType.Ushort; break;
 				case int t4: i = (int)o;		type = StackType.Int; break;
 				case uint t5: u = (uint)o;		type = StackType.Uint; break;
 				case long t6: l = (long)o;		type = StackType.Long; break;
-				case ulong t7: e = (ulong)o;		type = StackType.Ulong; break;
-				case float t8: f = (float)o;		type = StackType.Float; break;
-				case double t9: d = (ulong)o;		type = StackType.Double; break;
+				case ulong t7: e = (ulong)o;	type = StackType.Ulong; break;
+				case float t8: f = (float)o;	type = StackType.Float; break;
+				case double t9: d = (ulong)o;	type = StackType.Double; break;
 				case bool ta: i = ((bool)o) ? 1 : 0; type = StackType.Boolean; break;
 				default: this.o = o; type = StackType.Object; break;
 				}
@@ -166,6 +168,26 @@ namespace Cilbox
 					return TypeFromStackType[(int)type];
 			}
 
+			public void Unbox( object i, StackType st )
+			{
+				type = st;
+				switch( st )
+				{
+				case StackType.Sbyte: this.u = (uint)(sbyte)i; break;
+				case StackType.Byte: this.u = (uint)(byte)i; break;
+				case StackType.Short: this.u = (uint)(short)i; break;
+				case StackType.Ushort: this.u = (uint)(ushort)i; break;
+				case StackType.Int: this.i = (int)i; break;
+				case StackType.Uint: this.u = (uint)i; break;
+				case StackType.Long: this.l = (long)i; break;
+				case StackType.Ulong: this.e = (ulong)i; break;
+				case StackType.Float: this.f = (float)i; break;
+				case StackType.Double: this.d = (double)i; break;
+				case StackType.Boolean: this.i = ((bool)i)?1:0; break;
+				default: this.o = i; break;
+				}
+			}
+
 			public object AsObject()
 			{
 				switch( type )
@@ -181,8 +203,32 @@ namespace Cilbox
 				case StackType.Float: return (float)f;
 				case StackType.Double: return (double)d;
 				case StackType.Boolean: return (bool)b;
+				case StackType.Address: return Dereference().o;
 				default: return o;
 				}
+			}
+
+			public StackElement Dereference()
+			{
+				return ((StackElement[])o)[i];
+			}
+
+			static public StackElement CreateReference( StackElement[] array, uint index )
+			{
+				StackElement ret = new StackElement();
+				ret.type = StackType.Address;
+				// XXX TODO: Is this correct? Do references to references dereference, or make more references?
+				//if( array[index].type == StackType.Address )
+				//{
+				//	ret.u = array[index].u;
+				//	ret.o = array[index].o;
+				//}
+				//else
+				{
+					ret.u = index;
+					ret.o = array;
+				}
+				return ret;
 			}
 		}
 
@@ -192,6 +238,14 @@ namespace Cilbox
 			if( byteCode == null || byteCode.Length == 0 || disabled ) return null;
 			Cilbox box = parentClass.box;
 	
+			if( box.nestingDepth > 1000 ) throw new Exception( "Error: Interpreted stack overflow in " + methodName );
+			if( box.nestingDepth == 0 )
+			{
+				box.stepsThisInvoke = 0;
+				box.startTime = System.Diagnostics.Stopwatch.GetTimestamp();
+			}
+			box.nestingDepth++;
+
 			// Do the magic.
 
 			// Uncomment for debug.
@@ -200,6 +254,7 @@ namespace Cilbox
 
 			StackElement [] stack = new StackElement[MaxStackSize];
 			StackElement [] localVars = new StackElement[methodLocals.Length];
+
 			int sp = 0;
 
 			object [] parameters;
@@ -249,13 +304,20 @@ namespace Cilbox
 					case 0x0b: localVars[1] = stack[--sp]; break; //stloc.1
 					case 0x0c: localVars[2] = stack[--sp]; break; //stloc.2
 					case 0x0d: localVars[3] = stack[--sp]; break; //stloc.3
-					case 0x11:  stack[sp++] = localVars[byteCode[pc++]]; break; //ldloc.s
-
+					case 0x0f: stack[sp++].Load( parameters[byteCode[pc++]] ); break; // ldarga.s <uint8 (argNum)>
+					case 0x11: stack[sp++] = localVars[byteCode[pc++]]; break; //ldloc.s
+					case 0x12:
+					{
+						uint whichLocal = byteCode[pc++];
+						//Debug.Log( $"Pushing var {whichLocal}'s address (it is {localVars[whichLocal].type} {localVars[whichLocal].AsObject().GetType()} {localVars[whichLocal].AsObject()}) to stack\n" );
+						stack[sp++] = StackElement.CreateReference( localVars, whichLocal );
+						break; //ldloca.s // Load address of local variable.
+					}
 					case 0x13: localVars[byteCode[pc++]] = stack[--sp]; break; //stloc.s
 					//case 0x0e: stack[sp++] = parameters[byteCode[pc++]]; break; //ldarg.0
 					//case 0x0e: stack[sp++] = parameters[byteCode[pc++]]; break; //ldarg.0
 					// Some more...
-					case 0x14: stack[sp++].LoadObject( null ); break; // ldnull
+					case 0x14: stack[sp++].Load( null ); break; // ldnull
 					case 0x15: stack[sp++].LoadInt( -1 ); break; // ldc.i4.m1
 					case 0x16: stack[sp++].LoadInt( 0 ); break; // ldc.i4.0
 					case 0x17: stack[sp++].LoadInt( 1 ); break; // ldc.i4.1
@@ -267,7 +329,7 @@ namespace Cilbox
 					case 0x1d: stack[sp++].LoadInt( 7 ); break; // ldc.i4.7
 					case 0x1e: stack[sp++].LoadInt( 8 ); break; // ldc.i4.8
 
-					case 0x1f: stack[sp++].Load( (sbyte)byteCode[pc++] ); break; // ldc.i4.s <int8>
+					case 0x1f: stack[sp++].LoadInt( (sbyte)byteCode[pc++] ); break; // ldc.i4.s <int8>
 					case 0x20: stack[sp++].LoadInt( (int)BytecodeAs32( ref pc ) ); break; // ldc.i4 <int32>
 					case 0x21: stack[sp++].Load( (long)BytecodeAs64( ref pc ) ); break; // ldc.i8 <int64>
 					case 0x22: stack[sp++].LoadFloat( CilboxUtil.IntFloatConverter.ConvertUtoF(BytecodeAs32( ref pc ) ) ); break; // ldc.r4 <float32 (num)>
@@ -285,78 +347,80 @@ namespace Cilbox
 						uint bc = (b == 0x29) ? stack[--sp].u : BytecodeAs32( ref pc );
 						object iko = null; // Returned value.
 						CilMetadataTokenInfo dt = box.metadatas[bc];
-						if( dt.nativeToken != 0 )
+
+						bool isVoid = false;
+						MethodBase st;
+
+						if( dt.nativeToken == 0 )
 						{
-							bool isVoid = false;
-							MethodBase st;
-
-							if( dt.nativeToken == 0 )
+							// Sentinel.  interpretiveMethod will contain what method to interpret.
+							// interpretiveMethodClass
+							CilboxClass targetClass = box.classesList[dt.interpretiveMethodClass];
+							CilboxMethod targetMethod = targetClass.methods[dt.interpretiveMethod];
+							if( targetMethod == null )
 							{
-								// Faulty: Can't execute.
-								Breakwarn( $"Attempting to execute non-existent function in {fullSignature}", pc );
+								throw( new Exception( $"Function {dt.fields[2]} not found" ) );
 							}
-							else if( dt.nativeToken == 1 )
+							int numParams = targetMethod.signatureParameters.Length;
+							object [] cparameters = new object[numParams];
+							int i;
+							for( i = 0; i < numParams; i++ )
 							{
-								// Sentinel.  interpretiveMethod will contain what method to interpret.
-								// interpretiveMethodClass
-								CilboxClass targetClass = box.classesList[dt.interpretiveMethodClass];
-								CilboxMethod targetMethod = targetClass.methods[dt.interpretiveMethod];
-
-								int numParams = targetMethod.signatureParameters.Length;
-								object [] cparameters = new object[numParams];
-								int i;
-								for( i = 0; i < numParams; i++ )
-								{
-									cparameters[i] = stack[--sp].AsObject();
-								}
-								CilboxProxy callThis = null;
-								if( !targetMethod.isStatic )
-								{
-									callThis = (CilboxProxy)stack[--sp].AsObject();
-								}
-								iko = targetMethod.Interpret( callThis, cparameters );
-								//public object Interpret( CilboxProxy ths, object [] parametersIn )
-								//signatureParameters // count
+								cparameters[i] = stack[--sp].AsObject();
 							}
-							else
+							CilboxProxy callThis = null;
+							if( !targetMethod.isStatic )
 							{
-								st = dt.assembly.ManifestModule.ResolveMethod((int)dt.nativeToken);
-								if( st is MethodInfo )
-									isVoid = ((MethodInfo)st).ReturnType == typeof(void);
-
-								ParameterInfo [] pa = st.GetParameters();
-								//MethodInfo mi = (MethodInfo)st;
-								int numFields = pa.Length;
-								object callthis = null;
-								object [] callpar = new object[numFields];
-								int ik;
-								for( ik = 0; ik < numFields; ik++ )
-								{
-									callpar[numFields-ik-1] = stack[--sp].AsObject();
-								}
-								if( st.IsConstructor )
-								{
-									callthis = Activator.CreateInstance(st.DeclaringType);
-								}
-								else if( !st.IsStatic )
-									callthis = stack[--sp].AsObject();
-								//Debug.Log( " " + ((st.IsStatic)?"STATIC":"INSTANCE") + " / " + st.Name + "/" + (callthis==null) + " / " + callthis + " / fields=" + numFields + "/"+st );
-								if( st.IsConstructor )
-									iko = ((ConstructorInfo)st).Invoke( callpar );
-								else
-									iko = st.Invoke( callthis, callpar );
+								callThis = (CilboxProxy)stack[--sp].AsObject();
 							}
-							//Debug.Log( "ISVOID:" + isVoid+ " IKO:" + iko );
-							if( !isVoid ) stack[sp++].Load( iko );
-							if( b == 0x27 )
-							{
-								// This is returning from a jump, so immediatelb abort.
-								if( isVoid ) stack[sp++].Load( null );
-								cont = false;
-							}						}
+							iko = targetMethod.Interpret( callThis, cparameters );
+							//public object Interpret( CilboxProxy ths, object [] parametersIn )
+							//signatureParameters // count
+						}
 						else
 						{
-							Breakwarn( $"Function {dt.fields[2]} not found", pc );
+							st = dt.assembly.ManifestModule.ResolveMethod((int)dt.nativeToken);
+							if( st is MethodInfo )
+								isVoid = ((MethodInfo)st).ReturnType == typeof(void);
+
+							ParameterInfo [] pa = st.GetParameters();
+							//MethodInfo mi = (MethodInfo)st;
+							int numFields = pa.Length;
+							object callthis = null;
+							object [] callpar = new object[numFields];
+							StackElement callthis_se = new StackElement{};
+							//callthis_se.type = StackType.Object; // Default to not a reference.
+							StackElement [] callpar_se = new StackElement[numFields];
+							int ik;
+							for( ik = 0; ik < numFields; ik++ )
+								callpar[numFields-ik-1] = (callpar_se[numFields-ik-1] = stack[--sp]).AsObject();
+							if( st.IsConstructor )
+								callthis = Activator.CreateInstance(st.DeclaringType);
+							else if( !st.IsStatic )
+								callthis = (callthis_se = stack[--sp]).AsObject();
+							//Debug.Log( stack[sp].type );
+							//Debug.Log( callthis );
+							//Debug.Log( dt.Name );
+							//Debug.Log( " " + ((st.IsStatic)?"STATIC":"INSTANCE") + " / " + st.Name + "/" + (callthis==null) + " / " + callthis + " / fields=" + numFields + "/"+st );
+							if( st.IsConstructor )
+								iko = ((ConstructorInfo)st).Invoke( callpar );
+							else
+								iko = st.Invoke( callthis, callpar );
+
+							// Possibly copy back any references.
+							for( ik = 0; ik < numFields; ik++ )
+								if( callpar_se[ik].type == StackType.Address )
+									callpar_se[ik].Dereference().Load( callpar[numFields-ik-1] );
+							if( callthis_se.type == StackType.Address )
+								callthis_se.Load( callthis );
+						}
+						//Debug.Log( "ISVOID:" + isVoid+ " IKO:" + iko );
+						if( !isVoid ) stack[sp++].Load( iko );
+						if( b == 0x27 )
+						{
+							// This is returning from a jump, so immediatelb abort.
+							if( isVoid ) stack[sp++].Load( null );
+							cont = false;
 						}
 						break;
 					}
@@ -390,76 +454,90 @@ namespace Cilbox
 						break;
 					}
 					case 0x2f: // bge.s
-					{
-						StackElement sb = stack[--sp]; StackElement sa = stack[--sp];
-						pc++;
-						if( sa.l >= sb.l )
-							pc += (sbyte)byteCode[pc-1];
-						break;
-					}
 					case 0x30: // bgt.s
-					{
-						StackElement sb = stack[--sp]; StackElement sa = stack[--sp];
-						pc++;
-						if( sa.l > sb.l )
-							pc += (sbyte)byteCode[pc-1];
-						break;
-					}
 					case 0x31: // ble.s
-					{
-						StackElement sb = stack[--sp]; StackElement sa = stack[--sp];
-						pc++;
-						if( sa.l <= sb.l )
-							pc += (sbyte)byteCode[pc-1];
-						break;
-					}
 					case 0x32: // blt.s
-					{
-						StackElement sb = stack[--sp]; StackElement sa = stack[--sp];
-						pc++;
-						if( sa.l < sb.l )
-							pc += (sbyte)byteCode[pc-1];
-						break;
-					}
 					case 0x33: // bne.un.s
-					{
-						StackElement sb = stack[--sp]; StackElement sa = stack[--sp];
-						pc++;
-						if( (sa.type == StackType.Object && sa.o != sb.o ) || 
-							(sa.type != StackType.Object && sa.e != sb.e ) )
-							pc += (sbyte)byteCode[pc-1];
-						break;
-					}
 					case 0x34: // bge.un.s
-					{
-						StackElement sb = stack[--sp]; StackElement sa = stack[--sp];
-						pc++;
-						if( sa.e >= sb.e )
-							pc += (sbyte)byteCode[pc-1];
-						break;
-					}
 					case 0x35: // bgt.un.s
-					{
-						StackElement sb = stack[--sp]; StackElement sa = stack[--sp];
-						pc++;
-						if( sa.e > sb.e )
-							pc += (sbyte)byteCode[pc-1];
-						break;
-					}
 					case 0x36: // ble.un.s
-					{
-						StackElement sb = stack[--sp]; StackElement sa = stack[--sp];
-						pc++;
-						if( sa.e <= sb.e )
-							pc += (sbyte)byteCode[pc-1];
-						break;
-					}
 					case 0x37: // blt.un.s
 					{
 						StackElement sb = stack[--sp]; StackElement sa = stack[--sp];
 						pc++;
-						if( sa.e < sb.e )
-							pc += (sbyte)byteCode[pc-1];
+						int joffset = (sbyte)byteCode[pc-1];
+						switch( sb.type )
+						{
+						case StackType.Sbyte: case StackType.Short: case StackType.Int:
+							switch( b )
+							{
+							case 0x2f: if( sa.i >= sb.i ) pc += joffset; break;
+							case 0x30: if( sa.i >  sb.i ) pc += joffset; break;
+							case 0x31: if( sa.i <= sb.i ) pc += joffset; break;
+							case 0x32: if( sa.i <  sb.i ) pc += joffset; break;
+							case 0x33: if( sa.e != sb.e ) pc += joffset; break;
+							case 0x34: if( sa.e >= sb.e ) pc += joffset; break;
+							case 0x35: if( sa.e >  sb.e ) pc += joffset; break;
+							case 0x36: if( sa.e <= sb.e ) pc += joffset; break;
+							case 0x37: if( sa.e <  sb.e ) pc += joffset; break;
+							} break;
+						case StackType.Byte: case StackType.Ushort: case StackType.Uint: case StackType.Ulong:
+							switch( b )	{
+							case 0x2f: if( sa.e >= sb.e ) pc += joffset; break;
+							case 0x30: if( sa.e >  sb.e ) pc += joffset; break;
+							case 0x31: if( sa.e <= sb.e ) pc += joffset; break;
+							case 0x32: if( sa.e <  sb.e ) pc += joffset; break;
+							case 0x33: if( sa.e != sb.e ) pc += joffset; break;
+							case 0x34: if( sa.e >= sb.e ) pc += joffset; break;
+							case 0x35: if( sa.e >  sb.e ) pc += joffset; break;
+							case 0x36: if( sa.e <= sb.e ) pc += joffset; break;
+							case 0x37: if( sa.e <  sb.e ) pc += joffset; break;
+							} break;
+						case StackType.Long:
+							switch( b )	{
+							case 0x2f: if( sa.l >= sb.l ) pc += joffset; break;
+							case 0x30: if( sa.l >  sb.l ) pc += joffset; break;
+							case 0x31: if( sa.l <= sb.l ) pc += joffset; break;
+							case 0x32: if( sa.l <  sb.l ) pc += joffset; break;
+							case 0x33: if( sa.e != sb.e ) pc += joffset; break;
+							case 0x34: if( sa.e >= sb.e ) pc += joffset; break;
+							case 0x35: if( sa.e >  sb.e ) pc += joffset; break;
+							case 0x36: if( sa.e <= sb.e ) pc += joffset; break;
+							case 0x37: if( sa.e <  sb.e ) pc += joffset; break;
+							} break;
+						case StackType.Float:
+							switch( b )	{
+							case 0x2f: if( sa.f >= sb.f ) pc += joffset; break;
+							case 0x30: if( sa.f >  sb.f ) pc += joffset; break;
+							case 0x31: if( sa.f <= sb.f ) pc += joffset; break;
+							case 0x32: if( sa.f <  sb.f ) pc += joffset; break;
+							case 0x33: if( sa.f != sb.f ) pc += joffset; break;
+							case 0x34: if( sa.f >= sb.f ) pc += joffset; break;
+							case 0x35: if( sa.f >  sb.f ) pc += joffset; break;
+							case 0x36: if( sa.f <= sb.f ) pc += joffset; break;
+							case 0x37: if( sa.f <  sb.f ) pc += joffset; break;
+							} break;
+						case StackType.Double:
+							switch( b )	{
+							case 0x2f: if( sa.d >= sb.d ) pc += joffset; break;
+							case 0x30: if( sa.d >  sb.d ) pc += joffset; break;
+							case 0x31: if( sa.d <= sb.d ) pc += joffset; break;
+							case 0x32: if( sa.d <  sb.d ) pc += joffset; break;
+							case 0x33: if( sa.d != sb.d ) pc += joffset; break;
+							case 0x34: if( sa.d >= sb.d ) pc += joffset; break;
+							case 0x35: if( sa.d >  sb.d ) pc += joffset; break;
+							case 0x36: if( sa.d <= sb.d ) pc += joffset; break;
+							case 0x37: if( sa.d <  sb.d ) pc += joffset; break;
+							} break;
+						case StackType.Object:
+							switch(b)
+							{
+							case 0x33: if( sa.o != sb.o ) pc += joffset; break;
+							default: throw new( "Invalid object comparison" );
+							} break;
+						default: 
+							throw new( "Invalid comparison" );
+						}
 						break;
 					}
 					case 0x38: // br
@@ -582,11 +660,11 @@ namespace Cilbox
 					case 0x7d:
 					{
 						uint bc = BytecodeAs32( ref pc );
-						Debug.Log( bc );
-						Debug.Log( ths );
-						Debug.Log( ths.fields );
-						Debug.Log( ths.fields.Length );
-						Debug.Log( box.metadatas[bc].fieldIndex );
+						//Debug.Log( bc );
+						//Debug.Log( ths );
+						//Debug.Log( ths.fields );
+						//Debug.Log( ths.fields.Length );
+						//Debug.Log( box.metadatas[bc].fieldIndex );
 						ths.fields[box.metadatas[bc].fieldIndex] = stack[--sp].AsObject();
 						--sp; // Should be "This" XXX WRONG
 						break; //stfld
@@ -597,26 +675,83 @@ namespace Cilbox
 						stack[sp++].Load( parentClass.staticFields[box.metadatas[bc].fieldIndex] );
 						break; //ldsfld
 					}
-
-					case 0x8C: BytecodeAs32( ref pc ); break; // box (This pulls off a type, but I think everything is boxed, so no big deal)
-
+					case 0x80:
+					{
+						uint bc = BytecodeAs32( ref pc );
+						parentClass.staticFields[box.metadatas[bc].fieldIndex] = stack[sp++].AsObject();
+						break; //stsfld
+					}
+					case 0x8C: // box (This pulls off a type)
+					{
+						uint otyp = BytecodeAs32( ref pc );
+						//CilMetadataTokenInfo metaType = box.metadatas[otyp];
+						stack[sp-1].LoadObject( stack[sp-1].AsObject() );//(metaType.nativeType)stack[sp-1].AsObject();
+						break; 
+					}
+					case 0x8d:
+					{
+						uint otyp = BytecodeAs32( ref pc );
+						int size = stack[sp-1].i; // TODO: Check type?
+						Type t = box.metadatas[otyp].nativeType;
+						stack[sp-1].LoadObject( Array.CreateInstance( t, size ) );
+						//newarr <etype>
+						break;
+					}
+					case 0xa2:
+					{
+						object val = stack[--sp].AsObject();
+						if( stack[sp-1].type > StackType.Uint ) throw new Exception( "Invalid index type" );
+						int index = stack[--sp].i;
+						object [] array = (object[])stack[--sp].AsObject();
+						array[index] = val;
+						break; // stelem.ref
+					}
+					case 0xa4:
+					{
+						uint otyp = BytecodeAs32( ref pc );
+						object val = stack[--sp].AsObject();
+						if( stack[sp-1].type > StackType.Uint ) throw new Exception( "Invalid index type" );
+						int index = stack[--sp].i;
+						object [] array = (object[])stack[--sp].AsObject();
+						Type t = box.metadatas[otyp].nativeType;
+						array[index] = Convert.ChangeType( val, t );  // This shouldn't be type changing.s
+						break; // stelem
+					}
 					case 0xA5:
-						uint tokType = BytecodeAs32( ref pc ); // Let's hope that somehow this isn't needed?
-						StackElement e = stack[sp-1];
-						Debug.Log( "Scary Unbox (that we don't have code for) from " + e.type + " to " +tokType.ToString("X8") );
+					{
+						uint otyp = BytecodeAs32( ref pc ); // Let's hope that somehow this isn't needed?
+						CilMetadataTokenInfo metaType = box.metadatas[otyp];
+						if( metaType.nativeTypeIsStackType )
+						{
+							//if( stack[sp-1].type != StackType.Object )
+							//{
+							//	Breakwarn( "Invalid stack type unbox (From " + stack[sp-1].type + " to " + metaType.nativeTypeStackType + ")", pc );
+							//}
+							stack[sp-1].Unbox( stack[sp-1].AsObject(), metaType.nativeTypeStackType );
+						}
+						else
+						{
+							Breakwarn( "Scary Unbox (that we don't have code for) from " + otyp + " ORIG " + metaType.ToString(), pc );
+							disabled = true; cont = false;
+						}
 						break; // unbox.any
-
+					}
 					default: Breakwarn( $"Opcode 0x{b.ToString("X2")} unimplemented", pc ); disabled = true; cont = false; break;
 
 					}
 					//Update 022040e201007d020000042a
 
 					ctr++;
-					if( ctr > 10000 )
+					box.stepsThisInvoke++;
+
+					if( ( box.stepsThisInvoke & 0xf ) == 0 )
 					{
-						Breakwarn( "Infinite Loop", pc );
-						disabled = true;
-						break;
+						// Only check every 16.
+						long elapsed = (System.Diagnostics.Stopwatch.GetTimestamp() - box.startTime);
+						if( elapsed > Cilbox.timeoutLengthTicks )
+						{
+							throw new Exception( "Infinite Loop @ " + pc + " In " + methodName + " (Timeout ticks: " + elapsed + "/" + Cilbox.timeoutLengthTicks + " )" );
+						}
 					}
 				}
 				while( cont );
@@ -624,12 +759,23 @@ namespace Cilbox
 			catch( Exception e )
 			{
 				disabled = true;
-				Breakwarn( e.ToString(), pc );
+				if( box.nestingDepth == 1 )
+					Breakwarn( e.ToString(), pc );
+				else
+				{
+					box.nestingDepth--;
+					throw;
+				}
 			}
-
+if( box.nestingDepth == 1 ) Debug.Log( box.stepsThisInvoke );
+			box.nestingDepth--;
 			return ( cont || sp == 0 ) ? null : stack[--sp].AsObject();
 		}
 
+		uint BytecodeAs16( ref int i )
+		{
+			return (uint)CilboxUtil.BytecodePullLiteral( byteCode, ref i, 2 );
+		}
 		uint BytecodeAs32( ref int i )
 		{
 			return (uint)CilboxUtil.BytecodePullLiteral( byteCode, ref i, 4 );
@@ -732,19 +878,29 @@ namespace Cilbox
 		public CilMetadataTokenInfo( MetaTokenType type, String [] fields ) { this.type = type; this.fields = fields; }
 		public MetaTokenType type;
 		public int fieldIndex; // Only used for fields.
+
+		public Type nativeType; // Used for types.
+		public bool nativeTypeIsStackType;
+		public StackType nativeTypeStackType;
+
+		// Todo handle interpreted types.
 		public int nativeToken; // Only used for native function calls.
-		public int interpretiveMethod; // If nativeToken is 1, then it's a interpreted call.
-		public int interpretiveMethodClass; // If nativeToken is 1, then it's a interpreted call class
+		public int interpretiveMethod; // If nativeToken is 0, then it's a interpreted call.
+		public int interpretiveMethodClass; // If nativeToken is 0, then it's a interpreted call class
 		public Assembly assembly; // Only used for native function calls.
 
 		// For string, type = 7, string is in fields[0]
 		// For methods, type = 10, Declaring Type is in fields[0], Method is in fields[1], Full name is in fields[2] assembly name is in fields[3]
 		// For fields, type = 4, Declaring Type is in fields[0], Name is in fields[1], Type is in fields[2]
 		public String [] fields;
+
+		public String Name;
+		//public String ToString() { return Name; }
 	}
 
 	public enum MetaTokenType
 	{
+		mtType = 1,
 		mtField = 4,
 		mtString = 7,
 		mtMethod = 10,
@@ -758,6 +914,12 @@ namespace Cilbox
 		public String assemblyData;
 		public bool initialized;
 
+		public int stepsThisInvoke;
+		public int nestingDepth;
+
+		public long startTime;
+		public static readonly long timeoutLengthTicks = 50000000; // 5000ms
+
 		Cilbox()
 		{
 			initialized = false;
@@ -768,7 +930,6 @@ namespace Cilbox
 			Debug.Log( $"Cilbox Initialize called {initialized}" );
 			if( initialized ) return;
 			initialized = true;
-
 			Debug.Log( "Cilbox Initialize" );
 
 			//CilboxEnvironmentHolder [] se = UnityEngine.Object.FindObjectsByType<CilboxEnvironmentHolder>(FindObjectsInactive.Include, FindObjectsSortMode.None);
@@ -813,12 +974,49 @@ namespace Cilbox
 				MetaTokenType metatype = (MetaTokenType)Convert.ToInt32(st[0]);
 				CilMetadataTokenInfo t = metadatas[mid] = new CilMetadataTokenInfo( metatype, fields );
 
+				t.type = metatype;
+				t.Name = "<UNKNOWN>";
+
 				if( metatype == MetaTokenType.mtField && st.Length > 4 )
 				{
 					// The type has been "sealed" so-to-speak. In that we have an index for it.
-					metadatas[mid].fieldIndex = Convert.ToInt32(st[4]);
+					t.fieldIndex = Convert.ToInt32(st[4]);
+					t.Name = "Field: " + st[4];
 				}
+				if( metatype == MetaTokenType.mtType )
+				{
+					String hostTypeName = st[1];
+					String useAssembly = st[2];
+					StackType nst;
+					if( CilboxUtil.TypeToStackType.TryGetValue( hostTypeName, out nst ) )
+					{
+						t.nativeTypeIsStackType = true;
+						t.nativeTypeStackType = nst;
+					}
 
+					t.nativeType = null;
+
+					t.Name = "Type: " + hostTypeName;
+
+					foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+					{
+						if( assembly.GetName().ToString() != useAssembly ) continue;
+						var tt = assembly.GetTypes();
+						foreach( Type lt in tt )
+						{
+							if( lt.FullName == hostTypeName )
+							{
+								t.nativeType = lt;
+								break;
+							}
+						}
+					}
+
+					if( t.nativeType == null )
+					{
+						Debug.LogError( $"Error: Could not find type: {st[1]}" );
+					}
+				}
 				if( metatype == MetaTokenType.mtMethod )
 				{
 					// Function call
@@ -827,6 +1025,7 @@ namespace Cilbox
 					String parentType = st[1];
 					String fullSignature = st[3];
 					String useAssembly = st[4];
+					t.Name = "Method: " + fullSignature;
 
 					// First, see if this is to a class we are responsible for.
 					int classid;
@@ -836,7 +1035,7 @@ namespace Cilbox
 						uint imid = 0;
 						if( matchingClass.methodFullSignatureToIndex.TryGetValue( fullSignature, out imid ) )
 						{
-							t.nativeToken = 1; // Sentinel for saying it's a local class.
+							t.nativeToken = 0; // Sentinel for saying it's a cilbox'd class.
 							t.interpretiveMethod = (int)imid;
 							t.interpretiveMethodClass = classid;
 						}
@@ -1011,6 +1210,15 @@ namespace Cilbox
 											writebackToken = (uint)mdcount;
 											FieldInfo rf = proxyAssembly.ManifestModule.ResolveField( (int)operand );
 											assemblyMetadata[(mdcount++).ToString()] = ((int)MetaTokenType.mtField) + "\t" + rf.DeclaringType + "\t" + rf.Name + "\t" + rf.FieldType;
+										}
+									}
+									else if( oc.OperandType == CilboxUtil.OpCodes.OperandType.InlineType )
+									{
+										if( !assemblyMetadataReverseOriginal.TryGetValue( (int)operand, out writebackToken ) )
+										{
+											writebackToken = (uint)mdcount;
+											Type ty = proxyAssembly.ManifestModule.ResolveType( (int)operand );
+											assemblyMetadata[(mdcount++).ToString()] = ((int)MetaTokenType.mtType) + "\t" + ty.FullName + "\t" + ty.Assembly.GetName();
 										}
 									}
 									else
