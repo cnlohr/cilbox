@@ -3,16 +3,10 @@ using UnityEngine;
 [Cilboxable]
 public class TestScript2 : MonoBehaviour
 {
-	public int framenoPublic2;
-	private int framenoPrivate;
-	[SerializeField] private int framenoPrivateButSerialize;
-	static public int framenoPublic2Static;
-	static private int framenoPrivateStatic;
-	TestScript2() { framenoPrivate = 10; }
-    void Start(){ framenoPublic2++; framenoPrivate+=2; Debug.Log( $"XXX TestScript2 Start() {framenoPublic2} {framenoPrivate}" ); }
-    void Awake(){ }
-    void Update() { /*Debug.Log( "XXX TestScript Update()" );*/ framenoPrivate = 123456; }
-    public void PublicFunction() { Debug.Log( "Public Function" ); }
-    public void PublicStaticFunction() { Debug.Log( "Public Staic Function" ); }
-    private void PrivateStaticFunction() { Debug.Log( "Private Static Function" ); }
+    void Update() {	
+		MaterialPropertyBlock block = new MaterialPropertyBlock();
+		MeshRenderer mr = GetComponent<MeshRenderer>();
+		block.SetVector( "_Color", new Vector4( Mathf.Sin( (float)Time.time )*0.5f+0.5f, 0.5f, 0, 1 ) );
+		mr.SetPropertyBlock(block);
+	}
 }

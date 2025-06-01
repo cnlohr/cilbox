@@ -774,7 +774,7 @@ namespace Cilbox
 					throw;
 				}
 			}
-			if( box.nestingDepth == 1 ) Debug.Log( "This invoke took: " + box.stepsThisInvoke );
+			//if( box.nestingDepth == 1 ) Debug.Log( "This invoke took: " + box.stepsThisInvoke );
 			box.nestingDepth--;
 			return ( cont || sp == 0 ) ? null : stack[--sp].AsObject();
 		}
@@ -1070,6 +1070,7 @@ Debug.Log( "Assembly data: " + assemblyData );
 					{
 						// Also, if we wanted we could filter behavior out here, to restrict the user to certain classes.
 						// XXX Should this be reverse search?
+						// XXX How do we handle things like GetComponent<MeshRenderer>();
 						foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
 						{
 							if( assembly.GetName().Name != useAssembly ) continue;
@@ -1079,6 +1080,7 @@ Debug.Log( "Assembly data: " + assemblyData );
 								MethodBase[] methods = tt.GetMethods( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
 								foreach( MethodBase m in methods )
 								{
+									//Debug.Log( $"Checking Assembly:{m.ToString()} {m.ToString()} {fullSignature}" );
 									if( m.ToString() == fullSignature )
 									{
 										t.nativeMethod = m;
@@ -1105,7 +1107,7 @@ Debug.Log( "Assembly data: " + assemblyData );
 							}
 							if( !t.isNative )
 							{
-								Debug.LogError( "Error: Could not find reference to: " + useAssembly + " " + fullSignature );
+								Debug.LogError( "Error: Could not find reference to: " + useAssembly + "." + fullSignature );
 								t.isValid = false;
 							}
 							else
