@@ -10,7 +10,18 @@ public class TestScript : MonoBehaviour
 	static public int framenoPublicStatic;
 	static private int framenoPrivateStatic;
 	TestScript() { framenoPrivate = 10; framenoPrivateStatic = 14; framenoPrivateStatic = 32; }
-	void Start(){ framenoPublic++; framenoPrivate+=2; Debug.Log( $"XXX TestScript Start() {framenoPublic} {framenoPrivate} {framenoPrivateStatic}" ); }
+	void Start(){
+		framenoPublic++;
+		framenoPrivate+=2;
+		Debug.Log( $"XXX TestScript Start() {framenoPublic} {framenoPrivate} {framenoPrivateStatic}" );
+		System.Diagnostics.Stopwatch stopWatch = new System.Diagnostics.Stopwatch();
+		stopWatch.Start();
+		//int fi = Fib(20);
+		int rc = RecursePO2( 17 );
+		stopWatch.Stop();
+		TimeSpan ts = stopWatch.Elapsed;
+		Debug.Log( $"RecursionTest :{rc} Time:{ts.Milliseconds}ms" );
+	}
 	void Awake(){ }
 	public int Fib( int n ) { if( n < 2 ) return n; else return Fib(n-1) + Fib(n-2); }
 	public int RecursePO2( int n ) { if( n == 0 ) return 1; else return RecursePO2(n-1) + RecursePO2(n-1); }
@@ -32,13 +43,6 @@ public class TestScript : MonoBehaviour
 		//Debug.Log( $"XXX TestScript Update() {x} {z} {f}" );
 		transform.position = new Vector3(x, 2, z);
 */
-		System.Diagnostics.Stopwatch stopWatch = new System.Diagnostics.Stopwatch();
-		stopWatch.Start();
-		//int fi = Fib(20);
-		int rc = RecursePO2( 17 );
-		stopWatch.Stop();
-		TimeSpan ts = stopWatch.Elapsed;
-		Debug.Log( $"RecursionTest :{rc} Time:{ts.Milliseconds}ms" );
 	}
 	public void PublicFunction() { Debug.Log( "Public Function" ); }
 	public void PublicStaticFunction() { Debug.Log( "Public Staic Function" ); }

@@ -105,8 +105,14 @@ namespace Cilbox
 		{
 			if( a < StackType.Int ) a = StackType.Int;
 			if( b < StackType.Int ) b = StackType.Int;
-			if( a < b ) a = b;
-			// Could be Int, Uint, Long, Ulong, Float Double or Object.
+			StackType ret = a;
+			if( ret < b ) ret = b;
+
+			// Could be Int, Uint, Long, Ulong, Float Double or Object.  But if non-integer must be same type to prompte.
+			// I think?
+			if( ret >= StackType.Float && a != b )
+				throw new Exception( $"Invalid stack conversion from {a} to {b}" );
+
 			return a;
 		}
 
@@ -774,7 +780,7 @@ namespace Cilbox
 					throw;
 				}
 			}
-			if( box.nestingDepth == 1 ) Debug.Log( "This invoke took: " + box.stepsThisInvoke );
+			//if( box.nestingDepth == 1 ) Debug.Log( "This invoke took: " + box.stepsThisInvoke );
 			box.nestingDepth--;
 			return ( cont || sp == 0 ) ? null : stack[--sp].AsObject();
 		}
@@ -946,7 +952,7 @@ namespace Cilbox
 			if( initialized ) return;
 			initialized = true;
 			Debug.Log( "Cilbox Initialize" );
-
+			Debug.Log( "Metadata:" + assemblyData );
 			//CilboxEnvironmentHolder [] se = UnityEngine.Object.FindObjectsByType<CilboxEnvironmentHolder>(FindObjectsInactive.Include, FindObjectsSortMode.None);
 			//CilboxEnvironmentHolder [] se = Resources.FindObjectsOfTypeAll(typeof(CilboxEnvironmentHolder)) as CilboxEnvironmentHolder [];
 			//if( se.Length == 0 )
@@ -954,7 +960,6 @@ namespace Cilbox
 			//	Debug.LogError( "Can't find cilly environment holder. Something went wrong with CilboxScenePostprocessor" );
 			//	return;
 			//}
-Debug.Log( "Assembly data: " + assemblyData );
 			OrderedDictionary assemblyRoot = CilboxUtil.DeserializeDict( assemblyData );
 			OrderedDictionary classData = CilboxUtil.DeserializeDict( (String)assemblyRoot["classes"] );
 			OrderedDictionary metaData = CilboxUtil.DeserializeDict( (String)assemblyRoot["metadata"] );
@@ -1009,46 +1014,41 @@ Debug.Log( "Assembly data: " + assemblyData );
 						t.nativeTypeIsStackType = true;
 						t.nativeTypeStackType = nst;
 					}
-
-					t.nativeType = null;
-					t.isValid = true;
-					t.Name = "Type: " + hostTypeName;
-
-					foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+					else
 					{
-						//Debug.Log( "TYPE ASSY: \"" + assembly.GetName().Name + "\" == \"" + useAssembly + "\"" );
-						if( assembly.GetName().Name != useAssembly ) continue;
-						var tt = assembly.GetTypes();
-						foreach( Type lt in tt )
+						t.nativeType = CilboxUtil.GetNativeTypeFromName( useAssembly, hostTypeName );
+						t.isValid = t.nativeType != null;
+
+						if( !t.isValid )
 						{
-							//Debug.Log( "TYPE c: " + lt.FullName + " / " + hostTypeName );
-							if( lt.FullName == hostTypeName )
-							{
-								t.nativeType = lt;
-								break;
-							}
+							Debug.LogError( $"Error: Could not find type: {st[1]}" );
 						}
-					}
-
-					if( t.nativeType == null )
-					{
-						t.isValid = false;
-						Debug.LogError( $"Error: Could not find type: {st[1]}" );
+						else
+						{
+							t.Name = "Type: " + hostTypeName;
+						}
 					}
 				}
 				if( metatype == MetaTokenType.mtMethod )
 				{
+					OrderedDictionary methodProps = CilboxUtil.DeserializeDict( st[1] );
+
 					// Function call
 					// TODO: Need to figure out if this is an interpreted call or a native call.
 					// (Or a please explode, for instance if you violate security rules)
-					String parentType = st[1];
-					String fullSignature = st[3];
-					String useAssembly = st[4];
-					t.Name = "Method: " + fullSignature;
+					String declaringTypeName = (String)methodProps["declaringType"];
+					String [] parameterNames = CilboxUtil.DeserializeArray((String)methodProps["parameters"]);
+					String name = (String)methodProps["name"];
+					String fullSignature = (String)methodProps["fullSignature"];
+					String useAssembly = (String)methodProps["assembly"];
+					String [] genericArguments = CilboxUtil.DeserializeArray( (String)methodProps["genericArguments"] );
+					t.Name = "Method: " + name;
+
+					//genericArguments Possibly generate based on this.
 
 					// First, see if this is to a class we are responsible for.
 					int classid;
-					if( classes.TryGetValue( parentType, out classid ) )
+					if( classes.TryGetValue( declaringTypeName, out classid ) )
 					{
 						CilboxClass matchingClass = classesList[classid];
 						uint imid = 0;
@@ -1063,61 +1063,63 @@ Debug.Log( "Assembly data: " + assemblyData );
 						else
 						{
 							t.isValid = false;
-							Debug.LogError( $"Error: Could not find {parentType}:{fullSignature}" );
+							throw new Exception( $"Error: Could not find internal method {declaringTypeName}:{fullSignature}" );
 						}
 					}
 					else
 					{
-						// Also, if we wanted we could filter behavior out here, to restrict the user to certain classes.
-						// XXX Should this be reverse search?
-						foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+						Type declaringType = CilboxUtil.GetNativeTypeFromName( useAssembly, declaringTypeName );
+						if( declaringType == null )
 						{
-							if( assembly.GetName().Name != useAssembly ) continue;
-							var tt = assembly.GetType( parentType );
-							if (tt != null)
-							{
-								MethodBase[] methods = tt.GetMethods( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
-								foreach( MethodBase m in methods )
-								{
-									if( m.ToString() == fullSignature )
-									{
-										t.nativeMethod = m;
-										t.isNative = true;
-										//t.assembly = assembly;
-										break;
-									}
-								}
+							throw new Exception( $"Error: Could not find referenced type {useAssembly} {declaringTypeName}" );
+						}
 
-								if( !t.isNative )
+						Type [] parameters = CilboxUtil.TypeNamesToArrayOfNativeTypes( parameterNames );
+
+						// XXX Can we combine these?
+						MethodBase m = declaringType.GetMethod(
+							name,
+							genericArguments.Length,
+							BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static,
+							null,
+							CallingConventions.Any,
+							parameters,
+							null ); // TODO I don't ... think? we need parameter modifiers? "To be only used when calling through COM interop, and only parameters that are passed by reference are handled. The default binder does not process this parameter."
+
+						if( m == null )
+						{
+							// Can't use GetConstructor, because somethings have .ctor or .cctor
+							ConstructorInfo[] cts = declaringType.GetConstructors(
+								BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
+							int ck;
+							for( ck = 0; ck < cts.Length; ck++ )
+							{
+								Debug.Log( cts[ck] );
+								if( fullSignature == cts[ck].ToString() )
 								{
-									methods = tt.GetConstructors( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
-									foreach( MethodBase m in methods )
-									{
-										if( m.ToString() == fullSignature )
-										{
-											t.nativeMethod = m;
-											t.isNative = true;
-											//t.assembly = assembly;
-											break;
-										}
-									}
+									m = cts[ck];
+									break;
 								}
 							}
-							if( !t.isNative )
-							{
-								Debug.LogError( "Error: Could not find reference to: " + useAssembly + " " + fullSignature );
-								t.isValid = false;
-							}
-							else
-							{
-								t.isValid = true;
-							}
+						}
+
+						if( m != null && m is MethodInfo && genericArguments.Length > 0 )
+						{
+					    	m = ((MethodInfo)m).MakeGenericMethod( CilboxUtil.TypeNamesToArrayOfNativeTypes( genericArguments ) );
+						}
+
+						if( m != null )
+						{
+							t.nativeMethod = m;
+							t.isNative = true;
+							t.isValid = true;
+						} else if( !t.isNative )
+						{
+							throw new Exception( "Error: Could not find reference to: " + useAssembly + "." + fullSignature );
 						}
 					}
 				}
 			}
-			
-
 		}
 
 		public CilboxClass GetClass( String className )
@@ -1178,7 +1180,7 @@ Debug.Log( "Assembly data: " + assemblyData );
 					else
 						me = type.GetConstructors( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
 
-					foreach( var m in me )
+					foreach( MethodBase m in me )
 					{
 						if( m.DeclaringType.Assembly != proxyAssembly )
 						{
@@ -1237,7 +1239,43 @@ Debug.Log( "Assembly data: " + assemblyData );
 										{
 											writebackToken = (uint)mdcount;
 											MethodBase tmb = proxyAssembly.ManifestModule.ResolveMethod( (int)operand );
-											assemblyMetadata[(mdcount++).ToString()] = ((int)MetaTokenType.mtMethod) + "\t" + tmb.DeclaringType + "\t" + tmb.Name + "\t" + tmb + "\t" + tmb.DeclaringType.Assembly.GetName().Name;
+
+											OrderedDictionary methodProps = new OrderedDictionary();
+
+											// "Generic constructors are not supported in the .NET Framework version 2.0"
+											if( !tmb.IsConstructor )
+											{
+												Type[] templateArguments = tmb.GetGenericArguments();
+												if( templateArguments.Length > 0 )
+												{
+													String [] argtypes = new String[templateArguments.Length];
+													for( int a = 0; a < templateArguments.Length; a++ )
+														argtypes[a] = CilboxUtil.SerializeArray( new String[]{
+															templateArguments[a].Assembly.GetName().Name, templateArguments[a].FullName } );
+													methodProps["genericArguments"] = CilboxUtil.SerializeArray( argtypes );
+												}
+											}
+
+											methodProps["declaringType"] = tmb.DeclaringType.ToString();
+											methodProps["name"] = tmb.Name;
+
+											System.Reflection.ParameterInfo[] parameterInfos = tmb.GetParameters();
+											if( parameterInfos.Length > 0 )
+											{
+												String [] sParameters = new String[parameterInfos.Length];
+												for( var j = 0; j < parameterInfos.Length; j++ )
+												{
+													Type ty = parameterInfos[j].ParameterType;
+													sParameters[j] = CilboxUtil.SerializeArray( new String[]{
+														ty.Assembly.GetName().Name, ty.FullName });
+												}
+												methodProps["parameters"] = CilboxUtil.SerializeArray( sParameters );
+											}
+											methodProps["fullSignature"] = tmb.ToString();
+											methodProps["assembly"] = tmb.DeclaringType.Assembly.GetName().Name;
+
+											assemblyMetadata[(mdcount++).ToString()] = CilboxUtil.SerializeArray( new String[]{
+												((int)MetaTokenType.mtMethod).ToString(), CilboxUtil.SerializeDict( methodProps ) } );
 										}
 									}
 									else if( oc.OperandType == CilboxUtil.OpCodes.OperandType.InlineField )
@@ -1273,7 +1311,7 @@ Debug.Log( "Assembly data: " + assemblyData );
 							}
 							catch( Exception e )
 							{
-								Debug.LogWarning( e );
+								Debug.LogError( e );
 								continue;
 							}
 						}
@@ -1300,7 +1338,6 @@ Debug.Log( "Assembly data: " + assemblyData );
 							argVars[p.Name] = p.ParameterType.ToString();
 						}
 						MethodProps["parameters"] = CilboxUtil.SerializeDict( argVars );
-
 						MethodProps["maxStack"] = mb.MaxStackSize.ToString();
 						MethodProps["isStatic"] = m.IsStatic ? "1" : "0";
 						MethodProps["fullSignature"] = m.ToString();

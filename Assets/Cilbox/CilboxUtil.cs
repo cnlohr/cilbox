@@ -175,8 +175,21 @@ namespace Cilbox
 			return ret + "\n";
 		}
 
+		static public String SerializeArray( String [] arr )
+		{
+			String ret = "";
+			int i;
+			for( i = 0; i < arr.Length; i++ )
+			{
+				ret += Escape(arr[i]);
+				if( i < arr.Length-1 ) ret += "\t";
+			}
+			return ret;
+		}
+
 		static public String [] DeserializeArray( String s )
 		{
+			if( s == null ) return new String[0];
 			int poserror = -1;
 			int pos = 0;
 			List< String > ret = new List< String >();
@@ -237,7 +250,7 @@ namespace Cilbox
 			}
 			if( poserror >= 0 )
 			{
-				Debug.LogError( $"Erorr parsing dictionary at char {poserror}\n{s}" );
+				Debug.LogError( $"Erorr parsing dictionary at char {poserror} ({s})" );
 			}
 			return ret;
 		}
@@ -262,6 +275,39 @@ namespace Cilbox
 			}
 		}
 
+
+
+		///////////////////////////////////////////////////////////////////////////
+		//  REFLECTION HELPERS  ///////////////////////////////////////////////////
+		///////////////////////////////////////////////////////////////////////////
+		public static Type GetNativeTypeFromName( String useAssembly, String typeName )
+		{
+			foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+			{
+				if( assembly.GetName().Name != useAssembly ) continue;
+				var tt = assembly.GetTypes();
+				foreach( Type lt in tt )
+				{
+					if( lt.FullName == typeName )
+					{
+						return lt;
+					}
+				}
+			}
+			return null;
+		}
+
+		public static Type[] TypeNamesToArrayOfNativeTypes( String [] parameterNames )
+		{
+			if( parameterNames == null ) return null;
+			Type[] ret = new Type[parameterNames.Length];
+			for( int i = 0; i < parameterNames.Length; i++ )
+			{
+				String [] assemblyAndTypeName = DeserializeArray( parameterNames[i] );
+				Type pt = ret[i] = GetNativeTypeFromName( assemblyAndTypeName[0], assemblyAndTypeName[1] );
+			}
+			return ret;
+		}
 
 		///////////////////////////////////////////////////////////////////////////
 		//  DEFS FROM CECIL FOR PARSING CIL  //////////////////////////////////////
