@@ -1185,6 +1185,33 @@ namespace Cilbox
 			AssetDatabase.ImportAsset(UnityEngine.SceneManagement.SceneManager.GetActiveScene().path, ImportAssetOptions.ForceUpdate);
 */
 
+			int cilboxableElements = 0;
+
+			// Iterate over all GameObjects, and find the ones that have Cilboxable scripts.
+			object[] obj = GameObject.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+			foreach (object o in obj)
+			{
+				GameObject g = (GameObject) o;
+				MonoBehaviour [] scripts = g.GetComponents<MonoBehaviour>();
+				foreach (MonoBehaviour m in scripts )
+				{
+					// Skip null objects.
+					if (m == null)
+						continue;
+					object[] attribs = m.GetType().GetCustomAttributes(typeof(CilboxableAttribute), true);
+					// Not a proxiable script.
+					if (attribs == null || attribs.Length <= 0)
+						continue;
+
+					cilboxableElements++;
+				}
+			}
+
+			if( cilboxableElements == 0 )
+				return;
+
+			Debug.Log( $"Dirtying scene, found {cilboxableElements} cilboxable elements." );
+
 			// PLEASE LET ME KNOW IF YOU KNOW A BETTER WAY https://discussions.unity.com/t/onprocessscene-sometimes-gets-skipped/943573/6
 			GameObject dirtier = GameObject.Find( "/CilboxDirtier" );
 			if( !dirtier )
