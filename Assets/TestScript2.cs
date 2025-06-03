@@ -13,4 +13,5 @@ public class TestScript2 : MonoBehaviour
 		mr.SetPropertyBlock(block);
 		Debug.Log( block );
 	}
+
 }

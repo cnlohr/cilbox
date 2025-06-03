@@ -39,7 +39,7 @@ namespace Cilbox
 			}
 
 			serializedObjectData = CilboxUtil.SerializeDict( instanceFields );
-			Debug.Log( "Serializing: " + serializedObjectData );
+			//Debug.Log( "Serializing: " + serializedObjectData );
 
 			Awake();
 		}

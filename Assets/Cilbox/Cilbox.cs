@@ -8,6 +8,7 @@ using System.Reflection;
 
 #if UNITY_EDITOR
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.Callbacks;
 #endif
 
@@ -1094,7 +1095,7 @@ namespace Cilbox
 							int ck;
 							for( ck = 0; ck < cts.Length; ck++ )
 							{
-								Debug.Log( cts[ck] );
+								//Debug.Log( cts[ck] );
 								if( fullSignature == cts[ck].ToString() )
 								{
 									m = cts[ck];
@@ -1146,11 +1147,83 @@ namespace Cilbox
 	///////////////////////////////////////////////////////////////////////////
 
 	#if UNITY_EDITOR
+
+
+	// IProcessSceneWithReport - runs before scene is compiled, against the play-mode tree
+	// OnPostBuildPlayerScriptDLLs - it runs at the right time, in a blank scene, but that scene is not what is used.
+	// IPostprocessBuildWithReport - happens after build is complete, but also dumped into a temporary scene.
+	// IPreprocessBuildWithReport - Happens on the main scene, and outputs are preserved
+
+	class CilboxCustomBuildProcessor : IProcessSceneWithReport
+	{
+		public int callbackOrder { get { return 0; } }
+		public void OnProcessScene( UnityEngine.SceneManagement.Scene scene, UnityEditor.Build.Reporting.BuildReport report)
+		{
+			Debug.Log( "IProcessSceneWithReport" );
+			CilboxScenePostprocessor.OnPostprocessScene();
+		}
+	}
+
+	class CilboxCustomBuildProcessor2 : IPreprocessBuildWithReport
+	{
+		public int callbackOrder { get { return 0; } }
+		public void OnPreprocessBuild(UnityEditor.Build.Reporting.BuildReport report)
+		{
+/*
+			This does not work >:(
+
+			UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
+				UnityEngine.SceneManagement.SceneManager.GetActiveScene() );
+
+			object[] objToCheck = GameObject.FindObjectsByType<GameObject>( FindObjectsSortMode.None );
+			foreach (object o in objToCheck)
+			{
+				GameObject g = (GameObject) o;
+				EditorUtility.SetDirty( g );
+			}
+			UnityEditor.SceneManagement.EditorSceneManager.SaveScene( UnityEngine.SceneManagement.SceneManager.GetActiveScene() );
+			AssetDatabase.ImportAsset(UnityEngine.SceneManagement.SceneManager.GetActiveScene().path, ImportAssetOptions.ForceUpdate);
+*/
+
+			// PLEASE LET ME KNOW IF YOU KNOW A BETTER WAY https://discussions.unity.com/t/onprocessscene-sometimes-gets-skipped/943573/6
+			GameObject dirtier = GameObject.Find( "/CilboxDirtier" );
+			if( !dirtier )
+				dirtier = new GameObject("CilboxDirtier");
+			dirtier.hideFlags = HideFlags.HideInHierarchy;
+			dirtier.transform.position = new Vector3(UnityEngine.Random.Range(-100,100),UnityEngine.Random.Range(-100,100),UnityEngine.Random.Range(-100,100));
+			UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
+				UnityEngine.SceneManagement.SceneManager.GetActiveScene() );
+			UnityEditor.SceneManagement.EditorSceneManager.SaveScene( UnityEngine.SceneManagement.SceneManager.GetActiveScene() );
+		}
+	}
 	public class CilboxScenePostprocessor {
 
 		[PostProcessSceneAttribute (2)]
 		public static void OnPostprocessScene() {
-			Debug.Log( "Postprocessing scene." );
+
+			int scriptsThatNeedCilboxing = 0;
+			{
+				object[] objToCheck = GameObject.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+				foreach (object o in objToCheck)
+				{
+					GameObject g = (GameObject) o;
+					MonoBehaviour [] scripts = g.GetComponents<MonoBehaviour>();
+					foreach (MonoBehaviour m in scripts )
+					{
+						// Skip null objects.
+						if (m == null)
+							continue;
+						object[] attribs = m.GetType().GetCustomAttributes(typeof(CilboxableAttribute), true);
+						// Not a proxiable script.
+						if (attribs == null || attribs.Length <= 0)
+							continue;
+						scriptsThatNeedCilboxing++;
+					}
+				}
+			}
+
+			Debug.Log( $"Postprocessing scene. Cilbox scripts to do: {scriptsThatNeedCilboxing}" );
+			if( scriptsThatNeedCilboxing == 0 ) return;
 
 			Assembly proxyAssembly = typeof(CilboxProxy).Assembly;
 
@@ -1199,7 +1272,9 @@ namespace Cilbox
 							continue;
 						}
 
-						byte [] byteCode = mb.GetILAsByteArray();
+						byte [] byteCodeIn = mb.GetILAsByteArray();
+						byte [] byteCode = new byte[byteCodeIn.Length];
+						Array.Copy( byteCodeIn, byteCode, byteCodeIn.Length );
 
 						String asm = "";
 						//if( !ExtractAndTransformMetas( proxyAssembly, ref ba, ref assemblyMetadata, ref assemblyMetadataReverseOriginal, ref mdcount ) ) continue;
@@ -1320,7 +1395,7 @@ namespace Cilbox
 						for( int i = 0; i < byteCode.Length; i++ )
 							byteCodeStr += byteCode[i].ToString( "x2" );
 
-						Debug.Log( type.FullName + ":" + methodName + " (" + byteCode.Length + ")\n" + asm );
+					//	Debug.Log( type.FullName + ":" + methodName + " (" + byteCode.Length + ")\n" + asm );
 
 						bytecodeLength += byteCode.Length;
 						MethodProps["body"] = byteCodeStr;
@@ -1403,17 +1478,21 @@ namespace Cilbox
 			String sAllAssemblyData = CilboxUtil.SerializeDict( assemblyRoot );
 
 			Cilbox [] se = Resources.FindObjectsOfTypeAll(typeof(Cilbox)) as Cilbox [];
+
 			Cilbox tac;
 			if( se.Length != 0 )
 			{
 				tac = se[0];
+				if( tac.assemblyData != sAllAssemblyData ) EditorUtility.SetDirty( tac );
 			}
 			else
 			{
 				GameObject cilboxDataObject = new GameObject("CilboxData " + new System.Random().Next(0,10000000));
 				//cilboxDataObject.hideFlags = HideFlags.HideInHierarchy;
 				tac = cilboxDataObject.AddComponent( typeof(Cilbox) ) as Cilbox;
+				EditorUtility.SetDirty( tac );
 			}
+
 			if( bytecodeLength == 0 )
 			{
 				Debug.Log( "No bytecode available in this build. Falling back to last build." );
