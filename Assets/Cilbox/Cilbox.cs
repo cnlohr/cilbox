@@ -447,9 +447,7 @@ namespace Cilbox
 						int iop = b - 0x2c;
 						if( iop >= 0x38 ) iop -= 0xd;
 						int offset = (b >= 0x38) ? (int)BytecodeAsU32( ref pc ) : (sbyte)byteCode[pc];
-//						offset--;
 						pc++;
-//Debug.Log( "CHECKING " + iop + " / " + offset + " " + b );
 						switch( iop )
 						{
 							case 0: if( ( s.type == StackType.Object && s.o == null ) || s.i == 0 ) pc += offset; break;
@@ -473,7 +471,6 @@ namespace Cilbox
 						if( iop >= 0x38 ) iop -= 0xd;
 						int joffset = (b >= 0x38) ? (int)BytecodeAsU32( ref pc ) : (sbyte)byteCode[pc];
 						pc++;
-//						joffset--;
 						switch( sb.type )
 						{
 						case StackType.Sbyte: case StackType.Short: case StackType.Int:
@@ -662,16 +659,23 @@ namespace Cilbox
 
 					case 0x7b: 
 					{
-						--sp; // Should be "This" XXX WRONG
 						uint bc = BytecodeAsU32( ref pc );
-						stack[sp++].Load( ths.fields[box.metadatas[bc].fieldIndex] );
+						object opths = stack[--sp].AsObject();
+						if( opths is CilboxProxy )
+							stack[sp++].Load( ((CilboxProxy)opths).fields[box.metadatas[bc].fieldIndex] );
+						else
+							throw new Exception( "Unimplemented.  Attempting to get field on non-cilbox object" );
 						break; //ldfld
 					}
 					case 0x7d:
 					{
 						uint bc = BytecodeAsU32( ref pc );
-						ths.fields[box.metadatas[bc].fieldIndex] = stack[--sp].AsObject();
-						--sp; // Should be "This" XXX WRONG
+						object o = stack[--sp].AsObject();
+						object opths = stack[--sp].AsObject();
+						if( opths is CilboxProxy )
+							((CilboxProxy)opths).fields[box.metadatas[bc].fieldIndex] = o;
+						else
+							throw new Exception( "Unimplemented.  Attempting to set field on non-cilbox object" );
 						break; //stfld
 					}
 					case 0x7e: 
@@ -1517,8 +1521,11 @@ namespace Cilbox
 
 					CilboxProxy p = g.AddComponent<CilboxProxy>();
 					p.SetupProxy( tac, m );
-					UnityEngine.Object.DestroyImmediate( m );
 				}
+			}
+			foreach (MonoBehaviour m in allBehavioursThatNeedCilboxing)
+			{
+				UnityEngine.Object.DestroyImmediate( m );
 			}
 		}
 	}

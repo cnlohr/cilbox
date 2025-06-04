@@ -35,7 +35,8 @@ namespace Cilbox
 				if( !f.IsPublic && f.GetCustomAttributes(typeof(SerializeField), true).Length <= 0 )
 					continue;
 
-				instanceFields[f.Name] = f.GetValue( mToSteal ).ToString();
+				object fv = f.GetValue( mToSteal );
+				instanceFields[f.Name] = fv.ToString();
 			}
 
 			serializedObjectData = CilboxUtil.SerializeDict( instanceFields );
@@ -69,6 +70,7 @@ namespace Cilbox
 				for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
 				{
 					String fieldValue = (String)d[cls.instanceFieldNames[i]];
+					Debug.Log( "DESER: " + cls.instanceFieldTypes[i] + " / " + fieldValue + " / " + cls.instanceFieldNames[i] );
 					fields[i] = CilboxUtil.DeserializeDataForProxyField( cls.instanceFieldTypes[i], fieldValue );
 				}
 			}

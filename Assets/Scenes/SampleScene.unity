@@ -242,6 +242,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   framenoPublic: 0
   framenoPrivateButSerialize: 0
+  testScript2: {fileID: 136241552}
 --- !u!1 &136241546
 GameObject:
   m_ObjectHideFlags: 0

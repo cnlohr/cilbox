@@ -9,11 +9,13 @@ public class TestScript : MonoBehaviour
 	[SerializeField] private int framenoPrivateButSerialize;
 	static public int framenoPublicStatic;
 	static private int framenoPrivateStatic;
+	//public TestScript2 testScript2;
 	TestScript() { framenoPrivate = 10; framenoPrivateStatic = 14; framenoPrivateStatic = 32; }
 	void Start(){
 		framenoPublic++;
 		framenoPrivate+=2;
 		Debug.Log( $"XXX TestScript Start() {framenoPublic} {framenoPrivate} {framenoPrivateStatic}" );
+		//Debug.Log( testScript2 );
 		System.Diagnostics.Stopwatch stopWatch = new System.Diagnostics.Stopwatch();
 		stopWatch.Start();
 		//int fi = Fib(20);
@@ -43,14 +45,6 @@ public class TestScript : MonoBehaviour
 		//Debug.Log( $"XXX TestScript Update() {x} {z} {f}" );
 		transform.position = new Vector3(x, 2, z);
 */
-
-		System.Diagnostics.Stopwatch stopWatch = new System.Diagnostics.Stopwatch();
-		stopWatch.Start();
-		//int fi = Fib(20);
-		int rc = RecursePO2( 17 );
-		stopWatch.Stop();
-		TimeSpan ts = stopWatch.Elapsed;
-		Debug.Log( $"RecursionTest :{rc} Time:{ts.Milliseconds}ms" );
 
 	}
 	public void PublicFunction() { Debug.Log( "Public Function" ); }
