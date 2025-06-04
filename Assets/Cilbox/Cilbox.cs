@@ -542,7 +542,8 @@ namespace Cilbox
 						case StackType.Object:
 							switch(iop)
 							{
-							case 0: if( sa.o != sb.o ) pc += joffset; break;
+							case 0: if( sa.o == sb.o ) pc += joffset; break;
+							case 5: if( sa.o != sb.o ) pc += joffset; break;
 							default: throw new( "Invalid object comparison" );
 							} break;
 						default: 
