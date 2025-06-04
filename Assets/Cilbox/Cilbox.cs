@@ -10,6 +10,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Callbacks;
+using System.IO;
 #endif
 
 // To add [Cilboxable] to your classes that you want exported.
@@ -337,11 +338,11 @@ namespace Cilbox
 					case 0x1e: stack[sp++].LoadInt( 8 ); break; // ldc.i4.8
 
 					case 0x1f: stack[sp++].LoadInt( (sbyte)byteCode[pc++] ); break; // ldc.i4.s <int8>
-					case 0x20: stack[sp++].LoadInt( (int)BytecodeAs32( ref pc ) ); break; // ldc.i4 <int32>
+					case 0x20: stack[sp++].LoadInt( (int)BytecodeAsU32( ref pc ) ); break; // ldc.i4 <int32>
 					case 0x21: stack[sp++].Load( (long)BytecodeAs64( ref pc ) ); break; // ldc.i8 <int64>
-					case 0x22: stack[sp++].LoadFloat( CilboxUtil.IntFloatConverter.ConvertUtoF(BytecodeAs32( ref pc ) ) ); break; // ldc.r4 <float32 (num)>
+					case 0x22: stack[sp++].LoadFloat( CilboxUtil.IntFloatConverter.ConvertUtoF(BytecodeAsU32( ref pc ) ) ); break; // ldc.r4 <float32 (num)>
 					case 0x23: stack[sp++].LoadDouble( CilboxUtil.IntFloatConverter.ConvertEtoD(BytecodeAs64( ref pc ) ) ); break; // ldc.r4 <float32 (num)>
-					// 0x24 is unimplemented.
+					// 0x24 does not exist.
 					case 0x25: stack[sp] = stack[sp-1]; sp++; break; // dup
 					case 0x26: sp--; break; // pop
 
@@ -351,7 +352,7 @@ namespace Cilbox
 					case 0x73: //newobj
 					case 0x6F: //callvirt
 					{
-						uint bc = (b == 0x29) ? stack[--sp].u : BytecodeAs32( ref pc );
+						uint bc = (b == 0x29) ? stack[--sp].u : BytecodeAsU32( ref pc );
 						object iko = null; // Returned value.
 						CilMetadataTokenInfo dt = box.metadatas[bc];
 
@@ -411,10 +412,7 @@ namespace Cilbox
 								callthis = Activator.CreateInstance(st.DeclaringType);
 							else if( !st.IsStatic )
 								callthis = (callthis_se = stack[--sp]).AsObject();
-							//Debug.Log( stack[sp].type );
-							//Debug.Log( callthis );
-							//Debug.Log( dt.Name );
-							//Debug.Log( " " + ((st.IsStatic)?"STATIC":"INSTANCE") + " / " + st.Name + "/" + (callthis==null) + " / " + callthis + " / fields=" + numFields + "/"+st );
+
 							if( st.IsConstructor )
 								iko = ((ConstructorInfo)st).Invoke( callpar );
 							else
@@ -428,7 +426,6 @@ namespace Cilbox
 								callthis_se.Load( callthis );
 						}
 
-						//Debug.Log( "ISVOID:" + isVoid+ " IKO:" + iko );
 						if( !isVoid ) stack[sp++].Load( iko );
 						if( b == 0x27 )
 						{
@@ -439,114 +436,116 @@ namespace Cilbox
 						break;
 					}
 					case 0x2a: cont = false; break; // ret
+
 					case 0x2b: pc += (sbyte)byteCode[pc] + 1; break; //br.s
-					case 0x2c:
+					case 0x38: pc += (int)BytecodeAsU32( ref pc ) + 1; break; // br
+
+					case 0x2c: case 0x39: // brfalse.s, brnull.s, brzero.s - is it zero, null or  / brfalse
+					case 0x2d: case 0x3a: // brinst.s, brtrue.s / btrue
 					{
-						// brfalse.s, brnull.s, brzero.s - is it zero, null or 
 						StackElement s = stack[--sp];
+						int iop = b - 0x2c;
+						if( iop >= 0x38 ) iop -= 0xd;
+						int offset = (b >= 0x38) ? (int)BytecodeAsU32( ref pc ) : (sbyte)byteCode[pc];
+//						offset--;
 						pc++;
-						if( ( s.type == StackType.Object && s.o == null ) || s.i == 0 ) 
-							pc += (sbyte)byteCode[pc-1];
+//Debug.Log( "CHECKING " + iop + " / " + offset + " " + b );
+						switch( iop )
+						{
+							case 0: if( ( s.type == StackType.Object && s.o == null ) || s.i == 0 ) pc += offset; break;
+							case 1: if( ( s.type == StackType.Object && s.o != null ) || s.i != 0 ) pc += offset; break;
+						}
 						break;
 					}
-					case 0x2d:
-					{
-						// brinst.s, brtrue.s
-						StackElement s = stack[--sp];
-						pc++;
-						if( ( s.type == StackType.Object && s.o != null ) || s.i != 0 ) 
-							pc += (sbyte)byteCode[pc-1];
-						break; //brfalse.s
-					}
-					case 0x2e: // beq.s
-					{
-						StackElement sb = stack[--sp]; StackElement sa = stack[--sp];
-						pc++;
-						if( (sa.type == StackType.Object && sa.o == sb.o ) || 
-							(sa.type != StackType.Object && sa.l == sb.l ) )
-							pc += (sbyte)byteCode[pc-1];
-						break;
-					}
-					case 0x2f: // bge.s
-					case 0x30: // bgt.s
-					case 0x31: // ble.s
-					case 0x32: // blt.s
-					case 0x33: // bne.un.s
-					case 0x34: // bge.un.s
-					case 0x35: // bgt.un.s
-					case 0x36: // ble.un.s
-					case 0x37: // blt.un.s
+					case 0x2e: case 0x3b: // beq.s / beq
+					case 0x2f: case 0x3c: // bge.s
+					case 0x30: case 0x3d: // bgt.s
+					case 0x31: case 0x3e: // ble.s
+					case 0x32: case 0x3f: // blt.s
+					case 0x33: case 0x40: // bne.un.s
+					case 0x34: case 0x41: // bge.un.s
+					case 0x35: case 0x42: // bgt.un.s
+					case 0x36: case 0x43: // ble.un.s
+					case 0x37: case 0x44: // blt.un.s
 					{
 						StackElement sb = stack[--sp]; StackElement sa = stack[--sp];
+						int iop = b - 0x2e;
+						if( iop >= 0x38 ) iop -= 0xd;
+						int joffset = (b >= 0x38) ? (int)BytecodeAsU32( ref pc ) : (sbyte)byteCode[pc];
 						pc++;
-						int joffset = (sbyte)byteCode[pc-1];
+//						joffset--;
 						switch( sb.type )
 						{
 						case StackType.Sbyte: case StackType.Short: case StackType.Int:
-							switch( b )
+							switch( iop )
 							{
-							case 0x2f: if( sa.i >= sb.i ) pc += joffset; break;
-							case 0x30: if( sa.i >  sb.i ) pc += joffset; break;
-							case 0x31: if( sa.i <= sb.i ) pc += joffset; break;
-							case 0x32: if( sa.i <  sb.i ) pc += joffset; break;
-							case 0x33: if( sa.e != sb.e ) pc += joffset; break;
-							case 0x34: if( sa.e >= sb.e ) pc += joffset; break;
-							case 0x35: if( sa.e >  sb.e ) pc += joffset; break;
-							case 0x36: if( sa.e <= sb.e ) pc += joffset; break;
-							case 0x37: if( sa.e <  sb.e ) pc += joffset; break;
+							case 0: if( sa.i == sb.i ) pc += joffset; break;
+							case 1: if( sa.i >= sb.i ) pc += joffset; break;
+							case 2: if( sa.i >  sb.i ) pc += joffset; break;
+							case 3: if( sa.i <= sb.i ) pc += joffset; break;
+							case 4: if( sa.i <  sb.i ) pc += joffset; break;
+							case 5: if( sa.e != sb.e ) pc += joffset; break;
+							case 6: if( sa.e >= sb.e ) pc += joffset; break;
+							case 7: if( sa.e >  sb.e ) pc += joffset; break;
+							case 8: if( sa.e <= sb.e ) pc += joffset; break;
+							case 9: if( sa.e <  sb.e ) pc += joffset; break;
 							} break;
 						case StackType.Byte: case StackType.Ushort: case StackType.Uint: case StackType.Ulong:
-							switch( b )	{
-							case 0x2f: if( sa.e >= sb.e ) pc += joffset; break;
-							case 0x30: if( sa.e >  sb.e ) pc += joffset; break;
-							case 0x31: if( sa.e <= sb.e ) pc += joffset; break;
-							case 0x32: if( sa.e <  sb.e ) pc += joffset; break;
-							case 0x33: if( sa.e != sb.e ) pc += joffset; break;
-							case 0x34: if( sa.e >= sb.e ) pc += joffset; break;
-							case 0x35: if( sa.e >  sb.e ) pc += joffset; break;
-							case 0x36: if( sa.e <= sb.e ) pc += joffset; break;
-							case 0x37: if( sa.e <  sb.e ) pc += joffset; break;
+							switch( iop )	{
+							case 0: if( sa.e == sb.e ) pc += joffset; break;
+							case 1: if( sa.e >= sb.e ) pc += joffset; break;
+							case 2: if( sa.e >  sb.e ) pc += joffset; break;
+							case 3: if( sa.e <= sb.e ) pc += joffset; break;
+							case 4: if( sa.e <  sb.e ) pc += joffset; break;
+							case 5: if( sa.e != sb.e ) pc += joffset; break;
+							case 6: if( sa.e >= sb.e ) pc += joffset; break;
+							case 7: if( sa.e >  sb.e ) pc += joffset; break;
+							case 8: if( sa.e <= sb.e ) pc += joffset; break;
+							case 9: if( sa.e <  sb.e ) pc += joffset; break;
 							} break;
 						case StackType.Long:
-							switch( b )	{
-							case 0x2f: if( sa.l >= sb.l ) pc += joffset; break;
-							case 0x30: if( sa.l >  sb.l ) pc += joffset; break;
-							case 0x31: if( sa.l <= sb.l ) pc += joffset; break;
-							case 0x32: if( sa.l <  sb.l ) pc += joffset; break;
-							case 0x33: if( sa.e != sb.e ) pc += joffset; break;
-							case 0x34: if( sa.e >= sb.e ) pc += joffset; break;
-							case 0x35: if( sa.e >  sb.e ) pc += joffset; break;
-							case 0x36: if( sa.e <= sb.e ) pc += joffset; break;
-							case 0x37: if( sa.e <  sb.e ) pc += joffset; break;
+							switch( iop )	{
+							case 0: if( sa.l == sb.l ) pc += joffset; break;
+							case 1: if( sa.l >= sb.l ) pc += joffset; break;
+							case 2: if( sa.l >  sb.l ) pc += joffset; break;
+							case 3: if( sa.l <= sb.l ) pc += joffset; break;
+							case 4: if( sa.l <  sb.l ) pc += joffset; break;
+							case 5: if( sa.e != sb.e ) pc += joffset; break;
+							case 6: if( sa.e >= sb.e ) pc += joffset; break;
+							case 7: if( sa.e >  sb.e ) pc += joffset; break;
+							case 8: if( sa.e <= sb.e ) pc += joffset; break;
+							case 9: if( sa.e <  sb.e ) pc += joffset; break;
 							} break;
 						case StackType.Float:
-							switch( b )	{
-							case 0x2f: if( sa.f >= sb.f ) pc += joffset; break;
-							case 0x30: if( sa.f >  sb.f ) pc += joffset; break;
-							case 0x31: if( sa.f <= sb.f ) pc += joffset; break;
-							case 0x32: if( sa.f <  sb.f ) pc += joffset; break;
-							case 0x33: if( sa.f != sb.f ) pc += joffset; break;
-							case 0x34: if( sa.f >= sb.f ) pc += joffset; break;
-							case 0x35: if( sa.f >  sb.f ) pc += joffset; break;
-							case 0x36: if( sa.f <= sb.f ) pc += joffset; break;
-							case 0x37: if( sa.f <  sb.f ) pc += joffset; break;
+							switch( iop )	{
+							case 0: if( sa.f == sb.f ) pc += joffset; break;
+							case 1: if( sa.f >= sb.f ) pc += joffset; break;
+							case 2: if( sa.f >  sb.f ) pc += joffset; break;
+							case 3: if( sa.f <= sb.f ) pc += joffset; break;
+							case 4: if( sa.f <  sb.f ) pc += joffset; break;
+							case 5: if( sa.f != sb.f ) pc += joffset; break;
+							case 6: if( sa.f >= sb.f ) pc += joffset; break;
+							case 7: if( sa.f >  sb.f ) pc += joffset; break;
+							case 8: if( sa.f <= sb.f ) pc += joffset; break;
+							case 9: if( sa.f <  sb.f ) pc += joffset; break;
 							} break;
 						case StackType.Double:
-							switch( b )	{
-							case 0x2f: if( sa.d >= sb.d ) pc += joffset; break;
-							case 0x30: if( sa.d >  sb.d ) pc += joffset; break;
-							case 0x31: if( sa.d <= sb.d ) pc += joffset; break;
-							case 0x32: if( sa.d <  sb.d ) pc += joffset; break;
-							case 0x33: if( sa.d != sb.d ) pc += joffset; break;
-							case 0x34: if( sa.d >= sb.d ) pc += joffset; break;
-							case 0x35: if( sa.d >  sb.d ) pc += joffset; break;
-							case 0x36: if( sa.d <= sb.d ) pc += joffset; break;
-							case 0x37: if( sa.d <  sb.d ) pc += joffset; break;
+							switch( iop )	{
+							case 0: if( sa.d == sb.d ) pc += joffset; break;
+							case 1: if( sa.d >= sb.d ) pc += joffset; break;
+							case 2: if( sa.d >  sb.d ) pc += joffset; break;
+							case 3: if( sa.d <= sb.d ) pc += joffset; break;
+							case 4: if( sa.d <  sb.d ) pc += joffset; break;
+							case 5: if( sa.d != sb.d ) pc += joffset; break;
+							case 6: if( sa.d >= sb.d ) pc += joffset; break;
+							case 7: if( sa.d >  sb.d ) pc += joffset; break;
+							case 8: if( sa.d <= sb.d ) pc += joffset; break;
+							case 9: if( sa.d <  sb.d ) pc += joffset; break;
 							} break;
 						case StackType.Object:
-							switch(b)
+							switch(iop)
 							{
-							case 0x33: if( sa.o != sb.o ) pc += joffset; break;
+							case 0: if( sa.o != sb.o ) pc += joffset; break;
 							default: throw new( "Invalid object comparison" );
 							} break;
 						default: 
@@ -554,9 +553,6 @@ namespace Cilbox
 						}
 						break;
 					}
-					case 0x38: // br
-						pc += (int)BytecodeAs32( ref pc ) + 1;
-						break;
 
 
 					case 0x58: case 0x59: case 0x5A: case 0x5B: case 0x5C: case 0x5D:
@@ -659,7 +655,7 @@ namespace Cilbox
 
 					case 0x72:
 					{
-						uint bc = BytecodeAs32( ref pc );
+						uint bc = BytecodeAsU32( ref pc );
 						stack[sp++].Load( box.metadatas[bc].fields[0] );
 						break; //ldstr
 					}
@@ -667,45 +663,41 @@ namespace Cilbox
 					case 0x7b: 
 					{
 						--sp; // Should be "This" XXX WRONG
-						uint bc = BytecodeAs32( ref pc );
+						uint bc = BytecodeAsU32( ref pc );
 						stack[sp++].Load( ths.fields[box.metadatas[bc].fieldIndex] );
 						break; //ldfld
 					}
 					case 0x7d:
 					{
-						uint bc = BytecodeAs32( ref pc );
-						//Debug.Log( bc );
-						//Debug.Log( ths );
-						//Debug.Log( ths.fields );
-						//Debug.Log( ths.fields.Length );
-						//Debug.Log( box.metadatas[bc].fieldIndex );
+						uint bc = BytecodeAsU32( ref pc );
 						ths.fields[box.metadatas[bc].fieldIndex] = stack[--sp].AsObject();
 						--sp; // Should be "This" XXX WRONG
 						break; //stfld
 					}
 					case 0x7e: 
 					{
-						uint bc = BytecodeAs32( ref pc );
+						uint bc = BytecodeAsU32( ref pc );
 						stack[sp++].Load( parentClass.staticFields[box.metadatas[bc].fieldIndex] );
 						break; //ldsfld
 					}
 					case 0x80:
 					{
-						uint bc = BytecodeAs32( ref pc );
+						uint bc = BytecodeAsU32( ref pc );
 						parentClass.staticFields[box.metadatas[bc].fieldIndex] = stack[sp++].AsObject();
 						break; //stsfld
 					}
 					case 0x8C: // box (This pulls off a type)
 					{
-						uint otyp = BytecodeAs32( ref pc );
-						//CilMetadataTokenInfo metaType = box.metadatas[otyp];
+						uint otyp = BytecodeAsU32( ref pc );
 						stack[sp-1].LoadObject( stack[sp-1].AsObject() );//(metaType.nativeType)stack[sp-1].AsObject();
 						break; 
 					}
 					case 0x8d:
 					{
-						uint otyp = BytecodeAs32( ref pc );
-						int size = stack[sp-1].i; // TODO: Check type?
+						uint otyp = BytecodeAsU32( ref pc );
+						if( stack[sp-1].type > StackType.Ulong )
+							throw new Exception( "Invalid type, processing new array" );
+						int size = stack[sp-1].i;
 						Type t = box.metadatas[otyp].nativeType;
 						stack[sp-1].LoadObject( Array.CreateInstance( t, size ) );
 						//newarr <etype>
@@ -722,7 +714,7 @@ namespace Cilbox
 					}
 					case 0xa4:
 					{
-						uint otyp = BytecodeAs32( ref pc );
+						uint otyp = BytecodeAsU32( ref pc );
 						object val = stack[--sp].AsObject();
 						if( stack[sp-1].type > StackType.Uint ) throw new Exception( "Invalid index type" );
 						int index = stack[--sp].i;
@@ -733,14 +725,10 @@ namespace Cilbox
 					}
 					case 0xA5:
 					{
-						uint otyp = BytecodeAs32( ref pc ); // Let's hope that somehow this isn't needed?
+						uint otyp = BytecodeAsU32( ref pc ); // Let's hope that somehow this isn't needed?
 						CilMetadataTokenInfo metaType = box.metadatas[otyp];
 						if( metaType.nativeTypeIsStackType )
 						{
-							//if( stack[sp-1].type != StackType.Object )
-							//{
-							//	Breakwarn( "Invalid stack type unbox (From " + stack[sp-1].type + " to " + metaType.nativeTypeStackType + ")", pc );
-							//}
 							stack[sp-1].Unbox( stack[sp-1].AsObject(), metaType.nativeTypeStackType );
 						}
 						else
@@ -751,9 +739,7 @@ namespace Cilbox
 						break; // unbox.any
 					}
 					default: Breakwarn( $"Opcode 0x{b.ToString("X2")} unimplemented", pc ); disabled = true; cont = false; break;
-
 					}
-					//Update 022040e201007d020000042a
 
 					ctr++;
 					box.stepsThisInvoke++;
@@ -790,9 +776,13 @@ namespace Cilbox
 		{
 			return (uint)CilboxUtil.BytecodePullLiteral( byteCode, ref i, 2 );
 		}
-		uint BytecodeAs32( ref int i )
+		uint BytecodeAsU32( ref int i )
 		{
 			return (uint)CilboxUtil.BytecodePullLiteral( byteCode, ref i, 4 );
+		}
+		int BytecodeAsI32( ref int i )
+		{
+			return (int)CilboxUtil.BytecodePullLiteral( byteCode, ref i, 4 );
 		}
 		ulong BytecodeAs64( ref int i )
 		{
@@ -899,12 +889,10 @@ namespace Cilbox
 		public StackType nativeTypeStackType;
 
 		// Todo handle interpreted types.
-		//public int nativeToken; // Only used for native function calls.
 		public bool isNative;
 		public MethodBase nativeMethod;
 		public int interpretiveMethod; // If nativeToken is 0, then it's a interpreted call.
 		public int interpretiveMethodClass; // If nativeToken is 0, then it's a interpreted call class
-		//public Assembly assembly; // Only used for native function calls.
 
 		// For string, type = 7, string is in fields[0]
 		// For methods, type = 10, Declaring Type is in fields[0], Method is in fields[1], Full name is in fields[2] assembly name is in fields[3]
@@ -954,13 +942,7 @@ namespace Cilbox
 			initialized = true;
 			Debug.Log( "Cilbox Initialize" );
 			Debug.Log( "Metadata:" + assemblyData );
-			//CilboxEnvironmentHolder [] se = UnityEngine.Object.FindObjectsByType<CilboxEnvironmentHolder>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-			//CilboxEnvironmentHolder [] se = Resources.FindObjectsOfTypeAll(typeof(CilboxEnvironmentHolder)) as CilboxEnvironmentHolder [];
-			//if( se.Length == 0 )
-			//{
-			//	Debug.LogError( "Can't find cilly environment holder. Something went wrong with CilboxScenePostprocessor" );
-			//	return;
-			//}
+
 			OrderedDictionary assemblyRoot = CilboxUtil.DeserializeDict( assemblyData );
 			OrderedDictionary classData = CilboxUtil.DeserializeDict( (String)assemblyRoot["classes"] );
 			OrderedDictionary metaData = CilboxUtil.DeserializeDict( (String)assemblyRoot["metadata"] );
@@ -1035,7 +1017,7 @@ namespace Cilbox
 					OrderedDictionary methodProps = CilboxUtil.DeserializeDict( st[1] );
 
 					// Function call
-					// TODO: Need to figure out if this is an interpreted call or a native call.
+					// TODO: Apply security rules here.
 					// (Or a please explode, for instance if you violate security rules)
 					String declaringTypeName = (String)methodProps["declaringType"];
 					String [] parameterNames = CilboxUtil.DeserializeArray((String)methodProps["parameters"]);
@@ -1148,11 +1130,14 @@ namespace Cilbox
 
 	#if UNITY_EDITOR
 
-
+	// Trigger the scene recompile.  Uuuughhhh someone who knows what they're doing need to rewrite
+	// this part.  Also, see this discussion: https://discussions.unity.com/t/onprocessscene-sometimes-gets-skipped/943573/7
+	//
 	// IProcessSceneWithReport - runs before scene is compiled, against the play-mode tree
 	// OnPostBuildPlayerScriptDLLs - it runs at the right time, in a blank scene, but that scene is not what is used.
 	// IPostprocessBuildWithReport - happens after build is complete, but also dumped into a temporary scene.
 	// IPreprocessBuildWithReport - Happens on the main scene, and outputs are preserved
+	// BuildPlayerProcessor - same as IPreprocessBuildWithReport
 
 	class CilboxCustomBuildProcessor : IProcessSceneWithReport
 	{
@@ -1185,32 +1170,12 @@ namespace Cilbox
 			AssetDatabase.ImportAsset(UnityEngine.SceneManagement.SceneManager.GetActiveScene().path, ImportAssetOptions.ForceUpdate);
 */
 
-			int cilboxableElements = 0;
+			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing();
 
-			// Iterate over all GameObjects, and find the ones that have Cilboxable scripts.
-			object[] obj = GameObject.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
-			foreach (object o in obj)
-			{
-				GameObject g = (GameObject) o;
-				MonoBehaviour [] scripts = g.GetComponents<MonoBehaviour>();
-				foreach (MonoBehaviour m in scripts )
-				{
-					// Skip null objects.
-					if (m == null)
-						continue;
-					object[] attribs = m.GetType().GetCustomAttributes(typeof(CilboxableAttribute), true);
-					// Not a proxiable script.
-					if (attribs == null || attribs.Length <= 0)
-						continue;
-
-					cilboxableElements++;
-				}
-			}
-
-			if( cilboxableElements == 0 )
+			if( allBehavioursThatNeedCilboxing.Length == 0 )
 				return;
 
-			Debug.Log( $"Dirtying scene, found {cilboxableElements} cilboxable elements." );
+			Debug.Log( $"Dirtying scene, found {allBehavioursThatNeedCilboxing.Length} cilboxable elements." );
 
 			// PLEASE LET ME KNOW IF YOU KNOW A BETTER WAY https://discussions.unity.com/t/onprocessscene-sometimes-gets-skipped/943573/6
 			GameObject dirtier = GameObject.Find( "/CilboxDirtier" );
@@ -1224,43 +1189,26 @@ namespace Cilbox
 		}
 	}
 	public class CilboxScenePostprocessor {
-
-		[PostProcessSceneAttribute (2)]
+		//[PostProcessSceneAttribute (2)] This is actually called by IProcessSceneWithReport
 		public static void OnPostprocessScene() {
 
-			int scriptsThatNeedCilboxing = 0;
-			{
-				object[] objToCheck = GameObject.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
-				foreach (object o in objToCheck)
-				{
-					GameObject g = (GameObject) o;
-					MonoBehaviour [] scripts = g.GetComponents<MonoBehaviour>();
-					foreach (MonoBehaviour m in scripts )
-					{
-						// Skip null objects.
-						if (m == null)
-							continue;
-						object[] attribs = m.GetType().GetCustomAttributes(typeof(CilboxableAttribute), true);
-						// Not a proxiable script.
-						if (attribs == null || attribs.Length <= 0)
-							continue;
-						scriptsThatNeedCilboxing++;
-					}
-				}
-			}
+			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing();
 
-			Debug.Log( $"Postprocessing scene. Cilbox scripts to do: {scriptsThatNeedCilboxing}" );
-			if( scriptsThatNeedCilboxing == 0 ) return;
+			Debug.Log( $"Postprocessing scene. Cilbox scripts to do: {allBehavioursThatNeedCilboxing.Length}" );
+			if( allBehavioursThatNeedCilboxing.Length == 0 ) return;
 
 			Assembly proxyAssembly = typeof(CilboxProxy).Assembly;
 
 			OrderedDictionary assemblyMetadata = new OrderedDictionary();
+			Dictionary< uint, String > originalMetaToFriendlyName = new Dictionary< uint, String >();
 			Dictionary< int, uint> assemblyMetadataReverseOriginal = new Dictionary< int, uint >();
 
-			int mdcount = 1; // token 0 is invalid.
+			uint mdcount = 1; // token 0 is invalid.
 			int bytecodeLength = 0;
 			OrderedDictionary classes = new OrderedDictionary();
 			Dictionary< String, OrderedDictionary > allClassMethods = new Dictionary< String, OrderedDictionary>();
+
+			StreamWriter CLog = File.CreateText( Application.dataPath + "/CilboxLog.txt" );
 
 			foreach (Type type in proxyAssembly.GetTypes())
 			{
@@ -1290,11 +1238,11 @@ namespace Cilbox
 
 						String methodName = m.Name;
 						OrderedDictionary MethodProps = new OrderedDictionary();
-						//Debug.Log( type + " / " + m.Name );
+						//CLog.WriteLine( type + " / " + m.Name );
 						MethodBody mb = m.GetMethodBody();
 						if( mb == null )
 						{
-							//Debug.Log( $"NOTE: {m.Name} does not have a body" );
+							Debug.Log( $"NOTE: {m.Name} does not have a body" );
 							// Things like MemberwiseClone, etc.
 							continue;
 						}
@@ -1318,9 +1266,10 @@ namespace Cilbox
 									int backupi = i;
 									uint operand = (uint)CilboxUtil.BytecodePullLiteral( byteCode, ref i, opLen );
 									bool changeOperand = true;
-									uint writebackToken = (uint)mdcount;
+									uint writebackToken = mdcount;
 
-									asm += starti + ":" + oc.ToString() + "\n";
+									asm += "\t" + String.Format("{0,-5}{1,-10}", starti, oc.ToString() );
+									if( opLen > 0 ) asm += "\t0x" + operand.ToString("X"+opLen*2);
 
 									// Check to see if this is a meta that we care about.  Then rewrite in a new identifier.
 									// ResolveField, ResolveMember, ResolveMethod, ResolveSignature, ResolveString, ResolveType
@@ -1331,15 +1280,18 @@ namespace Cilbox
 									{
 										if( !assemblyMetadataReverseOriginal.TryGetValue( (int)operand, out writebackToken ) )
 										{
-											writebackToken = (uint)mdcount;
-											assemblyMetadata[(mdcount++).ToString()] = ((int)MetaTokenType.mtString) + "\t" + proxyAssembly.ManifestModule.ResolveString( (int)operand );
+											writebackToken = mdcount;
+											String inlineString = ((int)MetaTokenType.mtString) + "\t" + proxyAssembly.ManifestModule.ResolveString( (int)operand );
+											originalMetaToFriendlyName[mdcount] = MetaTokenType.mtString.ToString();
+											assemblyMetadata[(mdcount++).ToString()] = inlineString;
 										}
+										asm += "\t" + originalMetaToFriendlyName[writebackToken];
 									}
 									else if( oc.OperandType == CilboxUtil.OpCodes.OperandType.InlineMethod )
 									{
 										if( !assemblyMetadataReverseOriginal.TryGetValue( (int)operand, out writebackToken ) )
 										{
-											writebackToken = (uint)mdcount;
+											writebackToken = mdcount;
 											MethodBase tmb = proxyAssembly.ManifestModule.ResolveMethod( (int)operand );
 
 											OrderedDictionary methodProps = new OrderedDictionary();
@@ -1376,35 +1328,45 @@ namespace Cilbox
 											methodProps["fullSignature"] = tmb.ToString();
 											methodProps["assembly"] = tmb.DeclaringType.Assembly.GetName().Name;
 
+											originalMetaToFriendlyName[mdcount] = tmb.DeclaringType.ToString() + "." + tmb.ToString();
 											assemblyMetadata[(mdcount++).ToString()] = CilboxUtil.SerializeArray( new String[]{
 												((int)MetaTokenType.mtMethod).ToString(), CilboxUtil.SerializeDict( methodProps ) } );
 										}
+
+										asm += "\t" + originalMetaToFriendlyName[writebackToken];
 									}
 									else if( oc.OperandType == CilboxUtil.OpCodes.OperandType.InlineField )
 									{
 										if( !assemblyMetadataReverseOriginal.TryGetValue( (int)operand, out writebackToken ) )
 										{
-											writebackToken = (uint)mdcount;
+											writebackToken = mdcount;
 											FieldInfo rf = proxyAssembly.ManifestModule.ResolveField( (int)operand );
-											assemblyMetadata[(mdcount++).ToString()] = ((int)MetaTokenType.mtField) + "\t" + rf.DeclaringType + "\t" + rf.Name + "\t" + rf.FieldType;
+											String fieldInfo = ((int)MetaTokenType.mtField) + "\t" + rf.DeclaringType + "\t" + rf.Name + "\t" + rf.FieldType;
+											originalMetaToFriendlyName[mdcount] = rf.Name;
+											assemblyMetadata[(mdcount++).ToString()] = fieldInfo;
 										}
+										asm += "\t" + originalMetaToFriendlyName[writebackToken];
 									}
 									else if( oc.OperandType == CilboxUtil.OpCodes.OperandType.InlineType )
 									{
 										if( !assemblyMetadataReverseOriginal.TryGetValue( (int)operand, out writebackToken ) )
 										{
-											writebackToken = (uint)mdcount;
+											writebackToken = mdcount;
 											Type ty = proxyAssembly.ManifestModule.ResolveType( (int)operand );
-											assemblyMetadata[(mdcount++).ToString()] = ((int)MetaTokenType.mtType) + "\t" + ty.FullName + "\t" + ty.Assembly.GetName().Name;
+											String typeInfo = ((int)MetaTokenType.mtType) + "\t" + ty.FullName + "\t" + ty.Assembly.GetName().Name;
+											originalMetaToFriendlyName[mdcount] = ty.FullName;
+											assemblyMetadata[(mdcount++).ToString()] = typeInfo;
 										}
+										asm += "\t" + originalMetaToFriendlyName[writebackToken];
 									}
 									else
 										changeOperand = false;
 
+									asm += "\n";
+
 									if( changeOperand )
 									{
 										i = backupi;
-										//Debug.Log( "MDC: " + mdcount + "Found OP:" + operand.ToString( "X8" ) + " WBT: " + writebackToken + " VALUE:" + assemblyMetadata[(writebackToken).ToString()] );
 										assemblyMetadataReverseOriginal[(int)operand] = writebackToken;
 										CilboxUtil.BytecodeReplaceLiteral( ref byteCode, ref i, opLen, writebackToken );
 									}
@@ -1422,7 +1384,7 @@ namespace Cilbox
 						for( int i = 0; i < byteCode.Length; i++ )
 							byteCodeStr += byteCode[i].ToString( "x2" );
 
-					//	Debug.Log( type.FullName + ":" + methodName + " (" + byteCode.Length + ")\n" + asm );
+						CLog.WriteLine( type.FullName + "." + methodName + " (" + byteCode.Length + ")\n" + asm );
 
 						bytecodeLength += byteCode.Length;
 						MethodProps["body"] = byteCodeStr;
@@ -1444,7 +1406,6 @@ namespace Cilbox
 						MethodProps["isStatic"] = m.IsStatic ? "1" : "0";
 						MethodProps["fullSignature"] = m.ToString();
 
-						//metadatas[methodName] = m.MetadataToken.ToString(); // There's also MethodHandle
 						methods[methodName] = CilboxUtil.SerializeDict( MethodProps );
 					}
 				}
@@ -1485,9 +1446,7 @@ namespace Cilbox
 					// Fill in our metadata with a class-specific field ID, if this field ID was used in code anywhere.
 					uint mdid;
 					if( assemblyMetadataReverseOriginal.TryGetValue(f.MetadataToken, out mdid) )
-					{
 						assemblyMetadata[mdid.ToString()] += "\t" + ifid;
-					}
 					ifid++;
 				}
 
@@ -1529,7 +1488,17 @@ namespace Cilbox
 				tac.assemblyData = sAllAssemblyData;
 				tac.ForceReinit();
 				Debug.Log( "Outputting Assembly Data: " + sAllAssemblyData + " byteCode: " + bytecodeLength + " bytes " );
+
+				String wordWrapped = "";
+				var m = 0;
+				foreach( var c in sAllAssemblyData )
+				{
+					wordWrapped += c;
+					if( ++m % 76 == 0 ) wordWrapped += "\n\t";
+				}
+				CLog.WriteLine( "Outputting Assembly Data:\n" + wordWrapped + "\nbyteCode: " + bytecodeLength + " bytes " );
 			}
+
 			// Iterate over all GameObjects, and find the ones that have Cilboxable scripts.
 			object[] obj = GameObject.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
 			foreach (object o in obj)

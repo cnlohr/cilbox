@@ -309,6 +309,31 @@ namespace Cilbox
 			return ret;
 		}
 
+		public static MonoBehaviour [] GetAllBehavioursThatNeedCilboxing()
+		{
+			List<MonoBehaviour> ret = new List<MonoBehaviour>();
+
+			object[] objToCheck = GameObject.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+			foreach (object o in objToCheck)
+			{
+				GameObject g = (GameObject) o;
+				MonoBehaviour [] scripts = g.GetComponents<MonoBehaviour>();
+				foreach (MonoBehaviour m in scripts )
+				{
+					// Skip null objects.
+					if (m == null)
+						continue;
+					object[] attribs = m.GetType().GetCustomAttributes(typeof(CilboxableAttribute), true);
+					// Not a proxiable script.
+					if (attribs == null || attribs.Length <= 0)
+						continue;
+					ret.Add(m);
+				}
+			}
+			return ret.ToArray();
+		}
+
+
 		///////////////////////////////////////////////////////////////////////////
 		//  DEFS FROM CECIL FOR PARSING CIL  //////////////////////////////////////
 		///////////////////////////////////////////////////////////////////////////

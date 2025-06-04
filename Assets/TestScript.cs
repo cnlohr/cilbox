@@ -43,6 +43,15 @@ public class TestScript : MonoBehaviour
 		//Debug.Log( $"XXX TestScript Update() {x} {z} {f}" );
 		transform.position = new Vector3(x, 2, z);
 */
+
+		System.Diagnostics.Stopwatch stopWatch = new System.Diagnostics.Stopwatch();
+		stopWatch.Start();
+		//int fi = Fib(20);
+		int rc = RecursePO2( 17 );
+		stopWatch.Stop();
+		TimeSpan ts = stopWatch.Elapsed;
+		Debug.Log( $"RecursionTest :{rc} Time:{ts.Milliseconds}ms" );
+
 	}
 	public void PublicFunction() { Debug.Log( "Public Function" ); }
 	public void PublicStaticFunction() { Debug.Log( "Public Staic Function" ); }
