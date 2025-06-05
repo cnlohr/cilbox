@@ -11,6 +11,8 @@ namespace Cilbox
 	public class CilboxProxy : MonoBehaviour
 	{
 		public object [] fields;
+		public MonoBehaviour [] fieldsObjects;
+
 		public CilboxClass cls;
 		public Cilbox box;
 		public String className;
@@ -19,7 +21,7 @@ namespace Cilbox
 		CilboxProxy() { }
 
 #if UNITY_EDITOR
-		public void SetupProxy( Cilbox box, MonoBehaviour mToSteal )
+		public void SetupProxy( Cilbox box, MonoBehaviour mToSteal, Dictionary< MonoBehaviour, CilboxProxy > refToProxyMap )
 		{
 			this.box = box;
 			this.className = mToSteal.GetType().ToString();
@@ -36,11 +38,36 @@ namespace Cilbox
 					continue;
 
 				object fv = f.GetValue( mToSteal );
-				instanceFields[f.Name] = fv.ToString();
-			}
 
-			serializedObjectData = CilboxUtil.SerializeDict( instanceFields );
-			//Debug.Log( "Serializing: " + serializedObjectData );
+				bool bHandled = false;
+				fieldsObjects = new MonoBehaviour[cls.instanceFieldNames.Length];
+
+				// Skip null objects.
+				if (fv != null)
+				{
+					object[] attribs = fv.GetType().GetCustomAttributes(typeof(CilboxableAttribute), true);
+					// Not a proxiable script.
+					if (attribs != null && attribs.Length > 0)
+					{
+
+						// This is a cilboxable thing.
+						int k;
+						for( k = 0; k < cls.instanceFieldNames.Length; k++ )
+						{
+							if( cls.instanceFieldNames[k] == f.Name )
+							{
+								fieldsObjects[k] = refToProxyMap[(MonoBehaviour)fv];
+								bHandled = true;
+								break;
+							}
+						}
+					}
+				}
+
+				if( !bHandled )
+					serializedObjectData = CilboxUtil.SerializeDict( instanceFields );
+				//Debug.Log( "Serializing: " + serializedObjectData );
+			}
 
 			Awake();
 		}
@@ -69,9 +96,15 @@ namespace Cilbox
 				OrderedDictionary d = CilboxUtil.DeserializeDict( serializedObjectData );
 				for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
 				{
-					String fieldValue = (String)d[cls.instanceFieldNames[i]];
-					Debug.Log( "DESER: " + cls.instanceFieldTypes[i] + " / " + fieldValue + " / " + cls.instanceFieldNames[i] );
-					fields[i] = CilboxUtil.DeserializeDataForProxyField( cls.instanceFieldTypes[i], fieldValue );
+					if( fieldsObjects[i] != null )
+					{
+						fields[i] = fieldsObjects[i];
+					}
+					else if( ! (fields[i] is object) )
+					{
+						String fieldValue = (String)d[cls.instanceFieldNames[i]];
+						fields[i] = CilboxUtil.DeserializeDataForProxyField( cls.instanceFieldTypes[i], fieldValue );
+					}
 				}
 			}
 

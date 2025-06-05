@@ -1504,6 +1504,10 @@ namespace Cilbox
 				CLog.WriteLine( "Outputting Assembly Data:\n" + wordWrapped + "\nbyteCode: " + bytecodeLength + " bytes " );
 			}
 
+			Dictionary< MonoBehaviour, CilboxProxy > refToProxyMap = new Dictionary< MonoBehaviour, CilboxProxy >();
+			List< MonoBehaviour > refProxiesOrig = new List< MonoBehaviour >();
+			List< CilboxProxy > refProxies = new List< CilboxProxy >();
+
 			// Iterate over all GameObjects, and find the ones that have Cilboxable scripts.
 			object[] obj = GameObject.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
 			foreach (object o in obj)
@@ -1521,9 +1525,22 @@ namespace Cilbox
 						continue;
 
 					CilboxProxy p = g.AddComponent<CilboxProxy>();
-					p.SetupProxy( tac, m );
+					refProxies.Add( p );
+					refProxiesOrig.Add( m );
+					refToProxyMap[m] = p;
 				}
 			}
+
+			var cnt = refProxies.Count;
+			for( var i = 0; i < cnt; i++ )
+			{
+				CilboxProxy p = refProxies[i];
+				MonoBehaviour m = refProxiesOrig[i];
+
+				p.SetupProxy( tac, m, refToProxyMap );
+			}
+
+			// re-attach the refrences to 
 			foreach (MonoBehaviour m in allBehavioursThatNeedCilboxing)
 			{
 				UnityEngine.Object.DestroyImmediate( m );
