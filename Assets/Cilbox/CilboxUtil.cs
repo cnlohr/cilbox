@@ -280,17 +280,45 @@ namespace Cilbox
 		///////////////////////////////////////////////////////////////////////////
 		//  REFLECTION HELPERS  ///////////////////////////////////////////////////
 		///////////////////////////////////////////////////////////////////////////
-		public static Type GetNativeTypeFromName( String useAssembly, String typeName )
+		public static Type GetNativeTypeFromName( String useAssembly, String typeName, bool forceBaseType = false )
 		{
+			String truncType = typeName;
+			String [] truncTypeSet = typeName.Split('[');
+			bool bGeneric = false;
+			Type[] genericArray = null;
+			if( truncTypeSet.Length > 1 )
+			{
+				truncType = truncTypeSet[0];
+				String [] genericList = truncTypeSet[1].Split(']')[0].Split(',');
+
+				genericArray = new Type[genericList.Length];
+				int gen;
+				for( gen = 0; gen < genericList.Length; gen++ )
+				{
+					Type t = GetNativeTypeFromName( useAssembly, genericList[gen] );
+					if( t == null ) return null;
+					genericArray[gen] = t;
+				}
+
+				bGeneric = true;
+			}
+
 			foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
 			{
 				if( assembly.GetName().Name != useAssembly ) continue;
 				var tt = assembly.GetTypes();
 				foreach( Type lt in tt )
 				{
-					if( lt.FullName == typeName )
+					if( lt.FullName == truncType )
 					{
-						return lt;
+						if( bGeneric && !forceBaseType )
+						{
+							return lt.MakeGenericType( genericArray );
+						}
+						else
+						{
+							return lt;
+						}
 					}
 				}
 			}

@@ -25,6 +25,7 @@
  * Figure out where "The referenced script (Unknown) on this Behaviour is missing!" is coming from.
 
 ## TODO
+ * Make GetNativeTypeFromName so that we serialize the generic arguments to type.
  * Use Harmony or something to prevent execution of original script .ctor and Awake() i.e. near `CilboxScenePostprocessor` https://github.com/MerlinVR/UdonSharp/blob/master/Packages/com.merlin.UdonSharp/Editor/UdonSharpEditorManager.cs#L145
  * Support ref.
  * Fixup arithmatic functions to do the right thing.

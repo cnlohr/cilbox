@@ -1103,7 +1103,7 @@ namespace Cilbox
 							t.isValid = true;
 						} else if( !t.isNative )
 						{
-							throw new Exception( "Error: Could not find reference to: " + useAssembly + "." + fullSignature );
+							throw new Exception( "Error: Could not find reference to: [" + useAssembly + "][" + declaringType.FullName + "][" + fullSignature + "] Type from:" + declaringTypeName );
 						}
 					}
 				}
@@ -1214,6 +1214,7 @@ namespace Cilbox
 			Dictionary< String, OrderedDictionary > allClassMethods = new Dictionary< String, OrderedDictionary>();
 
 			StreamWriter CLog = File.CreateText( Application.dataPath + "/CilboxLog.txt" );
+			String typeLog = "";
 
 			foreach (Type type in proxyAssembly.GetTypes())
 			{
@@ -1223,7 +1224,6 @@ namespace Cilbox
 				OrderedDictionary methods = new OrderedDictionary();
 
 				int mtyp; // Which round of methods are we getting.
-
 				// Iterate twice. Once for methods, then for constructors.
 				for( mtyp = 0; mtyp < 2; mtyp++ )
 				{
@@ -1359,6 +1359,7 @@ namespace Cilbox
 											writebackToken = mdcount;
 											Type ty = proxyAssembly.ManifestModule.ResolveType( (int)operand );
 											String typeInfo = ((int)MetaTokenType.mtType) + "\t" + ty.FullName + "\t" + ty.Assembly.GetName().Name;
+											typeLog += typeInfo + "\n";
 											originalMetaToFriendlyName[mdcount] = ty.FullName;
 											assemblyMetadata[(mdcount++).ToString()] = typeInfo;
 										}
@@ -1417,6 +1418,8 @@ namespace Cilbox
 
 				allClassMethods[type.FullName] = methods;
 			}
+
+			CLog.WriteLine( typeLog );
 
 			// Now that we've iterated through all classes, and collected all possible uses of field IDs,
 			// go through the classes again, collecting the fields themselves.
