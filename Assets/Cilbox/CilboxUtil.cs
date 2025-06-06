@@ -90,7 +90,6 @@ namespace Cilbox
 			}
 			return ret;
 		}
-		// \tkey\tvalue\tkey\tvalue\tkey\tvalue\n
 		static public String ParseString( String s, ref int pos, ref int poserror )
 		{
 			String ret = "";
@@ -194,22 +193,29 @@ namespace Cilbox
 			int pos = 0;
 			List< String > ret = new List< String >();
 			poserror = -1;
-
+			bool lastWasTab = false;
 			for( ; pos < s.Length; pos++ )
 			{
 				char c = s[pos];
 				if( c == '\n' ) break;
-				if( c == '\t' ) continue;
 				ret.Add( ParseString( s, ref pos, ref poserror ) );
 				if( poserror >= 0 )
 					break;
+				if( pos < s.Length && s[pos] == '\t' )
+					lastWasTab = true;
+				else
+					lastWasTab = false;
 			}
+			if( lastWasTab ) ret.Add( "" );
+
 			if( poserror >= 0 )
 			{
 				Debug.LogError( $"Erorr parsing dictionary at char {poserror}\n{s}" );
 			}
 			return ret.ToArray();
 		}
+
+		// \tkey\tvalue\tkey\tvalue\tkey\tvalue\n
 		static public OrderedDictionary DeserializeDict( String s )
 		{
 			if( s == null ) return null;
@@ -452,7 +458,7 @@ namespace Cilbox
 				8, // InlineR
 				4, // InlineSig
 				4, // InlineString
-				4, // InlineSwitch
+				4, // InlineSwitch (Not actually 4)
 				4, // InlineTok - The operand is a FieldRef, MethodRef, or TypeRef token.
 				4, // InlineType
 				2, // InlineVar
@@ -836,9 +842,18 @@ namespace Cilbox
 				//Debug.Log( $"Reading Opcodes: {bytecode[0]} {(bytecode.Length>1?bytecode[1]:-1)}" );
 				var il_opcode = bytecode[i++];
 				if( il_opcode != 0xfe )
+				{
+					if( il_opcode >= OpCodes.OneByteOpCode.Length )
+						throw new Exception( "Attempting to read opcode " + il_opcode.ToString("X2") + " which is not recognized even by cecil." );
 					return OpCodes.OneByteOpCode [il_opcode];
+				}
 				else
-					return OpCodes.TwoBytesOpCode [ bytecode[i++] ];
+				{
+					var il_opcode2 = bytecode[i++];
+					if( il_opcode2 >= OpCodes.TwoBytesOpCode.Length )
+						throw new Exception( "Attempting to read opcode 0xfe " + il_opcode2.ToString("X2") + " which is not recognized even by cecil." );
+					return OpCodes.TwoBytesOpCode [ il_opcode2 ];
+				}
 			}
 
 

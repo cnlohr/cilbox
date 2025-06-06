@@ -11,7 +11,8 @@ namespace Cilbox
 	public class CilboxProxy : MonoBehaviour
 	{
 		public object [] fields;
-		public MonoBehaviour [] fieldsObjects;
+		public UnityEngine.Object [] fieldsObjects;
+		public bool [] isFieldsObject;
 
 		public CilboxClass cls;
 		public Cilbox box;
@@ -32,17 +33,20 @@ namespace Cilbox
 			box.BoxInitialize();
 			cls = box.GetClass( className );
 
+			fieldsObjects = new UnityEngine.Object[cls.instanceFieldNames.Length];
+			isFieldsObject = new bool[cls.instanceFieldNames.Length];
+
 			OrderedDictionary instanceFields = new OrderedDictionary();
 			FieldInfo[] fi = mToSteal.GetType().GetFields( BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance );
 			foreach( var f in fi )
 			{
+				// TODO: Consider if we should try serializing _everything_.  No because arrays really need their constructors.
 				if( !f.IsPublic && f.GetCustomAttributes(typeof(SerializeField), true).Length <= 0 )
 					continue;
 
 				object fv = f.GetValue( mToSteal );
 
 				bool bHandled = false;
-				fieldsObjects = new MonoBehaviour[cls.instanceFieldNames.Length];
 
 				// Skip null objects.
 				if (fv != null)
@@ -51,7 +55,6 @@ namespace Cilbox
 					// Not a proxiable script.
 					if (attribs != null && attribs.Length > 0)
 					{
-
 						// This is a cilboxable thing.
 						int k;
 						for( k = 0; k < cls.instanceFieldNames.Length; k++ )
@@ -59,19 +62,55 @@ namespace Cilbox
 							if( cls.instanceFieldNames[k] == f.Name )
 							{
 								fieldsObjects[k] = refToProxyMap[(MonoBehaviour)fv];
+								isFieldsObject[k] = true;
 								bHandled = true;
 								break;
 							}
 						}
 					}
-				}
+					else if( fv is UnityEngine.Object )
+					{
+						int k;
+						for( k = 0; k < cls.instanceFieldNames.Length; k++ )
+						{
+							if( cls.instanceFieldNames[k] == f.Name )
+							{
+								fieldsObjects[k] = (UnityEngine.Object)fv;
+								Debug.Log( "Linking " + f.Name + " To field ID " + k );
+								isFieldsObject[k] = true;
+								bHandled = true;
+								break;
+							}
+						}
+						if( k == cls.instanceFieldNames.Length )
+						{
+							Debug.LogWarning( "Failed to link field object " + f.Name );
+						}
+					}
 
-				if( !bHandled )
-					serializedObjectData = CilboxUtil.SerializeDict( instanceFields );
+					if( !bHandled )
+					{
+						if( fv is UnityEngine.Object)
+						{
+							if( (UnityEngine.Object)fv )
+							{
+								Debug.LogError( $"Error: Field {f.Name} in {cls.className} is a UnityObject but could not be added to the fieldsObjects" );
+								//instanceFields[f.Name] = fv.ToString();
+							}
+							else
+							{
+								instanceFields[f.Name] = null;
+							}
+						}
+						else
+						{
+							instanceFields[f.Name] = fv.ToString();
+						}
+					}
+				}
 				//Debug.Log( "Serializing: " + serializedObjectData );
 			}
-
-			Awake();
+			serializedObjectData = CilboxUtil.SerializeDict( instanceFields );
 		}
 #endif
 
@@ -93,19 +132,34 @@ namespace Cilbox
 			box.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
 
 			OrderedDictionary d = CilboxUtil.DeserializeDict( serializedObjectData );
+
 			for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
 			{
-				MonoBehaviour o = fieldsObjects[i];
-				if( o != null )
+				if( isFieldsObject[i] )
 				{
-					if( o is CilboxProxy )
-						((CilboxProxy)o).RuntimeProxyLoad();
-					fields[i] = fieldsObjects[i];
+					UnityEngine.Object o = fieldsObjects[i];
+					if( o )
+					{
+						if( o is CilboxProxy )
+							((CilboxProxy)o).RuntimeProxyLoad();
+						fields[i] = fieldsObjects[i];
+					}
 				}
 				else if( ! (fields[i] is object) )
 				{
-					String fieldValue = (String)d[cls.instanceFieldNames[i]];
-					fields[i] = CilboxUtil.DeserializeDataForProxyField( cls.instanceFieldTypes[i], fieldValue );
+					String cfn = cls.instanceFieldNames[i];
+					object v = d[cfn];
+					if( v != null )
+					{
+						String fieldValue = (String)v;
+						Debug.Log( $"Deserializing: {cfn} from {fieldValue} type {cls.instanceFieldTypes[i]}" );
+						fields[i] = CilboxUtil.DeserializeDataForProxyField( cls.instanceFieldTypes[i], fieldValue );
+					}
+					else
+					{
+						// It's probably a private.
+						//Debug.LogError( "Could not find field " + cfn + " on class " + cls.className );
+					}
 				}
 			}
 
