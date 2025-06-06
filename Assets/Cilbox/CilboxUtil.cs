@@ -280,6 +280,20 @@ namespace Cilbox
 		///////////////////////////////////////////////////////////////////////////
 		//  REFLECTION HELPERS  ///////////////////////////////////////////////////
 		///////////////////////////////////////////////////////////////////////////
+		public static Type GetNativeTypeFromName( String typeName )
+		{
+			Type ret = Type.GetType( typeName );
+			if( ret != null ) return ret;
+
+			System.Reflection.Assembly [] assys = AppDomain.CurrentDomain.GetAssemblies();
+			foreach( System.Reflection.Assembly a in assys )
+			{
+				ret = a.GetType( typeName );
+				if( ret != null ) return ret;
+			}
+			return null;
+		}
+		/*
 		public static Type GetNativeTypeFromName( String useAssembly, String typeName, bool forceBaseType = false )
 		{
 			String truncType = typeName;
@@ -324,15 +338,15 @@ namespace Cilbox
 			}
 			return null;
 		}
-
+		*/
 		public static Type[] TypeNamesToArrayOfNativeTypes( String [] parameterNames )
 		{
 			if( parameterNames == null ) return null;
 			Type[] ret = new Type[parameterNames.Length];
 			for( int i = 0; i < parameterNames.Length; i++ )
 			{
-				String [] assemblyAndTypeName = DeserializeArray( parameterNames[i] );
-				Type pt = ret[i] = GetNativeTypeFromName( assemblyAndTypeName[0], assemblyAndTypeName[1] );
+				Type pt = ret[i] = GetNativeTypeFromName(  parameterNames[i]  );
+					//GetNativeTypeFromName( assemblyAndTypeName[0], assemblyAndTypeName[1] );
 			}
 			return ret;
 		}

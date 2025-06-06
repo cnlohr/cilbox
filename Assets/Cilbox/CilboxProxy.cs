@@ -18,6 +18,8 @@ namespace Cilbox
 		public String className;
 		public String serializedObjectData;
 
+		private bool proxyWasSetup = false;
+
 		CilboxProxy() { }
 
 #if UNITY_EDITOR
@@ -78,38 +80,47 @@ namespace Cilbox
 			// Tricky: Stuff really isn't even ready here :(  I don't know if we can try to get this going.
 		}
 
-		void Start()  {
-			Debug.Log( "Proxy Class Name: " + className );
-			box.BoxInitialize(); // In case it is not yet initialized.
+		public void RuntimeProxyLoad()
+		{
+			if( proxyWasSetup ) return;
 
-			if( string.IsNullOrEmpty( className ) ) return;
+			cls = box.GetClass( className );
+			// Populate fields[]
 
-			if( fields == null )
+			fields = new object[cls.instanceFieldNames.Length];
+
+			// Call interpreted constructor.
+			box.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
+
+			OrderedDictionary d = CilboxUtil.DeserializeDict( serializedObjectData );
+			for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
 			{
-				cls = box.GetClass( className );
-				// Populate fields[]
-				fields = new object[cls.instanceFieldNames.Length];
-
-				// Call interpreted constructor.
-				box.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
-
-				OrderedDictionary d = CilboxUtil.DeserializeDict( serializedObjectData );
-				for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
+				MonoBehaviour o = fieldsObjects[i];
+				if( o != null )
 				{
-					if( fieldsObjects[i] != null )
-					{
-						fields[i] = fieldsObjects[i];
-					}
-					else if( ! (fields[i] is object) )
-					{
-						String fieldValue = (String)d[cls.instanceFieldNames[i]];
-						fields[i] = CilboxUtil.DeserializeDataForProxyField( cls.instanceFieldTypes[i], fieldValue );
-					}
+					if( o is CilboxProxy )
+						((CilboxProxy)o).RuntimeProxyLoad();
+					fields[i] = fieldsObjects[i];
+				}
+				else if( ! (fields[i] is object) )
+				{
+					String fieldValue = (String)d[cls.instanceFieldNames[i]];
+					fields[i] = CilboxUtil.DeserializeDataForProxyField( cls.instanceFieldTypes[i], fieldValue );
 				}
 			}
 
 			box.InterpretIID( cls, this, ImportFunctionID.Awake, null ); // Does this go before or after initialized fields.
 			box.InterpretIID( cls, this, ImportFunctionID.Start, null );
+
+			proxyWasSetup = true;
+		}
+
+		void Start()  {
+			Debug.Log( "Starting Proxy: " + transform.name + " " + className );
+			box.BoxInitialize(); // In case it is not yet initialized.
+			if( string.IsNullOrEmpty( className ) ) return;
+
+			RuntimeProxyLoad();
 		}
 		void Update() { if( box != null ) box.InterpretIID( cls, this, ImportFunctionID.Update, null ); }
 	}

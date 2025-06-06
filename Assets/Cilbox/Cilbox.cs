@@ -99,7 +99,7 @@ namespace Cilbox
 		public void Breakwarn( String message, int bytecodeplace )
 		{
 			// TODO: Add debugging info.
-			Debug.LogWarning( $"Breakwarn: {message} Class: {parentClass.className}, Function: {methodName}, Bytecode: {bytecodeplace}" );
+			Debug.LogError( $"Breakwarn: {message} Class: {parentClass.className}, Function: {methodName}, Bytecode: {bytecodeplace}" );
 		}
 
 		// This logic is probably incorrect.
@@ -674,7 +674,9 @@ namespace Cilbox
 						object o = stack[--sp].AsObject();
 						object opths = stack[--sp].AsObject();
 						if( opths is CilboxProxy )
+						{
 							((CilboxProxy)opths).fields[box.metadatas[bc].fieldIndex] = o;
+						}
 						else
 							throw new Exception( "Unimplemented.  Attempting to set field on non-cilbox object" );
 						break; //stfld
@@ -997,6 +999,7 @@ namespace Cilbox
 					String hostTypeName = st[1];
 					String useAssembly = st[2];
 					StackType nst;
+Debug.Log( "LOADING TYPE:/" + hostTypeName + "/" + useAssembly );
 					if( CilboxUtil.TypeToStackType.TryGetValue( hostTypeName, out nst ) )
 					{
 						t.nativeTypeIsStackType = true;
@@ -1004,7 +1007,7 @@ namespace Cilbox
 					}
 					else
 					{
-						t.nativeType = CilboxUtil.GetNativeTypeFromName( useAssembly, hostTypeName );
+						t.nativeType = CilboxUtil.GetNativeTypeFromName( hostTypeName );
 						t.isValid = t.nativeType != null;
 
 						if( !t.isValid )
@@ -1056,10 +1059,10 @@ namespace Cilbox
 					}
 					else
 					{
-						Type declaringType = CilboxUtil.GetNativeTypeFromName( useAssembly, declaringTypeName );
+						Type declaringType = CilboxUtil.GetNativeTypeFromName( declaringTypeName );
 						if( declaringType == null )
 						{
-							throw new Exception( $"Error: Could not find referenced type {useAssembly} {declaringTypeName}" );
+							throw new Exception( $"Error: Could not find referenced type {useAssembly}/{declaringTypeName}/" );
 						}
 
 						Type [] parameters = CilboxUtil.TypeNamesToArrayOfNativeTypes( parameterNames );
@@ -1309,13 +1312,12 @@ namespace Cilbox
 												{
 													String [] argtypes = new String[templateArguments.Length];
 													for( int a = 0; a < templateArguments.Length; a++ )
-														argtypes[a] = CilboxUtil.SerializeArray( new String[]{
-															templateArguments[a].Assembly.GetName().Name, templateArguments[a].FullName } );
+														argtypes[a] = templateArguments[a].ToString();  //Was FullName
 													methodProps["genericArguments"] = CilboxUtil.SerializeArray( argtypes );
 												}
 											}
 
-											methodProps["declaringType"] = tmb.DeclaringType.ToString();
+											methodProps["declaringType"] = tmb.DeclaringType.ToString(); // Was FullName
 											methodProps["name"] = tmb.Name;
 
 											System.Reflection.ParameterInfo[] parameterInfos = tmb.GetParameters();
@@ -1325,8 +1327,7 @@ namespace Cilbox
 												for( var j = 0; j < parameterInfos.Length; j++ )
 												{
 													Type ty = parameterInfos[j].ParameterType;
-													sParameters[j] = CilboxUtil.SerializeArray( new String[]{
-														ty.Assembly.GetName().Name, ty.FullName });
+													sParameters[j] = ty.ToString(); //Was FullName;
 												}
 												methodProps["parameters"] = CilboxUtil.SerializeArray( sParameters );
 											}
@@ -1346,7 +1347,7 @@ namespace Cilbox
 										{
 											writebackToken = mdcount;
 											FieldInfo rf = proxyAssembly.ManifestModule.ResolveField( (int)operand );
-											String fieldInfo = ((int)MetaTokenType.mtField) + "\t" + rf.DeclaringType + "\t" + rf.Name + "\t" + rf.FieldType;
+											String fieldInfo = ((int)MetaTokenType.mtField) + "\t" + rf.DeclaringType + "\t" + rf.Name + "\t" + rf.FieldType.FullName;
 											originalMetaToFriendlyName[mdcount] = rf.Name;
 											assemblyMetadata[(mdcount++).ToString()] = fieldInfo;
 										}
@@ -1358,7 +1359,7 @@ namespace Cilbox
 										{
 											writebackToken = mdcount;
 											Type ty = proxyAssembly.ManifestModule.ResolveType( (int)operand );
-											String typeInfo = ((int)MetaTokenType.mtType) + "\t" + ty.FullName + "\t" + ty.Assembly.GetName().Name;
+											String typeInfo = ((int)MetaTokenType.mtType) + "\t" + ty.ToString() /* Was FullName */ + "\t" + ty.Assembly.GetName().Name;
 											typeLog += typeInfo + "\n";
 											originalMetaToFriendlyName[mdcount] = ty.FullName;
 											assemblyMetadata[(mdcount++).ToString()] = typeInfo;
