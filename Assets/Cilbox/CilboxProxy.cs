@@ -76,7 +76,6 @@ namespace Cilbox
 							if( cls.instanceFieldNames[k] == f.Name )
 							{
 								fieldsObjects[k] = (UnityEngine.Object)fv;
-								Debug.Log( "Linking " + f.Name + " To field ID " + k );
 								isFieldsObject[k] = true;
 								bHandled = true;
 								break;
