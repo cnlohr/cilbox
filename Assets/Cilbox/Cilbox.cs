@@ -582,11 +582,14 @@ namespace Cilbox
 								callpar_se[numFields-ik-1] = se;
 								object o = se.AsObject();
 								Type t = pa[ik].ParameterType;
+
+								// XXX TODO: Copy mechanism below from ResolveToStackElement and Coerce
 								if( se.type < StackType.Object )
 								{
 									if( o != null && t.IsValueType && o.GetType() != t )
 									{
-										o = Convert.ChangeType( o, t );
+										//o = Convert.ChangeType( o, t );
+										o = se.CoerceToObject( t );
 									}
 								}
 								callpar[numFields-ik-1] = o;
@@ -890,12 +893,12 @@ namespace Cilbox
 					case 0x66: stack[sp].e ^= 0xffffffffffffffff; break;
 
 					// TODO: All these conversions are sus.
-					case 0x67: stack[sp-1].LoadByte( Convert.ToUInt32(stack[sp-1].AsObject())&0xff ); break; // conv.i1
-					case 0x68: stack[sp-1].LoadUshort( Convert.ToUInt32(stack[sp-1].AsObject())&0xffff ); break; // conv.i2
-					case 0x69: stack[sp-1].LoadInt( Convert.ToInt32(stack[sp-1].AsObject()) ); break; // conv.i4
-					case 0x6A: stack[sp-1].LoadLong( Convert.ToInt64(stack[sp-1].AsObject()) ); break; // conv.i8
-					case 0x6B: stack[sp-1].LoadFloat( Convert.ToSingle(stack[sp-1].AsObject()) ); break; // conv.r4
-					case 0x6C: stack[sp-1].LoadDouble( Convert.ToDouble(stack[sp-1].AsObject()) ); break; // conv.r8
+					case 0x67: stack[sp-1].LoadByte( (byte)stack[sp-1].CoerceToObject( typeof(sbyte)) ); break; // conv.i1
+					case 0x68: stack[sp-1].LoadShort( (short)stack[sp-1].CoerceToObject(typeof(short))); break; // conv.i2
+					case 0x69: stack[sp-1].LoadInt( (int)stack[sp-1].CoerceToObject(typeof(int)) ); break; // conv.i4
+					case 0x6A: stack[sp-1].LoadLong( (long)stack[sp-1].CoerceToObject(typeof(long)) ); break; // conv.i8
+					case 0x6B: stack[sp-1].LoadFloat( (float)stack[sp-1].CoerceToObject(typeof(float)) ); break; // conv.r4
+					case 0x6C: stack[sp-1].LoadDouble( (double)stack[sp-1].CoerceToObject(typeof(double)) ); break; // conv.r8
 
 					case 0x72:
 					{
@@ -1099,8 +1102,8 @@ namespace Cilbox
 
 						break; // ldtoken <token>
 					}
-					case 0xD1: stack[sp-1].LoadUshort( (ushort)(int)stack[sp-1].i ); break; // conv.u2
-					case 0xD2: stack[sp-1].LoadByte( (byte)(int)stack[sp-1].i ); break; // conv.u1
+					case 0xD1: stack[sp-1].LoadUshort( (ushort)stack[sp-1].CoerceToObject(typeof(ushort)) ); break; // conv.u2
+					case 0xD2: stack[sp-1].LoadByte( (byte)stack[sp-1].CoerceToObject(typeof(byte)) ); break; // conv.u1
 
 					case 0xfe: // Extended opcodes
 						b = byteCode[pc++];
