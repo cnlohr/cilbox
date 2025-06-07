@@ -428,6 +428,8 @@ namespace Cilbox
 
 			int sp = 0;
 
+
+			// TODO: parameters<> should probably be StackElement's
 			object [] parameters;
 			if( isStatic )
 				parameters = parametersIn;
@@ -493,7 +495,7 @@ namespace Cilbox
 					//case 0x0e: stack[sp++] = parameters[byteCode[pc++]]; break; //ldarg.0
 					//case 0x0e: stack[sp++] = parameters[byteCode[pc++]]; break; //ldarg.0
 					// Some more...
-					case 0x14: stack[sp++].Load( null ); break; // ldnull
+					case 0x14: stack[sp++].LoadObject( null ); break; // ldnull
 					case 0x15: stack[sp++].LoadInt( -1 ); break; // ldc.i4.m1
 					case 0x16: stack[sp++].LoadInt( 0 ); break; // ldc.i4.0
 					case 0x17: stack[sp++].LoadInt( 1 ); break; // ldc.i4.1
@@ -507,11 +509,11 @@ namespace Cilbox
 
 					case 0x1f: stack[sp++].LoadInt( (sbyte)byteCode[pc++] ); break; // ldc.i4.s <int8>
 					case 0x20: stack[sp++].LoadInt( (int)BytecodeAsU32( ref pc ) ); break; // ldc.i4 <int32>
-					case 0x21: stack[sp++].Load( (long)BytecodeAs64( ref pc ) ); break; // ldc.i8 <int64>
+					case 0x21: stack[sp++].LoadLong( (long)BytecodeAs64( ref pc ) ); break; // ldc.i8 <int64>
 					case 0x22: stack[sp++].LoadFloat( CilboxUtil.IntFloatConverter.ConvertUtoF(BytecodeAsU32( ref pc ) ) ); break; // ldc.r4 <float32 (num)>
 					case 0x23: stack[sp++].LoadDouble( CilboxUtil.IntFloatConverter.ConvertEtoD(BytecodeAs64( ref pc ) ) ); break; // ldc.r4 <float32 (num)>
 					// 0x24 does not exist.
-					case 0x25: stack[sp] = stack[sp-1]; sp++; break; // dup
+					case 0x25: stack[sp] = stack[sp-1]; sp++; break; // dup TODO: Does dup potentially duplicate objects somehow?
 					case 0x26: sp--; break; // pop
 
 					case 0x27: //jmp
@@ -703,7 +705,9 @@ namespace Cilbox
 						if( b >= 0x38 ) iop -= 0xd;
 						int joffset = (b >= 0x38) ? (int)BytecodeAsU32( ref pc ) : (sbyte)byteCode[pc++];
 
-						switch( sb.type )
+						StackType promoted = StackTypeMaxPromote( sa.type, sb.type );
+
+						switch( promoted )
 						{
 						case StackType.Sbyte: case StackType.Short: case StackType.Int:
 							switch( iop )
@@ -892,7 +896,6 @@ namespace Cilbox
 					case 0x65: stack[sp].l = -stack[sp].l; break;
 					case 0x66: stack[sp].e ^= 0xffffffffffffffff; break;
 
-					// TODO: All these conversions are sus.
 					case 0x67: stack[sp-1].LoadByte( (byte)stack[sp-1].CoerceToObject( typeof(sbyte)) ); break; // conv.i1
 					case 0x68: stack[sp-1].LoadShort( (short)stack[sp-1].CoerceToObject(typeof(short))); break; // conv.i2
 					case 0x69: stack[sp-1].LoadInt( (int)stack[sp-1].CoerceToObject(typeof(int)) ); break; // conv.i4
