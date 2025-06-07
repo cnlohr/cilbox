@@ -317,10 +317,15 @@ namespace Cilbox
 					//Debug.Log( "PC@"+pc+"/"+byteCode.Length);
 					byte b = byteCode[pc];
 
+					bool bDeepDebug = false;
 					// Uncomment for debugging.
-					//String stackSt = ""; for( int sk = 0; sk < stack.Length; sk++ ) { stackSt += "/"; if( sk == sp-1 ) stackSt += ">"; stackSt += stack[sk].AsObject() + "+" + stack[sk].type; if( sk == sp-1 ) stackSt += "<"; }
-					//int icopy = pc; CilboxUtil.OpCodes.OpCode opc = CilboxUtil.OpCodes.ReadOpCode ( byteCode, ref icopy );
-					//Debug.Log( "Bytecode " + opc + " (" + b.ToString("X2") + ") @ " + pc + "/" + byteCode.Length + " " + stackSt);
+					if( fullSignature.Contains( "GetRegister" ) )
+					{
+						String stackSt = ""; for( int sk = 0; sk < stack.Length; sk++ ) { stackSt += "/"; if( sk == sp-1 ) stackSt += ">"; stackSt += stack[sk].AsObject() + "+" + stack[sk].type; if( sk == sp-1 ) stackSt += "<"; }
+						int icopy = pc; CilboxUtil.OpCodes.OpCode opc = CilboxUtil.OpCodes.ReadOpCode ( byteCode, ref icopy );
+						Debug.Log( "Bytecode " + opc + " (" + b.ToString("X2") + ") @ " + pc + "/" + byteCode.Length + " " + stackSt);
+						bDeepDebug = true;
+					}
 
 					pc++;
 
@@ -346,9 +351,13 @@ namespace Cilbox
 					{
 						uint whichLocal = byteCode[pc++];
 						stack[sp++] = StackElement.CreateReference( localVars, whichLocal );
+						Debug.Log( $"Load loca: {whichLocal} {stack[sp-1].o} {localVars[whichLocal]}" );
+						{
+							Debug.Log( $"SE: {((StackElement)(localVars[whichLocal])).type}  '{((StackElement)(localVars[whichLocal])).o}' '{((StackElement)(localVars[whichLocal])).o?.GetType()}'  {((StackElement)(localVars[whichLocal])).i} " );
+						}
 						break; //ldloca.s // Load address of local variable.
 					}
-					case 0x13: localVars[byteCode[pc++]] = stack[--sp]; break; //stloc.s
+					case 0x13: Debug.Log( $"STLOC.S {stack[sp-1].type} {stack[sp-1].o} {stack[sp-1].i} @ {byteCode[pc]}" ); localVars[byteCode[pc++]] = stack[--sp]; break; //stloc.s
 					//case 0x0e: stack[sp++] = parameters[byteCode[pc++]]; break; //ldarg.0
 					//case 0x0e: stack[sp++] = parameters[byteCode[pc++]]; break; //ldarg.0
 					// Some more...
@@ -443,7 +452,7 @@ namespace Cilbox
 								Type t = pa[ik].ParameterType;
 								if( se.type < StackType.Object )
 								{
-									if( o != null && o.GetType() != t )
+									if( o != null && t.IsValueType && o.GetType() != t )
 									{
 										o = Convert.ChangeType( o, t );
 									}
@@ -475,15 +484,15 @@ namespace Cilbox
 								callthis = (se.type == StackType.Address) ?
 									(se.Dereference() ) : (se.AsObject());
 								Type t = mi.DeclaringType;
+								if( t.IsValueType )
+									callthis = Convert.ChangeType( callthis, t );
+								Debug.Log( callthis );
+								Debug.Log( callthis.GetType() );
+								Debug.Log( mi );
 								iko = st.Invoke( callthis, callpar );
 								if( se.type == StackType.Address )
 								{
 									se.DereferenceLoad( callthis );
-									//Debug.Log( se.o );
-									//if( se.o.GetType() == typeof(StackElement[]) )
-									//	((StackElement[])se.o)[se.i].Load( callthis );
-									//else
-									//	((Array)se.o).SetValue(callthis, se.i);
 								}
 							}
 							else
@@ -508,8 +517,9 @@ namespace Cilbox
 
 						if( !isVoid )
 						{
-							//Debug.Log( "Not Void: " + iko + " " + iko?.GetType() );
+							Debug.Log( "Not Void: " + iko + " " + iko?.GetType() );
 							stack[sp++].Load( iko );
+							Debug.Log( "Not Void Check " + stack[sp-1].type + " / " + stack[sp-1].o + " / " + stack[sp-1].i );
 						}
 						if( b == 0x27 )
 						{
@@ -529,8 +539,15 @@ namespace Cilbox
 					{
 						StackElement s = stack[--sp];
 						int iop = b - 0x2c;
-						if( iop >= 0x38 ) iop -= 0xd;
+						if( b >= 0x38 ) iop -= 0xd;
 						int offset = (b >= 0x38) ? (int)BytecodeAsU32( ref pc ) : (sbyte)byteCode[pc++];
+
+						if( bDeepDebug )
+						{
+							Debug.Log( "brtrue.s  TEST " + b + " " + iop + " " + s.type + " " + s.i );
+						}
+
+
 						switch( iop )
 						{
 							case 0: if( ( s.type == StackType.Object && s.o == null ) || s.i == 0 ) pc += offset; break;
@@ -551,8 +568,13 @@ namespace Cilbox
 					{
 						StackElement sb = stack[--sp]; StackElement sa = stack[--sp];
 						int iop = b - 0x2e;
-						if( iop >= 0x38 ) iop -= 0xd;
+						if( b >= 0x38 ) iop -= 0xd;
 						int joffset = (b >= 0x38) ? (int)BytecodeAsU32( ref pc ) : (sbyte)byteCode[pc++];
+
+						if( bDeepDebug )
+						{
+							Debug.Log( "DEEP GT " + sb.type + " " + iop + " " + sa.e + " " + sb.e );
+						}
 
 						switch( sb.type )
 						{
@@ -761,7 +783,31 @@ namespace Cilbox
 					case 0x7b: 
 					{
 						uint bc = BytecodeAsU32( ref pc );
+
+						if( bDeepDebug )
+							Debug.Log( $"ldfld: {bc}" );
+
 						object opths = stack[--sp].AsObject();
+
+						if( bDeepDebug )
+							Debug.Log( $"ldfld: op {opths}" );
+
+						if( bDeepDebug )
+							Debug.Log( $"ldfld: opfi {box.metadatas[bc].fieldIndex}" );
+
+						if( bDeepDebug )
+							Debug.Log( $"ldfld: opfi {((CilboxProxy)opths).fields[box.metadatas[bc].fieldIndex]}" );
+
+
+						if( bDeepDebug )
+						{
+							String s = "";
+							int i;
+							for( i = 0; i < ((CilboxProxy)opths).fields.Length; i++ )
+								s += " " + i + ":" + ((CilboxProxy)opths).fields[i]?.GetType() + ":" + ((CilboxProxy)opths).fields[i];
+							Debug.Log( s );
+						}
+
 						if( opths is CilboxProxy )
 							stack[sp++].Load( ((CilboxProxy)opths).fields[box.metadatas[bc].fieldIndex] );
 						else
@@ -831,17 +877,18 @@ namespace Cilbox
 						Array a = ((Array)(stack[--sp].o));
 						switch( b - 0x90 )
 						{
-						case 0: stack[sp-1].LoadSByte( (sbyte)a.GetValue( index ) ); break; // ldelem.i1
-						case 1: stack[sp-1].LoadByte( (byte)a.GetValue( index ) ); break; // ldelem.u1
-						case 2: stack[sp-1].LoadShort( (short)a.GetValue( index ) ); break; // ldelem.i2
-						case 3: stack[sp-1].LoadUshort( (ushort)a.GetValue( index ) ); break; // ldelem.u2
-						case 4: stack[sp-1].LoadInt( (int)a.GetValue( index ) ); break; // ldelem.i4
-						case 5: stack[sp-1].LoadUint( (uint)a.GetValue( index ) ); break; // ldelem.u4
-						case 6: stack[sp-1].LoadUlong( (ulong)a.GetValue( index ) ); break; // ldelem.u8 / ldelem.i8
-						case 7: stack[sp-1].LoadInt( (int)a.GetValue( index ) ); break; // ldelem.i
-						case 8: stack[sp-1].LoadFloat( (float)a.GetValue( index ) ); break; // ldelem.r4
-						case 9: stack[sp-1].LoadDouble( (double)a.GetValue( index ) ); break; // ldelem.r8
+						case 0: stack[sp].LoadSByte( (sbyte)(a.GetValue( index )) ); break; // ldelem.i1
+						case 1: stack[sp].LoadByte( (byte)(a.GetValue( index )) ); break; // ldelem.u1
+						case 2: stack[sp].LoadShort( (short)(a.GetValue( index )) ); break; // ldelem.i2
+						case 3: stack[sp].LoadUshort( (ushort)(a.GetValue( index )) ); break; // ldelem.u2
+						case 4: stack[sp].LoadInt( (int)(a.GetValue( index )) ); break; // ldelem.i4
+						case 5: stack[sp].LoadUint( (uint)(a.GetValue( index )) ); break; // ldelem.u4
+						case 6: stack[sp].LoadUlong( (ulong)(a.GetValue( index )) ); break; // ldelem.u8 / ldelem.i8
+						case 7: stack[sp].LoadInt( (int)(a.GetValue( index )) ); break; // ldelem.i
+						case 8: stack[sp].LoadFloat( (float)(a.GetValue( index )) ); break; // ldelem.r4
+						case 9: stack[sp].LoadDouble( (double)(a.GetValue( index )) ); break; // ldelem.r8
 						}
+						sp++;
 						break;
 					}
 
@@ -1172,7 +1219,7 @@ namespace Cilbox
 		public int nestingDepth;
 
 		public long startTime;
-		public static readonly long timeoutLengthTicks = 50000000; // 5000ms
+		public static readonly long timeoutLengthTicks = 500000000; // 5000ms
 
 		Cilbox()
 		{

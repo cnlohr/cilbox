@@ -159,6 +159,11 @@ namespace Cilbox
 					{
 						// It's probably a private.
 						//Debug.LogError( "Could not find field " + cfn + " on class " + cls.className );
+						Type t = cls.instanceFieldTypes[i];
+						if( t.IsValueType )
+						{
+							fields[i] = Activator.CreateInstance( t );
+						}
 					}
 				}
 			}
