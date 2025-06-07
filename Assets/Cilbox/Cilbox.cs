@@ -121,8 +121,28 @@ namespace Cilbox
 		}
 
 		public static readonly Type [] TypeFromStackType = new Type[] {
-			typeof(sbyte), typeof(byte), typeof(short), typeof( ushort), typeof( int ),
-			typeof(uint), typeof(long), typeof(ulong), typeof(bool), typeof(object) };
+			typeof(bool), typeof(sbyte), typeof(byte), typeof(short), typeof(ushort), typeof( int ),
+			typeof(uint), typeof(long), typeof(ulong), typeof(float), typeof(double), typeof(object),
+			typeof(void) /*Tricky, pointer*/ };
+
+		public static StackType StackTypeFromType( Type t )
+		{
+			switch( t )
+			{
+				case Type _ when t == typeof(sbyte): return StackType.Sbyte;
+				case Type _ when t == typeof(byte): return StackType.Byte;
+				case Type _ when t == typeof(short): return StackType.Short;
+				case Type _ when t == typeof(ushort): return StackType.Ushort;
+				case Type _ when t == typeof(int): return StackType.Int;
+				case Type _ when t == typeof(uint): return StackType.Uint;
+				case Type _ when t == typeof(long): return StackType.Long;
+				case Type _ when t == typeof(ulong): return StackType.Ulong;
+				case Type _ when t == typeof(float): return StackType.Float;
+				case Type _ when t == typeof(double): return StackType.Double;
+				case Type _ when t == typeof(bool): return StackType.Boolean;
+				default: return StackType.Object;
+			}
+		}
 
 		[StructLayout(LayoutKind.Explicit)]
 		public struct StackElement
@@ -155,6 +175,28 @@ namespace Cilbox
 				default: this.o = o; type = StackType.Object; break;
 				}
 				return this;
+			}
+
+			static public StackElement LoadAsStatic( object o )
+			{
+				StackElement ret = new StackElement();
+				ret.i = 0; ret.o = null;
+				switch( o )
+				{
+				case sbyte t0: ret.i = (sbyte)o;	ret.type = StackType.Sbyte; break;
+				case byte  t1: ret.i = (byte)o;		ret.type = StackType.Byte; break;
+				case short t2: ret.i = (short)o;	ret.type = StackType.Short; break;
+				case ushort t3: ret.i = (ushort)o;	ret.type = StackType.Ushort; break;
+				case int t4: ret.i = (int)o;		ret.type = StackType.Int; break;
+				case uint t5: ret.u = (uint)o;		ret.type = StackType.Uint; break;
+				case long t6: ret.l = (long)o;		ret.type = StackType.Long; break;
+				case ulong t7: ret.e = (ulong)o;	ret.type = StackType.Ulong; break;
+				case float t8: ret.f = (float)o;	ret.type = StackType.Float; break;
+				case double t9: ret.d = (ulong)o;	ret.type = StackType.Double; break;
+				case bool ta0: ret.i = ((bool)o) ? 1 : 0; ret.type = StackType.Boolean; break;
+				default: ret.o = o; ret.type = StackType.Object; break;
+				}
+				return ret;
 			}
 
 			public StackElement LoadObject( object o ) { this.o = o; type = StackType.Object; return this; }
@@ -241,12 +283,105 @@ namespace Cilbox
 				}
 			}
 
+			public object CoerceToObject( Type t )
+			{
+				StackType rt = StackTypeFromType( t );
+				if( type < StackType.Float ) 
+				{
+					switch( rt )
+					{
+					case StackType.Sbyte:   return (sbyte)i;
+					case StackType.Byte:    return (byte)u;
+					case StackType.Short:   return (short)i;
+					case StackType.Ushort:  return (ushort)u;
+					case StackType.Int:     return (int)i;
+					case StackType.Uint:    return (uint)u;
+					case StackType.Long:    return (long)l;
+					case StackType.Ulong:   return (ulong)e;
+					case StackType.Float:   return (float)e;
+					case StackType.Double:  return (double)e;
+					case StackType.Boolean: return e != 0;
+					default:
+						switch( type )
+						{
+							case StackType.Sbyte: return Convert.ChangeType( (sbyte)i, t );
+							case StackType.Byte:  return Convert.ChangeType( (byte)u, t );
+							case StackType.Short: return Convert.ChangeType( (short)i, t );
+							case StackType.Ushort:return Convert.ChangeType( (ushort)u, t );
+							case StackType.Int:   return Convert.ChangeType( (int)i, t );
+							case StackType.Uint:  return Convert.ChangeType( (uint)u, t );
+							case StackType.Long:  return Convert.ChangeType( (long)e, t );
+							case StackType.Ulong: return Convert.ChangeType( (ulong)u, t );
+						}
+						break;
+					}
+				}
+				else if( type < StackType.Double ) // Float
+				{
+					switch( rt )
+					{
+					case StackType.Sbyte:  return (sbyte)f;
+					case StackType.Byte:   return (byte)f;
+					case StackType.Short:  return (short)f;
+					case StackType.Ushort: return (ushort)f;
+					case StackType.Int:    return (int)f;
+					case StackType.Uint:   return (uint)f;
+					case StackType.Long:   return (long)f;
+					case StackType.Ulong:  return (ulong)f;
+					case StackType.Float:  return (float)f;
+					case StackType.Double: return (double)f;
+					case StackType.Boolean:  return f != 0.0f;
+					default:   return Convert.ChangeType( o, t );
+					}
+				}
+				else if( type < StackType.Object ) // Double
+				{
+					switch( rt )
+					{
+					case StackType.Sbyte:   return (sbyte)d;
+					case StackType.Byte:    return (byte)d;
+					case StackType.Short:   return (short)d;
+					case StackType.Ushort:  return (ushort)d;
+					case StackType.Int:     return (int)d;
+					case StackType.Uint:    return (uint)d;
+					case StackType.Long:    return (long)d;
+					case StackType.Ulong:   return (ulong)d;
+					case StackType.Float:   return (float)d;
+					case StackType.Double:  return (double)d;
+					case StackType.Boolean: return d != 0;
+					default:        return Convert.ChangeType( o, t );
+					}
+				}
+				else if( type == StackType.Object )
+				{
+					return Convert.ChangeType( o, t );
+				}
+
+				throw new Exception( "Erorr invalid type conversion from " + type + " to " + t );
+			}
+
 			public object Dereference()
 			{
 				if( o.GetType() == typeof(StackElement[]) )
 					return ((StackElement[])o)[i].AsObject();
 				else
 					return ((Array)o).GetValue(i);
+			}
+
+			// Mostly like a Dereference.
+			static public StackElement ResolveToStackElement( StackElement tr )
+			{
+				if( tr.type == StackType.Address )
+				{
+					if( tr.o.GetType() == typeof(StackElement[]) )
+						return ResolveToStackElement( ((StackElement[])tr.o)[tr.i] );
+					else
+						return ResolveToStackElement( StackElement.LoadAsStatic(((Array)tr.o).GetValue(tr.i)) );
+				}
+				else
+				{
+					return tr;
+				}
 			}
 
 			// XXX RISKY - generally copy this in-place.
@@ -319,13 +454,13 @@ namespace Cilbox
 
 					bool bDeepDebug = false;
 					// Uncomment for debugging.
-					if( fullSignature.Contains( "GetRegister" ) )
-					{
-						String stackSt = ""; for( int sk = 0; sk < stack.Length; sk++ ) { stackSt += "/"; if( sk == sp-1 ) stackSt += ">"; stackSt += stack[sk].AsObject() + "+" + stack[sk].type; if( sk == sp-1 ) stackSt += "<"; }
-						int icopy = pc; CilboxUtil.OpCodes.OpCode opc = CilboxUtil.OpCodes.ReadOpCode ( byteCode, ref icopy );
-						Debug.Log( "Bytecode " + opc + " (" + b.ToString("X2") + ") @ " + pc + "/" + byteCode.Length + " " + stackSt);
-						bDeepDebug = true;
-					}
+					//if( fullSignature.Contains( "GetRegister" ) )
+					//{
+					//	String stackSt = ""; for( int sk = 0; sk < stack.Length; sk++ ) { stackSt += "/"; if( sk == sp-1 ) stackSt += ">"; stackSt += stack[sk].AsObject() + "+" + stack[sk].type; if( sk == sp-1 ) stackSt += "<"; }
+					//	int icopy = pc; CilboxUtil.OpCodes.OpCode opc = CilboxUtil.OpCodes.ReadOpCode ( byteCode, ref icopy );
+					//	Debug.Log( "Bytecode " + opc + " (" + b.ToString("X2") + ") @ " + pc + "/" + byteCode.Length + " " + stackSt);
+					//	bDeepDebug = true;
+					//}
 
 					pc++;
 
@@ -341,23 +476,20 @@ namespace Cilbox
 					case 0x07: stack[sp++] = localVars[1]; break; //ldloc.1
 					case 0x08: stack[sp++] = localVars[2]; break; //ldloc.2
 					case 0x09: stack[sp++] = localVars[3]; break; //ldloc.3
-					case 0x0a: if( sp == 0 ) { Debug.LogWarning("EEEEE"); }  localVars[0] = stack[--sp]; break; //stloc.0
-					case 0x0b: if( sp == 0 ) { Debug.LogWarning("EEEEE"); }  localVars[1] = stack[--sp]; break; //stloc.1
+					case 0x0a: localVars[0] = stack[--sp]; break; //stloc.0
+					case 0x0b: localVars[1] = stack[--sp]; break; //stloc.1
 					case 0x0c: localVars[2] = stack[--sp]; break; //stloc.2
 					case 0x0d: localVars[3] = stack[--sp]; break; //stloc.3
-					case 0x0f: stack[sp++].Load( parameters[byteCode[pc++]] ); break; // ldarga.s <uint8 (argNum)>
+					case 0x0e: stack[sp++].Load( parameters[byteCode[pc++]] ); break; // ldarg.s <uint8 (argNum)>
+					case 0x0f: stack[sp++] = StackElement.CreateReference( parameters, byteCode[pc++] ); break; // ldarga.s <uint8 (argNum)>
 					case 0x11: stack[sp++] = localVars[byteCode[pc++]]; break; //ldloc.s
 					case 0x12:
 					{
 						uint whichLocal = byteCode[pc++];
 						stack[sp++] = StackElement.CreateReference( localVars, whichLocal );
-						Debug.Log( $"Load loca: {whichLocal} {stack[sp-1].o} {localVars[whichLocal]}" );
-						{
-							Debug.Log( $"SE: {((StackElement)(localVars[whichLocal])).type}  '{((StackElement)(localVars[whichLocal])).o}' '{((StackElement)(localVars[whichLocal])).o?.GetType()}'  {((StackElement)(localVars[whichLocal])).i} " );
-						}
 						break; //ldloca.s // Load address of local variable.
 					}
-					case 0x13: Debug.Log( $"STLOC.S {stack[sp-1].type} {stack[sp-1].o} {stack[sp-1].i} @ {byteCode[pc]}" ); localVars[byteCode[pc++]] = stack[--sp]; break; //stloc.s
+					case 0x13: localVars[byteCode[pc++]] = stack[--sp]; break; //stloc.s
 					//case 0x0e: stack[sp++] = parameters[byteCode[pc++]]; break; //ldarg.0
 					//case 0x0e: stack[sp++] = parameters[byteCode[pc++]]; break; //ldarg.0
 					// Some more...
@@ -480,19 +612,24 @@ namespace Cilbox
 							else if( !st.IsStatic )
 							{
 								MethodInfo mi = (MethodInfo)st;
-								StackElement se = stack[--sp];
-								callthis = (se.type == StackType.Address) ?
-									(se.Dereference() ) : (se.AsObject());
+								StackElement seorig = stack[--sp];
+								StackElement se = StackElement.ResolveToStackElement( seorig );
 								Type t = mi.DeclaringType;
-								if( t.IsValueType )
-									callthis = Convert.ChangeType( callthis, t );
-								Debug.Log( callthis );
-								Debug.Log( callthis.GetType() );
-								Debug.Log( mi );
-								iko = st.Invoke( callthis, callpar );
-								if( se.type == StackType.Address )
+
+								if( t.IsValueType && se.type < StackType.Object )
 								{
-									se.DereferenceLoad( callthis );
+									// Try to coerce types.
+									callthis = se.CoerceToObject( t );
+								}
+								else
+								{
+									callthis = se.o;
+								}
+
+								iko = st.Invoke( callthis, callpar );
+								if( seorig.type == StackType.Address )
+								{
+									seorig.DereferenceLoad( callthis );
 								}
 							}
 							else
@@ -517,9 +654,7 @@ namespace Cilbox
 
 						if( !isVoid )
 						{
-							Debug.Log( "Not Void: " + iko + " " + iko?.GetType() );
 							stack[sp++].Load( iko );
-							Debug.Log( "Not Void Check " + stack[sp-1].type + " / " + stack[sp-1].o + " / " + stack[sp-1].i );
 						}
 						if( b == 0x27 )
 						{
@@ -541,12 +676,6 @@ namespace Cilbox
 						int iop = b - 0x2c;
 						if( b >= 0x38 ) iop -= 0xd;
 						int offset = (b >= 0x38) ? (int)BytecodeAsU32( ref pc ) : (sbyte)byteCode[pc++];
-
-						if( bDeepDebug )
-						{
-							Debug.Log( "brtrue.s  TEST " + b + " " + iop + " " + s.type + " " + s.i );
-						}
-
 
 						switch( iop )
 						{
@@ -570,11 +699,6 @@ namespace Cilbox
 						int iop = b - 0x2e;
 						if( b >= 0x38 ) iop -= 0xd;
 						int joffset = (b >= 0x38) ? (int)BytecodeAsU32( ref pc ) : (sbyte)byteCode[pc++];
-
-						if( bDeepDebug )
-						{
-							Debug.Log( "DEEP GT " + sb.type + " " + iop + " " + sa.e + " " + sb.e );
-						}
 
 						switch( sb.type )
 						{
@@ -784,23 +908,15 @@ namespace Cilbox
 					{
 						uint bc = BytecodeAsU32( ref pc );
 
-						if( bDeepDebug )
-							Debug.Log( $"ldfld: {bc}" );
-
 						object opths = stack[--sp].AsObject();
-
-						if( bDeepDebug )
-							Debug.Log( $"ldfld: op {opths}" );
-
-						if( bDeepDebug )
-							Debug.Log( $"ldfld: opfi {box.metadatas[bc].fieldIndex}" );
-
-						if( bDeepDebug )
-							Debug.Log( $"ldfld: opfi {((CilboxProxy)opths).fields[box.metadatas[bc].fieldIndex]}" );
 
 
 						if( bDeepDebug )
 						{
+							Debug.Log( $"ldfld: op {opths}" );
+							Debug.Log( $"ldfld: opfi {box.metadatas[bc].fieldIndex}" );
+							Debug.Log( $"ldfld: opfi {((CilboxProxy)opths).fields[box.metadatas[bc].fieldIndex]}" );
+
 							String s = "";
 							int i;
 							for( i = 0; i < ((CilboxProxy)opths).fields.Length; i++ )
@@ -813,6 +929,17 @@ namespace Cilbox
 						else
 							throw new Exception( "Unimplemented.  Attempting to get field on non-cilbox object" );
 						break; //ldfld
+					}
+					case 0x7c:
+					{
+						uint bc = BytecodeAsU32( ref pc );
+						object opths = stack[--sp].AsObject();
+
+						if( opths is CilboxProxy )
+							stack[sp++] = StackElement.CreateReference( (Array)(((CilboxProxy)opths).fields), (uint)box.metadatas[bc].fieldIndex );
+						else
+							throw new Exception( "Unimplemented.  Attempting to get field on non-cilbox object" );
+						break;// ldflda
 					}
 					case 0x7d:
 					{
@@ -891,7 +1018,14 @@ namespace Cilbox
 						sp++;
 						break;
 					}
-
+					case 0x9a:
+					{
+						if( stack[sp-1].type > StackType.Uint ) throw new Exception( "Invalid index type" + stack[sp-1].type + " " + stack[sp-1].o );
+						int index = stack[--sp].i;
+						Array a = ((Array)(stack[--sp].o));
+						stack[sp++].LoadObject( a.GetValue(index) );
+						break; //Ldelem_Ref
+					}
 					case 0x9c:
 					{
 						SByte val = (SByte)stack[--sp].i;
@@ -965,8 +1099,8 @@ namespace Cilbox
 
 						break; // ldtoken <token>
 					}
-					case 0xD1: stack[sp-1].LoadInt( (short)(int)stack[sp-1].i ); break; // conv.u2
-					case 0xD2: stack[sp-1].LoadInt( (sbyte)(int)stack[sp-1].i ); break; // conv.u1
+					case 0xD1: stack[sp-1].LoadUshort( (ushort)(int)stack[sp-1].i ); break; // conv.u2
+					case 0xD2: stack[sp-1].LoadByte( (byte)(int)stack[sp-1].i ); break; // conv.u1
 
 					case 0xfe: // Extended opcodes
 						b = byteCode[pc++];
@@ -1891,6 +2025,7 @@ namespace Cilbox
 	public enum ImportFunctionID
 	{
 		dotCtor, // Must be at index 0.
+		FixedUpdate,
 		Update,
 		Start,
 		Awake,

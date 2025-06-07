@@ -182,6 +182,7 @@ namespace Cilbox
 			RuntimeProxyLoad();
 		}
 		void Update() { if( box != null ) box.InterpretIID( cls, this, ImportFunctionID.Update, null ); }
+		void FixedUpdate() { if( box != null ) box.InterpretIID( cls, this, ImportFunctionID.FixedUpdate, null ); }
 	}
 }
 
