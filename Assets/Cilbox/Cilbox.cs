@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using System.Reflection;
 
 #if UNITY_EDITOR
+using Unity.Profiling;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Callbacks;
@@ -50,6 +51,9 @@ namespace Cilbox
 		public bool isVoid;
 		public String[] signatureParameters;
 		public String[] signatureParameterTypes;
+#if UNITY_EDITOR
+		ProfilerMarker perfMarkerInterpret;
+#endif
 
 		public void Load( CilboxClass cclass, String name, String payload )
 		{
@@ -97,6 +101,10 @@ namespace Cilbox
 				signatureParameterTypes[sn] = (String)v.Value;
 				sn++;
 			}
+#if UNITY_EDITOR
+			perfMarkerInterpret = new ProfilerMarker(parentClass.className + ":" + fullSignature);
+#endif
+
 		}
 		public void Breakwarn( String message, int bytecodeplace )
 		{
@@ -156,6 +164,8 @@ namespace Cilbox
 			[FieldOffset(8)]public long l;
 			[FieldOffset(8)]public ulong e;
 			[FieldOffset(16)]public object o;
+
+			static public StackElement nil;
 
 			public StackElement Load( object o )
 			{
@@ -403,10 +413,45 @@ namespace Cilbox
 			}
 		}
 
-
 		public object Interpret( CilboxProxy ths, object [] parametersIn )
 		{
-			if( byteCode == null || byteCode.Length == 0 || disabled ) return null;
+			StackElement [] parameters;
+
+			int plen = 0;
+			if( parametersIn != null )
+			{
+				plen = parametersIn.Length;
+			}
+
+			if( isStatic )
+			{
+				parameters = new StackElement[plen];
+				for( int p = 0; p < plen; p++ )
+					parameters[p].Load( parametersIn[p] );
+			}
+			else
+			{
+				parameters = new StackElement[plen+1];
+				parameters[0].Load( ths );
+				for( int p = 0; p < plen; p++ )
+					parameters[p+1].Load( parametersIn[p] );
+			}
+
+			return InterpretInner( parameters ).AsObject();
+		}
+
+
+		public StackElement InterpretInner( StackElement [] parameters )
+		{
+			if( byteCode == null || byteCode.Length == 0 || disabled )
+			{
+				return StackElement.nil;
+			}
+
+#if UNITY_EDITOR
+			perfMarkerInterpret.Begin();
+#endif
+
 			Cilbox box = parentClass.box;
 	
 			if( box.nestingDepth > 1000 ) throw new Exception( "Error: Interpreted stack overflow in " + methodName );
@@ -417,33 +462,10 @@ namespace Cilbox
 			}
 			box.nestingDepth++;
 
-			// Do the magic.
-
-			// Uncomment for debug.
-			//String stbc = ""; for( int i = 0; i < byteCode.Length; i++ ) stbc += byteCode[i].ToString("X2") + " "; Debug.Log( "INTERPRETING " + methodName + " VALS:" + stbc + " MAX: " + MaxStackSize );
-			//Debug.Log( ths.fields );
-
 			StackElement [] stack = new StackElement[MaxStackSize];
 			StackElement [] localVars = new StackElement[methodLocals.Length];
 
 			int sp = 0;
-
-
-			// TODO: parameters<> should probably be StackElement's
-			object [] parameters;
-			if( isStatic )
-				parameters = parametersIn;
-			else
-			{
-				int plen = 0;
-				if( parametersIn != null ) plen = parametersIn.Length;
-				parameters = new object[plen+1];
-				parameters[0] = ths;
-				int p;
-				for( p = 0; p < plen; p++ )
-					parameters[p+1] = parametersIn[p];
-			}
-
 			bool cont = true;
 			int ctr = 0;
 			int pc = 0;
@@ -456,7 +478,7 @@ namespace Cilbox
 
 					bool bDeepDebug = false;
 					// Uncomment for debugging.
-					//if( fullSignature.Contains( "GetRegister" ) )
+					//if( fullSignature.Contains( "exec" ) )
 					//{
 					//	String stackSt = ""; for( int sk = 0; sk < stack.Length; sk++ ) { stackSt += "/"; if( sk == sp-1 ) stackSt += ">"; stackSt += stack[sk].AsObject() + "+" + stack[sk].type; if( sk == sp-1 ) stackSt += "<"; }
 					//	int icopy = pc; CilboxUtil.OpCodes.OpCode opc = CilboxUtil.OpCodes.ReadOpCode ( byteCode, ref icopy );
@@ -470,10 +492,10 @@ namespace Cilbox
 					{
 					case 0x00: break; // nop
 					case 0x01: cont = false; Breakwarn( "Debug Break", pc ); break; // break
-					case 0x02: stack[sp++].Load( parameters[0] ); break; //ldarg.0
-					case 0x03: stack[sp++].Load( parameters[1] ); break; //ldarg.1
-					case 0x04: stack[sp++].Load( parameters[2] ); break; //ldarg.2
-					case 0x05: stack[sp++].Load( parameters[3] ); break; //ldarg.3
+					case 0x02: stack[sp++] = parameters[0]; break; //ldarg.0
+					case 0x03: stack[sp++] = parameters[1]; break; //ldarg.1
+					case 0x04: stack[sp++] = parameters[2]; break; //ldarg.2
+					case 0x05: stack[sp++] = parameters[3]; break; //ldarg.3
 					case 0x06: stack[sp++] = localVars[0]; break; //ldloc.0
 					case 0x07: stack[sp++] = localVars[1]; break; //ldloc.1
 					case 0x08: stack[sp++] = localVars[2]; break; //ldloc.2
@@ -482,7 +504,7 @@ namespace Cilbox
 					case 0x0b: localVars[1] = stack[--sp]; break; //stloc.1
 					case 0x0c: localVars[2] = stack[--sp]; break; //stloc.2
 					case 0x0d: localVars[3] = stack[--sp]; break; //stloc.3
-					case 0x0e: stack[sp++].Load( parameters[byteCode[pc++]] ); break; // ldarg.s <uint8 (argNum)>
+					case 0x0e: stack[sp++] = parameters[byteCode[pc++]]; break; // ldarg.s <uint8 (argNum)>
 					case 0x0f: stack[sp++] = StackElement.CreateReference( parameters, byteCode[pc++] ); break; // ldarga.s <uint8 (argNum)>
 					case 0x11: stack[sp++] = localVars[byteCode[pc++]]; break; //ldloc.s
 					case 0x12:
@@ -492,9 +514,6 @@ namespace Cilbox
 						break; //ldloca.s // Load address of local variable.
 					}
 					case 0x13: localVars[byteCode[pc++]] = stack[--sp]; break; //stloc.s
-					//case 0x0e: stack[sp++] = parameters[byteCode[pc++]]; break; //ldarg.0
-					//case 0x0e: stack[sp++] = parameters[byteCode[pc++]]; break; //ldarg.0
-					// Some more...
 					case 0x14: stack[sp++].LoadObject( null ); break; // ldnull
 					case 0x15: stack[sp++].LoadInt( -1 ); break; // ldc.i4.m1
 					case 0x16: stack[sp++].LoadInt( 0 ); break; // ldc.i4.0
@@ -545,23 +564,29 @@ namespace Cilbox
 							{
 								throw( new Exception( $"Function {dt.fields[2]} not found" ) );
 							}
+							int staticOffset = (targetMethod.isStatic?0:1);
 							int numParams = targetMethod.signatureParameters.Length;
-							object [] cparameters = new object[numParams];
-							int i;
-							for( i = 0; i < numParams; i++ )
-							{
-								cparameters[i] = stack[--sp].AsObject();
-							}
-							CilboxProxy callThis = null;
+							StackElement [] cparameters = new StackElement[numParams + staticOffset];
+
+							//Debug.Log( $"Getting values {numParams} {sp} {targetMethod.isStatic}" );
+							for( int i = 0; i < numParams; i++ )
+								cparameters[i+staticOffset] = stack[--sp];
+
 							if( !targetMethod.isStatic )
+								cparameters[0] = stack[--sp];
+
+							if( !isVoid )
+								stack[sp++] = targetMethod.InterpretInner( cparameters );
+							else
+								targetMethod.InterpretInner( cparameters );
+
+							if( b == 0x27 )
 							{
-								callThis = (CilboxProxy)stack[--sp].AsObject();
+								// This is returning from a jump, so immediately abort.
+								if( isVoid ) stack[sp++] = StackElement.nil; /// ?? Please check me! If wrong, fix above, too.
+								cont = false;
 							}
-//Debug.Log( $"INTERPRETING INTO: {callThis} parms {numParams}" ); 
-							iko = targetMethod.Interpret( callThis, cparameters );
-//Debug.Log( $"INTERPRETING DONE: {callThis} parms {numParams}" ); 
-							//public object Interpret( CilboxProxy ths, object [] parametersIn )
-							//signatureParameters // count
+
 						}
 						else
 						{
@@ -571,7 +596,6 @@ namespace Cilbox
 								isVoid = ((MethodInfo)st).ReturnType == typeof(void);
 
 							ParameterInfo [] pa = st.GetParameters();
-							//MethodInfo mi = (MethodInfo)st;
 							int numFields = pa.Length;
 							object callthis = null;
 							object [] callpar = new object[numFields];
@@ -655,18 +679,19 @@ namespace Cilbox
 									//	((Array)se.o).SetValue(callpar[ik], se.i);
 								}
 							}
+
+							if( !isVoid )
+							{
+								stack[sp++].Load( iko );
+							}
+							if( b == 0x27 )
+							{
+								// This is returning from a jump, so immediately abort.
+								if( isVoid ) stack[sp++] = StackElement.nil; /// ?? Please check me! If wrong, fix above, too.
+								cont = false;
+							}
 						}
 
-						if( !isVoid )
-						{
-							stack[sp++].Load( iko );
-						}
-						if( b == 0x27 )
-						{
-							// This is returning from a jump, so immediately abort.
-							if( isVoid ) stack[sp++].Load( null ); /// ?? Please check me!
-							cont = false;
-						}
 						break;
 					}
 					case 0x2a: cont = false; break; // ret
@@ -799,7 +824,7 @@ namespace Cilbox
 						if( s.u < nsw )
 						{
 							int smatch = (int)(s.u * 4 + startpc);
-							int ofs = (int)BytecodeAsU32( ref startpc );
+							int ofs = (int)BytecodeAsU32( ref smatch );
 							pc += ofs;
 						}
 						// Otherwise fall through
@@ -915,20 +940,6 @@ namespace Cilbox
 						uint bc = BytecodeAsU32( ref pc );
 
 						object opths = stack[--sp].AsObject();
-
-
-						if( bDeepDebug )
-						{
-							Debug.Log( $"ldfld: op {opths}" );
-							Debug.Log( $"ldfld: opfi {box.metadatas[bc].fieldIndex}" );
-							Debug.Log( $"ldfld: opfi {((CilboxProxy)opths).fields[box.metadatas[bc].fieldIndex]}" );
-
-							String s = "";
-							int i;
-							for( i = 0; i < ((CilboxProxy)opths).fields.Length; i++ )
-								s += " " + i + ":" + ((CilboxProxy)opths).fields[i]?.GetType() + ":" + ((CilboxProxy)opths).fields[i];
-							Debug.Log( s );
-						}
 
 						if( opths is CilboxProxy )
 							stack[sp++].Load( ((CilboxProxy)opths).fields[box.metadatas[bc].fieldIndex] );
@@ -1088,7 +1099,6 @@ namespace Cilbox
 					case 0xD0:
 					{
 						uint md = BytecodeAsU32( ref pc ); // Let's hope that somehow this isn't needed?
-						//Debug.Log( "TOKEN: " + md.ToString("X8") );
 						CilMetadataTokenInfo mi = box.metadatas[md];
 						Type setType = null;
 						switch( mi.type )
@@ -1112,6 +1122,7 @@ namespace Cilbox
 						b = byteCode[pc++];
 						switch( b )
 						{
+						case 0x01:
 						case 0x02:
 						case 0x03:
 						case 0x04:
@@ -1122,6 +1133,18 @@ namespace Cilbox
 							StackType promoted = StackTypeMaxPromote( sa.type, sb.type );
 							switch( b )
 							{
+							case 0x01: // CEQ
+								switch( promoted )
+								{
+									case StackType.Boolean: stack[sp++].LoadInt( sa.i == sb.i ? 1 : 0 ); break;
+									case StackType.Int:		stack[sp++].LoadInt( sa.i == sb.i ? 1 : 0 ); break;
+									case StackType.Uint:	stack[sp++].LoadInt( sa.i == sb.i ? 1 : 0 ); break;
+									case StackType.Long:	stack[sp++].LoadInt( sa.l == sb.l ? 1 : 0 ); break;
+									case StackType.Ulong:	stack[sp++].LoadInt( sa.l == sb.l ? 1 : 0 ); break;
+									case StackType.Float:	stack[sp++].LoadInt( sa.f == sb.f ? 1 : 0 ); break;
+									case StackType.Double:	stack[sp++].LoadInt( sa.d == sb.d ? 1 : 0 ); break;
+									default: throw new Exception( $"CEQ Unimplemented type promotion ({promoted})" );
+								} break;
 							case 0x02: // CGT
 								switch( promoted )
 								{
@@ -1131,6 +1154,7 @@ namespace Cilbox
 									case StackType.Ulong:	stack[sp++].LoadInt( sa.l > sb.l ? 1 : 0 ); break;
 									case StackType.Float:	stack[sp++].LoadInt( sa.f > sb.f ? 1 : 0 ); break;
 									case StackType.Double:	stack[sp++].LoadInt( sa.d > sb.d ? 1 : 0 ); break;
+									default: throw new Exception( $"CEQ Unimplemented type promotion ({promoted})" );
 								} break;
 							case 0x03: // CGT.UN
 								switch( promoted )
@@ -1141,6 +1165,7 @@ namespace Cilbox
 									case StackType.Ulong:	stack[sp++].LoadInt( sa.e > sb.e ? 1 : 0 ); break;
 									case StackType.Float:	stack[sp++].LoadInt( sa.f > sb.f ? 1 : 0 ); break;
 									case StackType.Double:	stack[sp++].LoadInt( sa.d > sb.d ? 1 : 0 ); break;
+									default: throw new Exception( $"CEQ Unimplemented type promotion ({promoted})" );
 								} break;
 							case 0x04: // CLT
 								switch( promoted )
@@ -1151,6 +1176,7 @@ namespace Cilbox
 									case StackType.Ulong:	stack[sp++].LoadInt( sa.l < sb.l ? 1 : 0 ); break;
 									case StackType.Float:	stack[sp++].LoadInt( sa.f < sb.f ? 1 : 0 ); break;
 									case StackType.Double:	stack[sp++].LoadInt( sa.d < sb.d ? 1 : 0 ); break;
+									default: throw new Exception( $"CEQ Unimplemented type promotion ({promoted})" );
 								} break;
 							case 0x05: // CLT.UN
 								switch( promoted )
@@ -1161,6 +1187,7 @@ namespace Cilbox
 									case StackType.Ulong:	stack[sp++].LoadInt( sa.e < sb.e ? 1 : 0 ); break;
 									case StackType.Float:	stack[sp++].LoadInt( sa.f < sb.f ? 1 : 0 ); break;
 									case StackType.Double:	stack[sp++].LoadInt( sa.d < sb.d ? 1 : 0 ); break;
+									default: throw new Exception( $"CEQ Unimplemented type promotion ({promoted})" );
 								} break;
 							}
 							break;
@@ -1204,7 +1231,10 @@ namespace Cilbox
 			}
 			//if( box.nestingDepth == 1 ) Debug.Log( "This invoke took: " + box.stepsThisInvoke );
 			box.nestingDepth--;
-			return ( cont || sp == 0 ) ? null : stack[--sp].AsObject();
+#if UNITY_EDITOR
+			perfMarkerInterpret.End();
+#endif
+			return ( sp == 0 ) ? StackElement.nil : stack[--sp];
 		}
 
 		uint BytecodeAs16( ref int i )
