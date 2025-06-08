@@ -416,8 +416,7 @@ namespace Cilbox
 		public object Interpret( CilboxProxy ths, object [] parametersIn )
 		{
 			//StackElement [] parameters, int parameterPlace, int stackHead
-			const int defaultStackSize = 1024;
-			StackElement [] stackBuffer = new StackElement[defaultStackSize];
+			StackElement [] stackBuffer = new StackElement[Cilbox.defaultStackSize];
 
 			int plen = 0;
 			if( parametersIn != null )
@@ -455,7 +454,6 @@ namespace Cilbox
 
 			Cilbox box = parentClass.box;
 	
-			if( box.nestingDepth > 1000 ) throw new Exception( "Error: Interpreted stack overflow in " + methodName );
 			if( box.nestingDepth == 0 )
 			{
 				box.stepsThisInvoke = 0;
@@ -465,13 +463,12 @@ namespace Cilbox
 
 			int localVarsHead = stackHead + MaxStackSize;
 			int stackContinues = localVarsHead + methodLocals.Length;
-		//	StackElement [] stack = new StackElement[MaxStackSize];
-		//	StackElement [] localVars = new StackElement[methodLocals.Length];
 
-			// Uncomment for debugging.
-
+			// Add a little buffer for possible function calls.
+			if( stackContinues + 16 >= stackBuffer.Length ) throw new Exception( "Error: Interpreted stack overflow in " + methodName );
 
 			bool bDeepDebug = false;
+			// Uncomment for debugging.
 /*
 			if( fullSignature.Contains( "Start" ) )
 			{
@@ -1419,6 +1416,8 @@ namespace Cilbox
 
 		public long startTime;
 		public static readonly long timeoutLengthTicks = 500000000; // 5000ms
+		public static readonly int defaultStackSize = 1024;
+
 
 		Cilbox()
 		{
