@@ -1046,9 +1046,11 @@ namespace Cilbox
 					{
 						if( stackBuffer[sp].type > StackType.Uint ) throw new Exception( "Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o );
 						int index = stackBuffer[sp--].i;
-						Array a = ((Array)(stackBuffer[sp].o));
+//						Array a = ((Array)(stackBuffer[sp].o));
 						switch( b - 0x90 )
 						{
+/*
+// Old way
 						case 0: stackBuffer[sp].LoadSByte( (sbyte)(a.GetValue( index )) ); break; // ldelem.i1
 						case 1: stackBuffer[sp].LoadByte( (byte)(a.GetValue( index )) ); break; // ldelem.u1
 						case 2: stackBuffer[sp].LoadShort( (short)(a.GetValue( index )) ); break; // ldelem.i2
@@ -1059,6 +1061,18 @@ namespace Cilbox
 						case 7: stackBuffer[sp].LoadInt( (int)(a.GetValue( index )) ); break; // ldelem.i
 						case 8: stackBuffer[sp].LoadFloat( (float)(a.GetValue( index )) ); break; // ldelem.r4
 						case 9: stackBuffer[sp].LoadDouble( (double)(a.GetValue( index )) ); break; // ldelem.r8
+*/
+						case 0: stackBuffer[sp].LoadSByte( (sbyte)(((sbyte[])stackBuffer[sp].o)[index]) ); break; // ldelem.i1
+						case 1: stackBuffer[sp].LoadByte( (byte)(((byte[])stackBuffer[sp].o)[index]) ); break; // ldelem.u1
+						case 2: stackBuffer[sp].LoadShort( (short)(((short[])stackBuffer[sp].o)[index]) ); break; // ldelem.i2
+						case 3: stackBuffer[sp].LoadUshort( (ushort)(((ushort[])stackBuffer[sp].o)[index]) ); break; // ldelem.u2
+						case 4: stackBuffer[sp].LoadInt( (int)(((int[])stackBuffer[sp].o)[index]) ); break; // ldelem.i4
+						case 5: stackBuffer[sp].LoadUint( (uint)(((uint[])stackBuffer[sp].o)[index]) ); break; // ldelem.u4
+						case 6: stackBuffer[sp].LoadUlong( (ulong)(((ulong[])stackBuffer[sp].o)[index]) ); break; // ldelem.u8 / ldelem.i8
+						case 7: stackBuffer[sp].LoadInt( (int)(((int[])stackBuffer[sp].o)[index]) ); break; // ldelem.i
+						case 8: stackBuffer[sp].LoadFloat( (float)(((float[])stackBuffer[sp].o)[index]) ); break; // ldelem.r4
+						case 9: stackBuffer[sp].LoadDouble( (double)(((double[])stackBuffer[sp].o)[index]) ); break; // ldelem.r8
+
 						}
 						break;
 					}
@@ -1230,9 +1244,9 @@ namespace Cilbox
 					ctr++;
 					box.stepsThisInvoke++;
 
-					if( ( box.stepsThisInvoke & 0xf ) == 0 )
+					if( ( box.stepsThisInvoke & 0x3f ) == 0 )
 					{
-						// Only check every 16.
+						// Only check every 64.
 						long elapsed = (System.Diagnostics.Stopwatch.GetTimestamp() - box.startTime);
 						if( elapsed > Cilbox.timeoutLengthTicks )
 						{
@@ -1617,7 +1631,13 @@ namespace Cilbox
 			if( cls == null ) return null;
 			uint index = cls.importFunctionToId[(uint)iid];
 			if( index == 0xffffffff ) return null;
-			return cls.methods[index].Interpret( ths, parameters );
+
+			object ret = cls.methods[index].Interpret( ths, parameters );
+
+			// For profiling
+			//long elapsed = (System.Diagnostics.Stopwatch.GetTimestamp() - startTime);
+			//Debug.Log( $"{stepsThisInvoke} in {elapsed/10}us or {stepsThisInvoke*10.0/(double)elapsed}MHz" );
+			return ret;
 		}
 	}
 
