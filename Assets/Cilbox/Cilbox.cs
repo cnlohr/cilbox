@@ -479,7 +479,7 @@ namespace Cilbox
 				bDeepDebug = true;
 			}
 */
-			int sp = 0;
+			int sp = -1;
 			bool cont = true;
 			int ctr = 0;
 			int pc = 0;
@@ -493,7 +493,7 @@ namespace Cilbox
 					// Uncomment for debugging.
 					if( bDeepDebug )
 					{
-						String stackSt = ""; for( int sk = 0; sk < stack.Length; sk++ ) { stackSt += "/"; if( sk == sp-1 ) stackSt += ">"; stackSt += stack[sk].AsObject() + "+" + stack[sk].type; if( sk == sp-1 ) stackSt += "<"; }
+						String stackSt = ""; for( int sk = 0; sk < stack.Length; sk++ ) { stackSt += "/"; if( sk == sp ) stackSt += ">"; stackSt += stack[sk].AsObject() + "+" + stack[sk].type; if( sk == sp ) stackSt += "<"; }
 						int icopy = pc; CilboxUtil.OpCodes.OpCode opc = CilboxUtil.OpCodes.ReadOpCode ( byteCode, ref icopy );
 						Debug.Log( "Bytecode " + opc + " (" + b.ToString("X2") + ") @ " + pc + "/" + byteCode.Length + " " + stackSt);
 					}
@@ -508,47 +508,47 @@ namespace Cilbox
 					{
 					case 0x00: break; // nop
 					case 0x01: cont = false; Breakwarn( "Debug Break", pc ); break; // break
-					case 0x02: stack[sp++] = parameters[0]; break; //ldarg.0
-					case 0x03: stack[sp++] = parameters[1]; break; //ldarg.1
-					case 0x04: stack[sp++] = parameters[2]; break; //ldarg.2
-					case 0x05: stack[sp++] = parameters[3]; break; //ldarg.3
-					case 0x06: stack[sp++] = localVars[0]; break; //ldloc.0
-					case 0x07: stack[sp++] = localVars[1]; break; //ldloc.1
-					case 0x08: stack[sp++] = localVars[2]; break; //ldloc.2
-					case 0x09: stack[sp++] = localVars[3]; break; //ldloc.3
-					case 0x0a: localVars[0] = stack[--sp]; break; //stloc.0
-					case 0x0b: localVars[1] = stack[--sp]; break; //stloc.1
-					case 0x0c: localVars[2] = stack[--sp]; break; //stloc.2
-					case 0x0d: localVars[3] = stack[--sp]; break; //stloc.3
-					case 0x0e: stack[sp++] = parameters[byteCode[pc++]]; break; // ldarg.s <uint8 (argNum)>
-					case 0x0f: stack[sp++] = StackElement.CreateReference( parameters, byteCode[pc++] ); break; // ldarga.s <uint8 (argNum)>
-					case 0x11: stack[sp++] = localVars[byteCode[pc++]]; break; //ldloc.s
+					case 0x02: stack[++sp] = parameters[0]; break; //ldarg.0
+					case 0x03: stack[++sp] = parameters[1]; break; //ldarg.1
+					case 0x04: stack[++sp] = parameters[2]; break; //ldarg.2
+					case 0x05: stack[++sp] = parameters[3]; break; //ldarg.3
+					case 0x06: stack[++sp] = localVars[0]; break; //ldloc.0
+					case 0x07: stack[++sp] = localVars[1]; break; //ldloc.1
+					case 0x08: stack[++sp] = localVars[2]; break; //ldloc.2
+					case 0x09: stack[++sp] = localVars[3]; break; //ldloc.3
+					case 0x0a: localVars[0] = stack[sp--]; break; //stloc.0
+					case 0x0b: localVars[1] = stack[sp--]; break; //stloc.1
+					case 0x0c: localVars[2] = stack[sp--]; break; //stloc.2
+					case 0x0d: localVars[3] = stack[sp--]; break; //stloc.3
+					case 0x0e: stack[++sp] = parameters[byteCode[pc++]]; break; // ldarg.s <uint8 (argNum)>
+					case 0x0f: stack[++sp] = StackElement.CreateReference( parameters, byteCode[pc++] ); break; // ldarga.s <uint8 (argNum)>
+					case 0x11: stack[++sp] = localVars[byteCode[pc++]]; break; //ldloc.s
 					case 0x12:
 					{
 						uint whichLocal = byteCode[pc++];
-						stack[sp++] = StackElement.CreateReference( localVars, whichLocal );
+						stack[++sp] = StackElement.CreateReference( localVars, whichLocal );
 						break; //ldloca.s // Load address of local variable.
 					}
-					case 0x13: localVars[byteCode[pc++]] = stack[--sp]; break; //stloc.s
-					case 0x14: stack[sp++].LoadObject( null ); break; // ldnull
-					case 0x15: stack[sp++].LoadInt( -1 ); break; // ldc.i4.m1
-					case 0x16: stack[sp++].LoadInt( 0 ); break; // ldc.i4.0
-					case 0x17: stack[sp++].LoadInt( 1 ); break; // ldc.i4.1
-					case 0x18: stack[sp++].LoadInt( 2 ); break; // ldc.i4.2
-					case 0x19: stack[sp++].LoadInt( 3 ); break; // ldc.i4.3
-					case 0x1a: stack[sp++].LoadInt( 4 ); break; // ldc.i4.4
-					case 0x1b: stack[sp++].LoadInt( 5 ); break; // ldc.i4.5
-					case 0x1c: stack[sp++].LoadInt( 6 ); break; // ldc.i4.6
-					case 0x1d: stack[sp++].LoadInt( 7 ); break; // ldc.i4.7
-					case 0x1e: stack[sp++].LoadInt( 8 ); break; // ldc.i4.8
+					case 0x13: localVars[byteCode[pc++]] = stack[sp--]; break; //stloc.s
+					case 0x14: stack[++sp].LoadObject( null ); break; // ldnull
+					case 0x15: stack[++sp].LoadInt( -1 ); break; // ldc.i4.m1
+					case 0x16: stack[++sp].LoadInt( 0 ); break; // ldc.i4.0
+					case 0x17: stack[++sp].LoadInt( 1 ); break; // ldc.i4.1
+					case 0x18: stack[++sp].LoadInt( 2 ); break; // ldc.i4.2
+					case 0x19: stack[++sp].LoadInt( 3 ); break; // ldc.i4.3
+					case 0x1a: stack[++sp].LoadInt( 4 ); break; // ldc.i4.4
+					case 0x1b: stack[++sp].LoadInt( 5 ); break; // ldc.i4.5
+					case 0x1c: stack[++sp].LoadInt( 6 ); break; // ldc.i4.6
+					case 0x1d: stack[++sp].LoadInt( 7 ); break; // ldc.i4.7
+					case 0x1e: stack[++sp].LoadInt( 8 ); break; // ldc.i4.8
 
-					case 0x1f: stack[sp++].LoadInt( (sbyte)byteCode[pc++] ); break; // ldc.i4.s <int8>
-					case 0x20: stack[sp++].LoadInt( (int)BytecodeAsU32( ref pc ) ); break; // ldc.i4 <int32>
-					case 0x21: stack[sp++].LoadLong( (long)BytecodeAs64( ref pc ) ); break; // ldc.i8 <int64>
-					case 0x22: stack[sp++].LoadFloat( CilboxUtil.IntFloatConverter.ConvertUtoF(BytecodeAsU32( ref pc ) ) ); break; // ldc.r4 <float32 (num)>
-					case 0x23: stack[sp++].LoadDouble( CilboxUtil.IntFloatConverter.ConvertEtoD(BytecodeAs64( ref pc ) ) ); break; // ldc.r8 <float64 (num)>
+					case 0x1f: stack[++sp].LoadInt( (sbyte)byteCode[pc++] ); break; // ldc.i4.s <int8>
+					case 0x20: stack[++sp].LoadInt( (int)BytecodeAsU32( ref pc ) ); break; // ldc.i4 <int32>
+					case 0x21: stack[++sp].LoadLong( (long)BytecodeAs64( ref pc ) ); break; // ldc.i8 <int64>
+					case 0x22: stack[++sp].LoadFloat( CilboxUtil.IntFloatConverter.ConvertUtoF(BytecodeAsU32( ref pc ) ) ); break; // ldc.r4 <float32 (num)>
+					case 0x23: stack[++sp].LoadDouble( CilboxUtil.IntFloatConverter.ConvertEtoD(BytecodeAs64( ref pc ) ) ); break; // ldc.r8 <float64 (num)>
 					// 0x24 does not exist.
-					case 0x25: stack[sp] = stack[sp-1]; sp++; break; // dup TODO: Does dup potentially duplicate objects somehow?
+					case 0x25: stack[sp+1] = stack[sp]; sp++; break; // dup TODO: Does dup potentially duplicate objects somehow?
 					case 0x26: sp--; break; // pop
 
 					case 0x27: //jmp
@@ -557,7 +557,7 @@ namespace Cilbox
 					case 0x73: //newobj
 					case 0x6F: //callvirt
 					{
-						uint bc = (b == 0x29) ? stack[--sp].u : BytecodeAsU32( ref pc );
+						uint bc = (b == 0x29) ? stack[sp--].u : BytecodeAsU32( ref pc );
 						object iko = null; // Returned value.
 						CilMetadataTokenInfo dt = box.metadatas[bc];
 
@@ -588,20 +588,20 @@ namespace Cilbox
 
 							//Debug.Log( $"Getting values {numParams} {sp} {targetMethod.isStatic}" );
 							for( int i = numParams - 1; i >= 0; i-- )
-								cparameters[i+staticOffset] = stack[--sp];
+								cparameters[i+staticOffset] = stack[sp--];
 
 							if( !targetMethod.isStatic )
-								cparameters[0] = stack[--sp];
+								cparameters[0] = stack[sp--];
 
 							if( !isVoid )
-								stack[sp++] = targetMethod.InterpretInner( cparameters );
+								stack[++sp] = targetMethod.InterpretInner( cparameters );
 							else
 								targetMethod.InterpretInner( cparameters );
 
 							if( b == 0x27 )
 							{
 								// This is returning from a jump, so immediately abort.
-								if( isVoid ) stack[sp++] = StackElement.nil; /// ?? Please check me! If wrong, fix above, too.
+								if( isVoid ) stack[++sp] = StackElement.nil; /// ?? Please check me! If wrong, fix above, too.
 								cont = false;
 							}
 
@@ -622,7 +622,7 @@ namespace Cilbox
 							int ik;
 							for( ik = 0; ik < numFields; ik++ )
 							{
-								StackElement se = stack[--sp];
+								StackElement se = stack[sp--];
 								callpar_se[numFields-ik-1] = se;
 								object o = se.AsObject();
 								Type t = pa[ik].ParameterType;
@@ -659,7 +659,7 @@ namespace Cilbox
 							else if( !st.IsStatic )
 							{
 								MethodInfo mi = (MethodInfo)st;
-								StackElement seorig = stack[--sp];
+								StackElement seorig = stack[sp--];
 								StackElement se = StackElement.ResolveToStackElement( seorig );
 								Type t = mi.DeclaringType;
 
@@ -700,12 +700,12 @@ namespace Cilbox
 
 							if( !isVoid )
 							{
-								stack[sp++].Load( iko );
+								stack[++sp].Load( iko );
 							}
 							if( b == 0x27 )
 							{
 								// This is returning from a jump, so immediately abort.
-								if( isVoid ) stack[sp++] = StackElement.nil; /// ?? Please check me! If wrong, fix above, too.
+								if( isVoid ) stack[++sp] = StackElement.nil; /// ?? Please check me! If wrong, fix above, too.
 								cont = false;
 							}
 						}
@@ -720,7 +720,7 @@ namespace Cilbox
 					case 0x2c: case 0x39: // brfalse.s, brnull.s, brzero.s - is it zero, null or  / brfalse
 					case 0x2d: case 0x3a: // brinst.s, brtrue.s / btrue
 					{
-						StackElement s = stack[--sp];
+						StackElement s = stack[sp--];
 						int iop = b - 0x2c;
 						if( b >= 0x38 ) iop -= 0xd;
 						int offset = (b >= 0x38) ? (int)BytecodeAsU32( ref pc ) : (sbyte)byteCode[pc++];
@@ -743,7 +743,7 @@ namespace Cilbox
 					case 0x36: case 0x43: // ble.un.s
 					case 0x37: case 0x44: // blt.un.s
 					{
-						StackElement sb = stack[--sp]; StackElement sa = stack[--sp];
+						StackElement sb = stack[sp--]; StackElement sa = stack[sp--];
 						int iop = b - 0x2e;
 						if( b >= 0x38 ) iop -= 0xd;
 						int joffset = (b >= 0x38) ? (int)BytecodeAsU32( ref pc ) : (sbyte)byteCode[pc++];
@@ -835,7 +835,7 @@ namespace Cilbox
 						int nsw = (int)BytecodeAsU32( ref pc );
 						int startpc = pc;
 						pc += nsw * 4;
-						StackElement s = stack[--sp];
+						StackElement s = stack[sp--];
 						if( s.type > StackType.Ulong )
 							throw new ( "Stack type invalid for switch statement" );
 
@@ -853,85 +853,85 @@ namespace Cilbox
 					case 0x5E: case 0x5F: case 0x60: case 0x61: case 0x62: case 0x63:
 					case 0x64:
 					{
-						StackElement sb = stack[--sp];
-						StackElement sa = stack[--sp];
+						StackElement sb = stack[sp--];
+						StackElement sa = stack[sp];
 						StackType promoted = StackTypeMaxPromote( sa.type, sb.type );
 
-						switch( b )
+						switch( b-0x58 )
 						{
-							case 0x58: // Add
+							case 0: // Add
 								switch( promoted )
 								{
-									case StackType.Int:		stack[sp++].LoadInt( sa.i + sb.i ); break;
-									case StackType.Uint:	stack[sp++].LoadUint( sa.u + sb.u ); break;
-									case StackType.Long:	stack[sp++].LoadLong( sa.l + sb.l ); break;
-									case StackType.Ulong:	stack[sp++].LoadUlong( sa.e + sb.e ); break;
-									case StackType.Float:	stack[sp++].LoadFloat( sa.f + sb.f ); break;
-									case StackType.Double:	stack[sp++].LoadDouble( sa.d + sb.d ); break;
+									case StackType.Int:		stack[sp].LoadInt( sa.i + sb.i ); break;
+									case StackType.Uint:	stack[sp].LoadUint( sa.u + sb.u ); break;
+									case StackType.Long:	stack[sp].LoadLong( sa.l + sb.l ); break;
+									case StackType.Ulong:	stack[sp].LoadUlong( sa.e + sb.e ); break;
+									case StackType.Float:	stack[sp].LoadFloat( sa.f + sb.f ); break;
+									case StackType.Double:	stack[sp].LoadDouble( sa.d + sb.d ); break;
 								} break;
-							case 0x59: // Sub
+							case 1: // Sub
 								switch( promoted )
 								{
-									case StackType.Int:		stack[sp++].LoadInt( sa.i - sb.i ); break;
-									case StackType.Uint:	stack[sp++].LoadUint( sa.u - sb.u ); break;
-									case StackType.Long:	stack[sp++].LoadLong( sa.l - sb.l ); break;
-									case StackType.Ulong:	stack[sp++].LoadUlong( sa.e - sb.e ); break;
-									case StackType.Float:	stack[sp++].LoadFloat( sa.f - sb.f ); break;
-									case StackType.Double:	stack[sp++].LoadDouble( sa.d - sb.d ); break;
+									case StackType.Int:		stack[sp].LoadInt( sa.i - sb.i ); break;
+									case StackType.Uint:	stack[sp].LoadUint( sa.u - sb.u ); break;
+									case StackType.Long:	stack[sp].LoadLong( sa.l - sb.l ); break;
+									case StackType.Ulong:	stack[sp].LoadUlong( sa.e - sb.e ); break;
+									case StackType.Float:	stack[sp].LoadFloat( sa.f - sb.f ); break;
+									case StackType.Double:	stack[sp].LoadDouble( sa.d - sb.d ); break;
 								} break;
-							case 0x5A: // Mul
+							case 2: // Mul
 								switch( promoted )
 								{
-									case StackType.Int:		stack[sp++].LoadInt( sa.i * sb.i ); break;
-									case StackType.Uint:	stack[sp++].LoadUint( sa.u * sb.u ); break;
-									case StackType.Long:	stack[sp++].LoadLong( sa.l * sb.l ); break;
-									case StackType.Ulong:	stack[sp++].LoadUlong( sa.e * sb.e ); break;
-									case StackType.Float:	stack[sp++].LoadFloat( sa.f * sb.f ); break;
-									case StackType.Double:	stack[sp++].LoadDouble( sa.d * sb.d ); break;
+									case StackType.Int:		stack[sp].LoadInt( sa.i * sb.i ); break;
+									case StackType.Uint:	stack[sp].LoadUint( sa.u * sb.u ); break;
+									case StackType.Long:	stack[sp].LoadLong( sa.l * sb.l ); break;
+									case StackType.Ulong:	stack[sp].LoadUlong( sa.e * sb.e ); break;
+									case StackType.Float:	stack[sp].LoadFloat( sa.f * sb.f ); break;
+									case StackType.Double:	stack[sp].LoadDouble( sa.d * sb.d ); break;
 								} break;
-							case 0x5B: // Div
+							case 3: // Div
 								switch( promoted )
 								{
-									case StackType.Int:		stack[sp++].LoadInt( sa.i / sb.i ); break;
-									case StackType.Uint:	stack[sp++].LoadUint( sa.u / sb.u ); break;
-									case StackType.Long:	stack[sp++].LoadLong( sa.l / sb.l ); break;
-									case StackType.Ulong:	stack[sp++].LoadUlong( sa.e / sb.e ); break;
-									case StackType.Float:	stack[sp++].LoadFloat( sa.f / sb.f ); break;
-									case StackType.Double:	stack[sp++].LoadDouble( sa.d / sb.d ); break;
+									case StackType.Int:		stack[sp].LoadInt( sa.i / sb.i ); break;
+									case StackType.Uint:	stack[sp].LoadUint( sa.u / sb.u ); break;
+									case StackType.Long:	stack[sp].LoadLong( sa.l / sb.l ); break;
+									case StackType.Ulong:	stack[sp].LoadUlong( sa.e / sb.e ); break;
+									case StackType.Float:	stack[sp].LoadFloat( sa.f / sb.f ); break;
+									case StackType.Double:	stack[sp].LoadDouble( sa.d / sb.d ); break;
 								} break;
-							case 0x5C: // Div.un
+							case 4: // Div.un
 								switch( promoted )
 								{
-									case StackType.Int:		stack[sp++].LoadUint( sa.u / sb.u ); break;
-									case StackType.Uint:	stack[sp++].LoadUint( sa.u / sb.u ); break;
-									case StackType.Long:	stack[sp++].LoadUlong( sa.e / sb.e ); break;
-									case StackType.Ulong:	stack[sp++].LoadUlong( sa.e / sb.e ); break;
+									case StackType.Int:		stack[sp].LoadUint( sa.u / sb.u ); break;
+									case StackType.Uint:	stack[sp].LoadUint( sa.u / sb.u ); break;
+									case StackType.Long:	stack[sp].LoadUlong( sa.e / sb.e ); break;
+									case StackType.Ulong:	stack[sp].LoadUlong( sa.e / sb.e ); break;
 									default: Breakwarn( "Unexpected div.un instruction behavior", pc); break;
 								} break;
-							case 0x5D: // rem
+							case 5: // rem
 								switch( promoted )
 								{
-									case StackType.Int:		stack[sp++].LoadInt( sa.i % sb.i ); break;
-									case StackType.Uint:	stack[sp++].LoadUint( sa.u % sb.u ); break;
-									case StackType.Long:	stack[sp++].LoadLong( sa.l % sb.l ); break;
-									case StackType.Ulong:	stack[sp++].LoadUlong( sa.e % sb.e ); break;
+									case StackType.Int:		stack[sp].LoadInt( sa.i % sb.i ); break;
+									case StackType.Uint:	stack[sp].LoadUint( sa.u % sb.u ); break;
+									case StackType.Long:	stack[sp].LoadLong( sa.l % sb.l ); break;
+									case StackType.Ulong:	stack[sp].LoadUlong( sa.e % sb.e ); break;
 									default: Breakwarn( "Unexpected rem instruction behavior", pc); break;
 								} break;
-							case 0x5E: // rem.un
+							case 6: // rem.un
 								switch( promoted )
 								{
-									case StackType.Int:		stack[sp++].LoadUint( sa.u % sb.u ); break;
-									case StackType.Uint:	stack[sp++].LoadUint( sa.u % sb.u ); break;
-									case StackType.Long:	stack[sp++].LoadUlong( sa.e % sb.e ); break;
-									case StackType.Ulong:	stack[sp++].LoadUlong( sa.e % sb.e ); break;
+									case StackType.Int:		stack[sp].LoadUint( sa.u % sb.u ); break;
+									case StackType.Uint:	stack[sp].LoadUint( sa.u % sb.u ); break;
+									case StackType.Long:	stack[sp].LoadUlong( sa.e % sb.e ); break;
+									case StackType.Ulong:	stack[sp].LoadUlong( sa.e % sb.e ); break;
 									default: Breakwarn( "Unexpected rem.un instruction behavior", pc); break;
 								} break;
-							case 0x5F: stack[sp++].LoadUlongType( sa.e & sb.e, promoted ); break; // and
-							case 0x60: stack[sp++].LoadUlongType( sa.e | sb.e, promoted ); break; // or
-							case 0x61: stack[sp++].LoadUlongType( sa.e ^ sb.e, promoted ); break; // xor
-							case 0x62: stack[sp++].LoadUlongType( sa.e << sb.i, promoted ); break; // shl
-							case 0x63: stack[sp++].LoadLongType( sa.l >> sb.i, promoted ); break; // shr
-							case 0x64: stack[sp++].LoadUlongType( sa.e >> sb.i, promoted ); break; // shr.un
+							case 7: stack[sp].LoadUlongType( sa.e & sb.e, promoted ); break; // and
+							case 8: stack[sp].LoadUlongType( sa.e | sb.e, promoted ); break; // or
+							case 9: stack[sp].LoadUlongType( sa.e ^ sb.e, promoted ); break; // xor
+							case 10: stack[sp].LoadUlongType( sa.e << sb.i, promoted ); break; // shl
+							case 11: stack[sp].LoadLongType( sa.l >> sb.i, promoted ); break; // shr
+							case 12: stack[sp].LoadUlongType( sa.e >> sb.i, promoted ); break; // shr.un
 						}
 						break;
 					}
@@ -941,19 +941,19 @@ namespace Cilbox
 
 					// XXX TODO: Perf improvement, detect float-to-int conversions and fast-path them.
 					// C# Does not want you to blindly interpret these.
-					case 0x67: { StackElement se = stack[sp-1]; stack[sp-1].LoadSByte( ((se.type < StackType.Float) ? (sbyte)se.u  : (sbyte)se.CoerceToObject(typeof(sbyte))) ); break; } // conv.i1
-					case 0x68: { StackElement se = stack[sp-1]; stack[sp-1].LoadShort( ((se.type < StackType.Float) ? (short)se.i  : (short)se.CoerceToObject(typeof(short))) ); break; } // conv.i2
-					case 0x69: { StackElement se = stack[sp-1]; stack[sp-1].LoadInt(   ((se.type < StackType.Float) ? (int)se.i    : (int)se.CoerceToObject(typeof(int)))   ); break; } // conv.i4
-					case 0x6A: { StackElement se = stack[sp-1]; stack[sp-1].LoadLong(  ((se.type < StackType.Float) ? (long)se.l   : (long)se.CoerceToObject(typeof(long)))  ); break; } // conv.i8
-					case 0x6B: { StackElement se = stack[sp-1]; stack[sp-1].LoadFloat( ((se.type < StackType.Float) ? (float)se.l  : (float)se.CoerceToObject(typeof(float))) ); break; } // conv.r4
-					case 0x6C: { StackElement se = stack[sp-1]; stack[sp-1].LoadDouble(((se.type < StackType.Float) ? (double)se.l : (double)se.CoerceToObject(typeof(double)))); break; } // conv.r8
-					case 0xD1: { StackElement se = stack[sp-1]; stack[sp-1].LoadUshort(((se.type < StackType.Float) ? (ushort)se.u : (ushort)se.CoerceToObject(typeof(ushort)))); break; } // conv.u2
-					case 0xD2: { StackElement se = stack[sp-1]; stack[sp-1].LoadByte(  ((se.type < StackType.Float) ? (byte)se.u   : (byte)se.CoerceToObject(typeof(byte)))  ); break; } // conv.u1
+					case 0x67: { StackElement se = stack[sp]; stack[sp].LoadSByte( ((se.type < StackType.Float) ? (sbyte)se.u  : (sbyte)se.CoerceToObject(typeof(sbyte)))  ); break; } // conv.i1
+					case 0x68: { StackElement se = stack[sp]; stack[sp].LoadShort( ((se.type < StackType.Float) ? (short)se.i  : (short)se.CoerceToObject(typeof(short)))  ); break; } // conv.i2
+					case 0x69: { StackElement se = stack[sp]; stack[sp].LoadInt(   ((se.type < StackType.Float) ? (int)se.i    : (int)se.CoerceToObject(typeof(int)))      ); break; } // conv.i4
+					case 0x6A: { StackElement se = stack[sp]; stack[sp].LoadLong(  ((se.type < StackType.Float) ? (long)se.l   : (long)se.CoerceToObject(typeof(long)))    ); break; } // conv.i8
+					case 0x6B: { StackElement se = stack[sp]; stack[sp].LoadFloat( ((se.type < StackType.Float) ? (float)se.l  : (float)se.CoerceToObject(typeof(float)))  ); break; } // conv.r4
+					case 0x6C: { StackElement se = stack[sp]; stack[sp].LoadDouble(((se.type < StackType.Float) ? (double)se.l : (double)se.CoerceToObject(typeof(double)))); break; } // conv.r8
+					case 0xD1: { StackElement se = stack[sp]; stack[sp].LoadUshort(((se.type < StackType.Float) ? (ushort)se.u : (ushort)se.CoerceToObject(typeof(ushort)))); break; } // conv.u2
+					case 0xD2: { StackElement se = stack[sp]; stack[sp].LoadByte(  ((se.type < StackType.Float) ? (byte)se.u   : (byte)se.CoerceToObject(typeof(byte)))    ); break; } // conv.u1
 
 					case 0x72:
 					{
 						uint bc = BytecodeAsU32( ref pc );
-						stack[sp++].Load( box.metadatas[bc].Name );
+						stack[++sp].Load( box.metadatas[bc].Name );
 						break; //ldstr
 					}
 
@@ -961,10 +961,10 @@ namespace Cilbox
 					{
 						uint bc = BytecodeAsU32( ref pc );
 
-						StackElement se = stack[--sp];
+						StackElement se = stack[sp--];
 
 						if( se.o is CilboxProxy )
-							stack[sp++] = ((CilboxProxy)se.o).fields[box.metadatas[bc].fieldIndex];
+							stack[++sp] = ((CilboxProxy)se.o).fields[box.metadatas[bc].fieldIndex];
 						else
 							throw new Exception( "Unimplemented.  Attempting to get field on non-cilbox object" );
 						break; //ldfld
@@ -972,10 +972,10 @@ namespace Cilbox
 					case 0x7c:
 					{
 						uint bc = BytecodeAsU32( ref pc );
-						StackElement se = stack[--sp];
+						StackElement se = stack[sp--];
 
 						if( se.o is CilboxProxy )
-							stack[sp++] = StackElement.CreateReference( (Array)(((CilboxProxy)se.o).fields), (uint)box.metadatas[bc].fieldIndex );
+							stack[++sp] = StackElement.CreateReference( (Array)(((CilboxProxy)se.o).fields), (uint)box.metadatas[bc].fieldIndex );
 						else
 							throw new Exception( "Unimplemented.  Attempting to get field on non-cilbox object" );
 						break;// ldflda
@@ -983,8 +983,8 @@ namespace Cilbox
 					case 0x7d:
 					{
 						uint bc = BytecodeAsU32( ref pc );
-						StackElement se = stack[--sp];
-						object opths = stack[--sp].AsObject();
+						StackElement se = stack[sp--];
+						object opths = stack[sp--].AsObject();
 						if( opths is CilboxProxy )
 						{
 							((CilboxProxy)opths).fields[box.metadatas[bc].fieldIndex] = se;
@@ -997,51 +997,51 @@ namespace Cilbox
 					case 0x7e: 
 					{
 						uint bc = BytecodeAsU32( ref pc );
-						stack[sp++].Load( parentClass.staticFields[box.metadatas[bc].fieldIndex] );
+						stack[++sp].Load( parentClass.staticFields[box.metadatas[bc].fieldIndex] );
 						break; //ldsfld
 					}
 					case 0x80:
 					{
 						uint bc = BytecodeAsU32( ref pc );
-						parentClass.staticFields[box.metadatas[bc].fieldIndex] = stack[sp++].AsObject();
+						parentClass.staticFields[box.metadatas[bc].fieldIndex] = stack[++sp].AsObject();
 						break; //stsfld
 					}
 					case 0x8C: // box (This pulls off a type)
 					{
 						uint otyp = BytecodeAsU32( ref pc );
-						stack[sp-1].LoadObject( stack[sp-1].AsObject() );//(metaType.nativeType)stack[sp-1].AsObject();
+						stack[sp].LoadObject( stack[sp].AsObject() );//(metaType.nativeType)stack[sp-1].AsObject();
 						break; 
 					}
 					case 0x8d:
 					{
 						uint otyp = BytecodeAsU32( ref pc );
-						if( stack[sp-1].type > StackType.Ulong )
+						if( stack[sp].type > StackType.Ulong )
 							throw new Exception( "Invalid type, processing new array" );
-						int size = stack[sp-1].i;
+						int size = stack[sp].i;
 						Type t = box.metadatas[otyp].nativeType;
-						stack[sp-1].LoadObject( Array.CreateInstance( t, size ) );
+						stack[sp].LoadObject( Array.CreateInstance( t, size ) );
 						//newarr <etype>
 						break;
 					}
 					case 0x8e:
 					{
-						stack[sp-1].LoadInt( ((Array)(stack[sp-1].o)).Length );
+						stack[sp].LoadInt( ((Array)(stack[sp].o)).Length );
 						break; //ldlen
 					}
 					case 0x8f:
 					{
 						/*uint whichClass = */BytecodeAsU32( ref pc ); // (For now, ignored)
-						uint index = stack[--sp].u;
-						Array a = (Array)(stack[--sp].AsObject());
-						stack[sp++] = StackElement.CreateReference( a, index );
+						uint index = stack[sp--].u;
+						Array a = (Array)(stack[sp--].AsObject());
+						stack[++sp] = StackElement.CreateReference( a, index );
 						break; //ldlema
 					}
 					case 0x90: case 0x91: case 0x92: case 0x93: case 0x94:
 					case 0x95: case 0x96: case 0x97: case 0x98: case 0x99:
 					{
-						if( stack[sp-1].type > StackType.Uint ) throw new Exception( "Invalid index type" + stack[sp-1].type + " " + stack[sp-1].o );
-						int index = stack[--sp].i;
-						Array a = ((Array)(stack[--sp].o));
+						if( stack[sp].type > StackType.Uint ) throw new Exception( "Invalid index type" + stack[sp].type + " " + stack[sp].o );
+						int index = stack[sp--].i;
+						Array a = ((Array)(stack[sp].o));
 						switch( b - 0x90 )
 						{
 						case 0: stack[sp].LoadSByte( (sbyte)(a.GetValue( index )) ); break; // ldelem.i1
@@ -1055,51 +1055,50 @@ namespace Cilbox
 						case 8: stack[sp].LoadFloat( (float)(a.GetValue( index )) ); break; // ldelem.r4
 						case 9: stack[sp].LoadDouble( (double)(a.GetValue( index )) ); break; // ldelem.r8
 						}
-						sp++;
 						break;
 					}
 					case 0x9a:
 					{
-						if( stack[sp-1].type > StackType.Uint ) throw new Exception( "Invalid index type" + stack[sp-1].type + " " + stack[sp-1].o );
-						int index = stack[--sp].i;
-						Array a = ((Array)(stack[--sp].o));
-						stack[sp++].LoadObject( a.GetValue(index) );
+						if( stack[sp].type > StackType.Uint ) throw new Exception( "Invalid index type" + stack[sp].type + " " + stack[sp].o );
+						int index = stack[sp--].i;
+						Array a = ((Array)(stack[sp--].o));
+						stack[++sp].LoadObject( a.GetValue(index) );
 						break; //Ldelem_Ref
 					}
 					case 0x9c:
 					{
-						SByte val = (SByte)stack[--sp].i;
-						if( stack[sp-1].type > StackType.Uint ) throw new Exception( "Invalid index type" + stack[sp-1].type + " " + stack[sp-1].o );
-						int index = stack[--sp].i;
-						((Array)(stack[--sp].o)).SetValue( (byte)val, index );
+						SByte val = (SByte)stack[sp--].i;
+						if( stack[sp].type > StackType.Uint ) throw new Exception( "Invalid index type" + stack[sp].type + " " + stack[sp].o );
+						int index = stack[sp--].i;
+						((Array)(stack[sp--].o)).SetValue( (byte)val, index );
 						break; // stelem.i1
 					}
 					case 0xa0:
 					{
 						float val;
-						val = stack[--sp].f;
-						if( stack[sp-1].type > StackType.Uint ) throw new Exception( "Invalid index type" + stack[sp-1].type + " " + stack[sp-1].o );
-						int index = stack[--sp].i;
-						float [] array = (float[])stack[--sp].AsObject();
+						val = stack[sp--].f;
+						if( stack[sp].type > StackType.Uint ) throw new Exception( "Invalid index type" + stack[sp].type + " " + stack[sp].o );
+						int index = stack[sp--].i;
+						float [] array = (float[])stack[sp--].AsObject();
 						array[index] = val;
 						break; // stelem.r4
 					}
 					case 0xa2:
 					{
-						object val = stack[--sp].AsObject();
-						if( stack[sp-1].type > StackType.Uint ) throw new Exception( "Invalid index type" );
-						int index = stack[--sp].i;
-						object [] array = (object[])stack[--sp].AsObject();
+						object val = stack[sp--].AsObject();
+						if( stack[sp].type > StackType.Uint ) throw new Exception( "Invalid index type" );
+						int index = stack[sp--].i;
+						object [] array = (object[])stack[sp--].AsObject();
 						array[index] = val;
 						break; // stelem.ref
 					}
 					case 0xa4:
 					{
 						uint otyp = BytecodeAsU32( ref pc );
-						object val = stack[--sp].AsObject();
-						if( stack[sp-1].type > StackType.Uint ) throw new Exception( "Invalid index type" );
-						int index = stack[--sp].i;
-						object [] array = (object[])stack[--sp].AsObject();
+						object val = stack[sp--].AsObject();
+						if( stack[sp].type > StackType.Uint ) throw new Exception( "Invalid index type" );
+						int index = stack[sp--].i;
+						object [] array = (object[])stack[sp--].AsObject();
 						Type t = box.metadatas[otyp].nativeType;
 						array[index] = Convert.ChangeType( val, t );  // This shouldn't be type changing.s
 						break; // stelem
@@ -1110,7 +1109,7 @@ namespace Cilbox
 						CilMetadataTokenInfo metaType = box.metadatas[otyp];
 						if( metaType.nativeTypeIsStackType )
 						{
-							stack[sp-1].Unbox( stack[sp-1].AsObject(), metaType.nativeTypeStackType );
+							stack[sp].Unbox( stack[sp].AsObject(), metaType.nativeTypeStackType );
 						}
 						else
 						{
@@ -1134,7 +1133,7 @@ namespace Cilbox
 						default: throw new Exception( "Error: opcode 0xD0 called on token ID " + md.ToString( "X8" ) + " Which is not currently handled." );
 						}
 
-						stack[sp++].LoadObject( setType );
+						stack[++sp].LoadObject( setType );
 
 						break; // ldtoken <token>
 					}
@@ -1149,65 +1148,65 @@ namespace Cilbox
 						case 0x04:
 						case 0x05:
 						{
-							StackElement sb = stack[--sp];
-							StackElement sa = stack[--sp];
+							StackElement sb = stack[sp--];
+							StackElement sa = stack[sp];
 							StackType promoted = StackTypeMaxPromote( sa.type, sb.type );
 							switch( b )
 							{
 							case 0x01: // CEQ
 								switch( promoted )
 								{
-									case StackType.Boolean: stack[sp++].LoadInt( sa.i == sb.i ? 1 : 0 ); break;
-									case StackType.Int:		stack[sp++].LoadInt( sa.i == sb.i ? 1 : 0 ); break;
-									case StackType.Uint:	stack[sp++].LoadInt( sa.i == sb.i ? 1 : 0 ); break;
-									case StackType.Long:	stack[sp++].LoadInt( sa.l == sb.l ? 1 : 0 ); break;
-									case StackType.Ulong:	stack[sp++].LoadInt( sa.l == sb.l ? 1 : 0 ); break;
-									case StackType.Float:	stack[sp++].LoadInt( sa.f == sb.f ? 1 : 0 ); break;
-									case StackType.Double:	stack[sp++].LoadInt( sa.d == sb.d ? 1 : 0 ); break;
+									case StackType.Boolean: stack[sp].LoadInt( sa.i == sb.i ? 1 : 0 ); break;
+									case StackType.Int:		stack[sp].LoadInt( sa.i == sb.i ? 1 : 0 ); break;
+									case StackType.Uint:	stack[sp].LoadInt( sa.i == sb.i ? 1 : 0 ); break;
+									case StackType.Long:	stack[sp].LoadInt( sa.l == sb.l ? 1 : 0 ); break;
+									case StackType.Ulong:	stack[sp].LoadInt( sa.l == sb.l ? 1 : 0 ); break;
+									case StackType.Float:	stack[sp].LoadInt( sa.f == sb.f ? 1 : 0 ); break;
+									case StackType.Double:	stack[sp].LoadInt( sa.d == sb.d ? 1 : 0 ); break;
 									default: throw new Exception( $"CEQ Unimplemented type promotion ({promoted})" );
 								} break;
 							case 0x02: // CGT
 								switch( promoted )
 								{
-									case StackType.Int:		stack[sp++].LoadInt( sa.i > sb.i ? 1 : 0 ); break;
-									case StackType.Uint:	stack[sp++].LoadInt( sa.i > sb.i ? 1 : 0 ); break;
-									case StackType.Long:	stack[sp++].LoadInt( sa.l > sb.l ? 1 : 0 ); break;
-									case StackType.Ulong:	stack[sp++].LoadInt( sa.l > sb.l ? 1 : 0 ); break;
-									case StackType.Float:	stack[sp++].LoadInt( sa.f > sb.f ? 1 : 0 ); break;
-									case StackType.Double:	stack[sp++].LoadInt( sa.d > sb.d ? 1 : 0 ); break;
+									case StackType.Int:		stack[sp].LoadInt( sa.i > sb.i ? 1 : 0 ); break;
+									case StackType.Uint:	stack[sp].LoadInt( sa.i > sb.i ? 1 : 0 ); break;
+									case StackType.Long:	stack[sp].LoadInt( sa.l > sb.l ? 1 : 0 ); break;
+									case StackType.Ulong:	stack[sp].LoadInt( sa.l > sb.l ? 1 : 0 ); break;
+									case StackType.Float:	stack[sp].LoadInt( sa.f > sb.f ? 1 : 0 ); break;
+									case StackType.Double:	stack[sp].LoadInt( sa.d > sb.d ? 1 : 0 ); break;
 									default: throw new Exception( $"CEQ Unimplemented type promotion ({promoted})" );
 								} break;
 							case 0x03: // CGT.UN
 								switch( promoted )
 								{
-									case StackType.Int:		stack[sp++].LoadInt( sa.u > sb.u ? 1 : 0 ); break;
-									case StackType.Uint:	stack[sp++].LoadInt( sa.u > sb.u ? 1 : 0 ); break;
-									case StackType.Long:	stack[sp++].LoadInt( sa.e > sb.e ? 1 : 0 ); break;
-									case StackType.Ulong:	stack[sp++].LoadInt( sa.e > sb.e ? 1 : 0 ); break;
-									case StackType.Float:	stack[sp++].LoadInt( sa.f > sb.f ? 1 : 0 ); break;
-									case StackType.Double:	stack[sp++].LoadInt( sa.d > sb.d ? 1 : 0 ); break;
+									case StackType.Int:		stack[sp].LoadInt( sa.u > sb.u ? 1 : 0 ); break;
+									case StackType.Uint:	stack[sp].LoadInt( sa.u > sb.u ? 1 : 0 ); break;
+									case StackType.Long:	stack[sp].LoadInt( sa.e > sb.e ? 1 : 0 ); break;
+									case StackType.Ulong:	stack[sp].LoadInt( sa.e > sb.e ? 1 : 0 ); break;
+									case StackType.Float:	stack[sp].LoadInt( sa.f > sb.f ? 1 : 0 ); break;
+									case StackType.Double:	stack[sp].LoadInt( sa.d > sb.d ? 1 : 0 ); break;
 									default: throw new Exception( $"CEQ Unimplemented type promotion ({promoted})" );
 								} break;
 							case 0x04: // CLT
 								switch( promoted )
 								{
-									case StackType.Int:		stack[sp++].LoadInt( sa.i < sb.i ? 1 : 0 ); break;
-									case StackType.Uint:	stack[sp++].LoadInt( sa.i < sb.i ? 1 : 0 ); break;
-									case StackType.Long:	stack[sp++].LoadInt( sa.l < sb.l ? 1 : 0 ); break;
-									case StackType.Ulong:	stack[sp++].LoadInt( sa.l < sb.l ? 1 : 0 ); break;
-									case StackType.Float:	stack[sp++].LoadInt( sa.f < sb.f ? 1 : 0 ); break;
-									case StackType.Double:	stack[sp++].LoadInt( sa.d < sb.d ? 1 : 0 ); break;
+									case StackType.Int:		stack[sp].LoadInt( sa.i < sb.i ? 1 : 0 ); break;
+									case StackType.Uint:	stack[sp].LoadInt( sa.i < sb.i ? 1 : 0 ); break;
+									case StackType.Long:	stack[sp].LoadInt( sa.l < sb.l ? 1 : 0 ); break;
+									case StackType.Ulong:	stack[sp].LoadInt( sa.l < sb.l ? 1 : 0 ); break;
+									case StackType.Float:	stack[sp].LoadInt( sa.f < sb.f ? 1 : 0 ); break;
+									case StackType.Double:	stack[sp].LoadInt( sa.d < sb.d ? 1 : 0 ); break;
 									default: throw new Exception( $"CEQ Unimplemented type promotion ({promoted})" );
 								} break;
 							case 0x05: // CLT.UN
 								switch( promoted )
 								{
-									case StackType.Int:		stack[sp++].LoadInt( sa.u < sb.u ? 1 : 0 ); break;
-									case StackType.Uint:	stack[sp++].LoadInt( sa.u < sb.u ? 1 : 0 ); break;
-									case StackType.Long:	stack[sp++].LoadInt( sa.e < sb.e ? 1 : 0 ); break;
-									case StackType.Ulong:	stack[sp++].LoadInt( sa.e < sb.e ? 1 : 0 ); break;
-									case StackType.Float:	stack[sp++].LoadInt( sa.f < sb.f ? 1 : 0 ); break;
-									case StackType.Double:	stack[sp++].LoadInt( sa.d < sb.d ? 1 : 0 ); break;
+									case StackType.Int:		stack[sp].LoadInt( sa.u < sb.u ? 1 : 0 ); break;
+									case StackType.Uint:	stack[sp].LoadInt( sa.u < sb.u ? 1 : 0 ); break;
+									case StackType.Long:	stack[sp].LoadInt( sa.e < sb.e ? 1 : 0 ); break;
+									case StackType.Ulong:	stack[sp].LoadInt( sa.e < sb.e ? 1 : 0 ); break;
+									case StackType.Float:	stack[sp].LoadInt( sa.f < sb.f ? 1 : 0 ); break;
+									case StackType.Double:	stack[sp].LoadInt( sa.d < sb.d ? 1 : 0 ); break;
 									default: throw new Exception( $"CEQ Unimplemented type promotion ({promoted})" );
 								} break;
 							}
@@ -1256,7 +1255,7 @@ namespace Cilbox
 #if UNITY_EDITOR
 			perfMarkerInterpret.End();
 #endif
-			return ( sp == 0 ) ? StackElement.nil : stack[--sp];
+			return ( sp == -1 ) ? StackElement.nil : stack[sp--];
 		}
 
 		uint BytecodeAs16( ref int i )
