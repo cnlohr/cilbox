@@ -1428,7 +1428,7 @@ namespace Cilbox
 			if( initialized ) return;
 			initialized = true;
 			Debug.Log( "Cilbox Initialize" );
-			Debug.Log( "Metadata:" + assemblyData );
+			Debug.Log( "Metadata:" + assemblyData.Length );
 
 			OrderedDictionary assemblyRoot = CilboxUtil.DeserializeDict( assemblyData );
 			OrderedDictionary classData = CilboxUtil.DeserializeDict( (String)assemblyRoot["classes"] );
@@ -1685,6 +1685,8 @@ namespace Cilbox
 		//[PostProcessSceneAttribute (2)] This is actually called by IProcessSceneWithReport
 		public static void OnPostprocessScene() {
 
+			ProfilerMarker perf = new ProfilerMarker("Initial Setup"); perf.Begin();
+
 			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing();
 
 			Debug.Log( $"Postprocessing scene. Cilbox scripts to do: {allBehavioursThatNeedCilboxing.Length}" );
@@ -1704,10 +1706,14 @@ namespace Cilbox
 			StreamWriter CLog = File.CreateText( Application.dataPath + "/CilboxLog.txt" );
 			String typeLog = "";
 
+			perf.End(); perf = new ProfilerMarker( "Main Getting Types" ); perf.Begin();
+
 			foreach (Type type in proxyAssembly.GetTypes())
 			{
 				if( type.GetCustomAttributes(typeof(CilboxableAttribute), true).Length <= 0 )
 					continue;
+
+				ProfilerMarker perfType = new ProfilerMarker(type.ToString()); perfType.Begin();
 
 				OrderedDictionary methods = new OrderedDictionary();
 
@@ -1729,6 +1735,8 @@ namespace Cilbox
 							continue;
 						}
 
+						ProfilerMarker perfMethod = new ProfilerMarker(m.ToString()); perfMethod.Begin();
+
 						String methodName = m.Name;
 						OrderedDictionary MethodProps = new OrderedDictionary();
 						//CLog.WriteLine( type + " / " + m.Name );
@@ -1737,6 +1745,7 @@ namespace Cilbox
 						{
 							Debug.Log( $"NOTE: {m.Name} does not have a body" );
 							// Things like MemberwiseClone, etc.
+							perfMethod.End();
 							continue;
 						}
 
@@ -1935,11 +1944,15 @@ namespace Cilbox
 						MethodProps["fullSignature"] = m.ToString();
 
 						methods[methodName] = CilboxUtil.SerializeDict( MethodProps );
+						perfMethod.End();
 					}
 				}
 
 				allClassMethods[type.FullName] = methods;
+				perfType.End();
 			}
+
+			perf.End(); perf = new ProfilerMarker( "Secondary Getting Types" ); perf.Begin();
 
 			CLog.WriteLine( typeLog );
 
@@ -1950,6 +1963,8 @@ namespace Cilbox
 			{
 				if( type.GetCustomAttributes(typeof(CilboxableAttribute), true).Length <= 0 )
 					continue;
+
+				ProfilerMarker perfType = new ProfilerMarker(type.ToString()); perfType.Begin();
 
 				OrderedDictionary staticFields = new OrderedDictionary();
 				int sfid = 0;
@@ -1985,22 +2000,30 @@ namespace Cilbox
 				classProps["staticFields"] = CilboxUtil.SerializeDict( staticFields );
 				classProps["instanceFields"] = CilboxUtil.SerializeDict( instanceFields );
 				classes[type.FullName] = CilboxUtil.SerializeDict( classProps );
+				perfType.End();
 			}
+
+			perf.End(); perf = new ProfilerMarker( "Assembling" ); perf.Begin();
 
 			OrderedDictionary assemblyRoot = new OrderedDictionary();
 			assemblyRoot["classes"] = CilboxUtil.SerializeDict( classes );
 			assemblyRoot["metadata"] = CilboxUtil.SerializeDict( assemblyMetadata );
 
+			perf.End(); perf = new ProfilerMarker( "Logging Entries" ); perf.Begin();
 
 			foreach( DictionaryEntry v in assemblyMetadata )
 			{
 				CLog.WriteLine( v.Key + ": " + v.Value );
 			}
 
+			perf.End(); perf = new ProfilerMarker( "Serializing" ); perf.Begin();
+
 			String sAllAssemblyData = CilboxUtil.SerializeDict( assemblyRoot );
 
-			Cilbox [] se = Resources.FindObjectsOfTypeAll(typeof(Cilbox)) as Cilbox [];
 
+			perf.End(); perf = new ProfilerMarker( "Checking If Assembly Changed" ); perf.Begin();
+
+			Cilbox [] se = Resources.FindObjectsOfTypeAll(typeof(Cilbox)) as Cilbox [];
 			Cilbox tac;
 			if( se.Length != 0 )
 			{
@@ -2015,6 +2038,8 @@ namespace Cilbox
 				EditorUtility.SetDirty( tac );
 			}
 
+			perf.End(); perf = new ProfilerMarker( "Applying Assembly" ); perf.Begin();
+
 			if( bytecodeLength == 0 )
 			{
 				Debug.Log( "No bytecode available in this build. Falling back to last build." );
@@ -2023,21 +2048,15 @@ namespace Cilbox
 			{
 				tac.assemblyData = sAllAssemblyData;
 				tac.ForceReinit();
-				Debug.Log( "Outputting Assembly Data: " + sAllAssemblyData + " byteCode: " + bytecodeLength + " bytes " );
-
-				String wordWrapped = "";
-				var m = 0;
-				foreach( var c in sAllAssemblyData )
-				{
-					wordWrapped += c;
-					if( ++m % 76 == 0 ) wordWrapped += "\n\t";
-				}
-				CLog.WriteLine( "Outputting Assembly Data:\n" + wordWrapped + "\nbyteCode: " + bytecodeLength + " bytes " );
+				//Debug.Log( "Outputting Assembly Data: " + sAllAssemblyData + " byteCode: " + bytecodeLength + " bytes " );
+				CLog.WriteLine( "ByteCode: " + sAllAssemblyData.Length + " bytes " );
 			}
 
 			Dictionary< MonoBehaviour, CilboxProxy > refToProxyMap = new Dictionary< MonoBehaviour, CilboxProxy >();
 			List< MonoBehaviour > refProxiesOrig = new List< MonoBehaviour >();
 			List< CilboxProxy > refProxies = new List< CilboxProxy >();
+
+			perf.End(); perf = new ProfilerMarker( "Updating Game Objects" ); perf.Begin();
 
 			// Iterate over all GameObjects, and find the ones that have Cilboxable scripts.
 			object[] obj = GameObject.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
@@ -2061,6 +2080,7 @@ namespace Cilbox
 					refToProxyMap[m] = p;
 				}
 			}
+			perf.End(); perf = new ProfilerMarker( "Setting Up Proxies" ); perf.Begin();
 
 			var cnt = refProxies.Count;
 			for( var i = 0; i < cnt; i++ )
@@ -2071,11 +2091,13 @@ namespace Cilbox
 				p.SetupProxy( tac, m, refToProxyMap );
 			}
 
+			perf.End(); perf = new ProfilerMarker( "Destroying Silboxable Scripts" ); perf.Begin();
 			// re-attach the refrences to 
 			foreach (MonoBehaviour m in allBehavioursThatNeedCilboxing)
 			{
 				UnityEngine.Object.DestroyImmediate( m );
 			}
+			perf.End();
 		}
 	}
 	#endif

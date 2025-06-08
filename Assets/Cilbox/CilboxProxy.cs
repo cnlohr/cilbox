@@ -28,7 +28,7 @@ namespace Cilbox
 		{
 			this.box = box;
 			this.className = mToSteal.GetType().ToString();
-			Debug.Log( $"CilboxProxy.ctor() ClassName:{className} Box:{box}" );
+			//Debug.Log( $"CilboxProxy.ctor() ClassName:{className} Box:{box}" );
 
 			box.BoxInitialize();
 			cls = box.GetClass( className );
@@ -120,7 +120,7 @@ namespace Cilbox
 
 		public void RuntimeProxyLoad()
 		{
-			Debug.Log( "Runtime Proxy Load " + proxyWasSetup + " " + transform.name + " " + className );
+			//Debug.Log( "Runtime Proxy Load " + proxyWasSetup + " " + transform.name + " " + className );
 			if( proxyWasSetup ) return;
 
 			cls = box.GetClass( className );

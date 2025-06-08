@@ -25,8 +25,10 @@
  * Figure out where "The referenced script (Unknown) on this Behaviour is missing!" is coming from.
 
 ## TODO
- * Make GetNativeTypeFromName so that we serialize the generic arguments to type.
- * Use Harmony or something to prevent execution of original script .ctor and Awake() i.e. near `CilboxScenePostprocessor` https://github.com/MerlinVR/UdonSharp/blob/master/Packages/com.merlin.UdonSharp/Editor/UdonSharpEditorManager.cs#L145
+ * Use a different serialization mechanism. (Preferably size/text)
+ * ~~Make GetNativeTypeFromName so that we serialize the generic arguments to type.~~
+ * Find all references in the scene to the original scripts, and port them over to the proxy scripts.
+ * ~~Possibly use Harmony or something to prevent execution of original script .ctor and Awake() i.e. near `CilboxScenePostprocessor` https://github.com/MerlinVR/UdonSharp/blob/master/Packages/com.merlin.UdonSharp/Editor/UdonSharpEditorManager.cs#L145~~
  * Support ref.
  * Fixup arithmatic functions to do the right thing.
  * Do the rest of the opcodes.
