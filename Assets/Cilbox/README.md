@@ -25,17 +25,16 @@
  * Figure out where "The referenced script (Unknown) on this Behaviour is missing!" is coming from.
 
 ## TODO
+ * Write filter system to allow for security to host functions.
  * Use a different serialization mechanism. (Preferably size/text)
  * ~~Make GetNativeTypeFromName so that we serialize the generic arguments to type.~~
  * Find all references in the scene to the original scripts, and port them over to the proxy scripts.
  * ~~Possibly use Harmony or something to prevent execution of original script .ctor and Awake() i.e. near `CilboxScenePostprocessor` https://github.com/MerlinVR/UdonSharp/blob/master/Packages/com.merlin.UdonSharp/Editor/UdonSharpEditorManager.cs#L145~~
- * Support ref.
- * Fixup arithmatic functions to do the right thing.
+ * Test support for ref.
+ * Optimize
  * Do the rest of the opcodes.
  * Write a good version of `DeserializeDataForProxyField` that can handle various data types, like Vector3, etc...
- * Make it so you can access fields from the proxy object, like "transform" etc.
- * Make it so you can call other functions within the emulated environment.
- * Add a bunch more opcodes.
+ * Make it so you can access non-proxy object fields in other gameobjects (selectively)
  * Need types to also be searched out and destroyed, for things like unbox, etc.  So we need a new section in metadata for types.
  * WRITE LOTS OF TESTS
 

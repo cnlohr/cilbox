@@ -499,9 +499,9 @@ namespace Cilbox
 					}
 
 // For itty bitty profiling.
-//int xicopy = pc; CilboxUtil.OpCodes.OpCode opcx = CilboxUtil.OpCodes.ReadOpCode ( byteCode, ref xicopy );
-//ProfilerMarker pfm = new ProfilerMarker(opcx.ToString());
-//pfm.Begin();
+int xicopy = pc; CilboxUtil.OpCodes.OpCode opcx = CilboxUtil.OpCodes.ReadOpCode ( byteCode, ref xicopy );
+ProfilerMarker pfm = new ProfilerMarker(opcx.ToString());
+pfm.Begin();
 
 					pc++;
 					switch( b )
@@ -1234,7 +1234,7 @@ namespace Cilbox
 							throw new Exception( "Infinite Loop @ " + pc + " In " + methodName + " (Timeout ticks: " + elapsed + "/" + Cilbox.timeoutLengthTicks + " )" );
 						}
 					}
-//pfm.End();
+pfm.End();
 				}
 				while( cont );
 			}
