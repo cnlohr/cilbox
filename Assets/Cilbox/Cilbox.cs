@@ -1457,6 +1457,8 @@ namespace Cilbox
 
 		public static Type GetNativeTypeFromName( String typeName )
 		{
+			// XXX SECURITY: DECIDE HERE IF THIS TYPE IS OKAY FOR THE CLIENT TO HAVE.
+
 			Type ret = Type.GetType( typeName );
 			if( ret != null ) return ret;
 
@@ -1471,6 +1473,8 @@ namespace Cilbox
 
 		public static Type[] TypeNamesToArrayOfNativeTypes( String [] parameterNames )
 		{
+			// XXX SECURITY: DECIDE HERE IF A GIVEN NATIVE TYPE GROUP
+
 			if( parameterNames == null ) return null;
 			Type[] ret = new Type[parameterNames.Length];
 			for( int i = 0; i < parameterNames.Length; i++ )
@@ -1483,6 +1487,9 @@ namespace Cilbox
 
 		MethodBase GetNativeMethodFromTypeAndName( Type declaringType, String name, Type [] parameters, String [] genericArguments, String fullSignature )
 		{
+			// XXX SECURITY: DECIDE HERE IF A GIVEN METHOD IS OK
+
+
 			// XXX Can we combine Constructor + Method?
 			MethodBase m = declaringType.GetMethod(
 				name,
@@ -1646,10 +1653,6 @@ namespace Cilbox
 					}
 					else
 					{
-						// Function call
-						// TODO: Apply security rules here.
-						// (Or a please explode, for instance if you violate security rules)
-
 						Type declaringType = GetNativeTypeFromName( declaringTypeName );
 						if( declaringType == null )
 						{
