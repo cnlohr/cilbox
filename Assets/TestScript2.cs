@@ -9,12 +9,17 @@ public class TestScript2 : MonoBehaviour
 
 	public Dictionary<String,int> test;
 
+	public float[] datafloat = { 0.125f, 0.25f, 0.5f, 1.0f };
+	public int[] dataint = {0x3e000000, 0x3e800000, 0x3f000000, 0x3f800000};
+
 	void Start()
 	{
 		test = new Dictionary<String,int>();
 		test["hello"] = 5;
 		test["world"] = 6;
 		Debug.Log( $"{test["hello"]} {test["world"]}" );
+		Debug.Log(datafloat[2]); // 0.5
+		Debug.Log(dataint[2]); // 1056964608
 	}
 
 	public void AnotherThing()
