@@ -47,6 +47,12 @@ Ideally the world could have a `Cilbox` and an avatar could also have a `Cilbox`
    * `TypeNamesToArrayOfNativeTypes`
    * `GetNativeMethodFromTypeAndName`
 
+### Things you can't do (At least not today)
+ * You cannot have arrays of properties on your object, for instance an array of GameObjects.  Each property must be a regular property.
+ * You cannot arbitrarily add an externally accessable method to your script. For instance, you cannot add your script to Unity UI and select a function that is not available in the `CilboxProxy`
+ * It will be tricky to allow compound types for security reasons.
+ * You can't currently reference fields of objects outside Cilbox, but you can access properties that have getters/setters.
+
 ## Cleanup
  * Clean up the `GetConstructors` code to use `GetConstructor` but we need access to the modifiers.
  * Improve the definitions for serializing the list of data for Methods, Fields, and Strings in the `assemblyRoot["metadata"]`. Maybe encapsulate again.  
