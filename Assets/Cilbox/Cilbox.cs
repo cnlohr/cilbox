@@ -213,7 +213,7 @@ namespace Cilbox
 			public StackElement LoadSByte( sbyte s ) { this.i = (int)s; type = StackType.Sbyte; return this; }
 			public StackElement LoadByte( uint u ) { this.u = u; type = StackType.Byte; return this; }
 			public StackElement LoadShort( short s ) { this.i = (int)s; type = StackType.Short; return this; }
-			public StackElement LoadUshort( uint u ) { this.u = u; type = StackType.Ushort; return this; }
+			public StackElement LoadUshort( ushort u ) { this.u = u; type = StackType.Ushort; return this; }
 			public StackElement LoadInt( int i ) { this.i = i; type = StackType.Int; return this; }
 			public StackElement LoadUint( uint u ) { this.u = u; type = StackType.Uint; return this; }
 			public StackElement LoadLong( long l ) { this.l = l; type = StackType.Long; return this; }
@@ -465,6 +465,20 @@ namespace Cilbox
 			StackElement [] stack = new StackElement[MaxStackSize];
 			StackElement [] localVars = new StackElement[methodLocals.Length];
 
+			bool bDeepDebug = false;
+			// Uncomment for debugging.
+
+/*
+			if( fullSignature.Contains( "initializeSlider" ) )
+			{
+				bDeepDebug = true;
+				String parmSt = ""; for( int sk = 0; sk < parameters.Length; sk++ ) {
+					parmSt += "/"; parmSt += parameters[sk].AsObject() + "+" + parameters[sk].type;
+				}
+				Debug.Log( "***** FUNCTION ENTRY " + parentClass.className + " " + methodName + " PARM:" + parmSt);
+				bDeepDebug = true;
+			}
+*/
 			int sp = 0;
 			bool cont = true;
 			int ctr = 0;
@@ -476,18 +490,20 @@ namespace Cilbox
 					//Debug.Log( "PC@"+pc+"/"+byteCode.Length);
 					byte b = byteCode[pc];
 
-					bool bDeepDebug = false;
 					// Uncomment for debugging.
-					//if( fullSignature.Contains( "exec" ) )
-					//{
-					//	String stackSt = ""; for( int sk = 0; sk < stack.Length; sk++ ) { stackSt += "/"; if( sk == sp-1 ) stackSt += ">"; stackSt += stack[sk].AsObject() + "+" + stack[sk].type; if( sk == sp-1 ) stackSt += "<"; }
-					//	int icopy = pc; CilboxUtil.OpCodes.OpCode opc = CilboxUtil.OpCodes.ReadOpCode ( byteCode, ref icopy );
-					//	Debug.Log( "Bytecode " + opc + " (" + b.ToString("X2") + ") @ " + pc + "/" + byteCode.Length + " " + stackSt);
-					//	bDeepDebug = true;
-					//}
+					if( bDeepDebug )
+					{
+						String stackSt = ""; for( int sk = 0; sk < stack.Length; sk++ ) { stackSt += "/"; if( sk == sp-1 ) stackSt += ">"; stackSt += stack[sk].AsObject() + "+" + stack[sk].type; if( sk == sp-1 ) stackSt += "<"; }
+						int icopy = pc; CilboxUtil.OpCodes.OpCode opc = CilboxUtil.OpCodes.ReadOpCode ( byteCode, ref icopy );
+						Debug.Log( "Bytecode " + opc + " (" + b.ToString("X2") + ") @ " + pc + "/" + byteCode.Length + " " + stackSt);
+					}
+
+// For itty bitty profiling.
+//int xicopy = pc; CilboxUtil.OpCodes.OpCode opcx = CilboxUtil.OpCodes.ReadOpCode ( byteCode, ref xicopy );
+//ProfilerMarker pfm = new ProfilerMarker(opcx.ToString());
+//pfm.Begin();
 
 					pc++;
-
 					switch( b )
 					{
 					case 0x00: break; // nop
@@ -530,7 +546,7 @@ namespace Cilbox
 					case 0x20: stack[sp++].LoadInt( (int)BytecodeAsU32( ref pc ) ); break; // ldc.i4 <int32>
 					case 0x21: stack[sp++].LoadLong( (long)BytecodeAs64( ref pc ) ); break; // ldc.i8 <int64>
 					case 0x22: stack[sp++].LoadFloat( CilboxUtil.IntFloatConverter.ConvertUtoF(BytecodeAsU32( ref pc ) ) ); break; // ldc.r4 <float32 (num)>
-					case 0x23: stack[sp++].LoadDouble( CilboxUtil.IntFloatConverter.ConvertEtoD(BytecodeAs64( ref pc ) ) ); break; // ldc.r4 <float32 (num)>
+					case 0x23: stack[sp++].LoadDouble( CilboxUtil.IntFloatConverter.ConvertEtoD(BytecodeAs64( ref pc ) ) ); break; // ldc.r8 <float64 (num)>
 					// 0x24 does not exist.
 					case 0x25: stack[sp] = stack[sp-1]; sp++; break; // dup TODO: Does dup potentially duplicate objects somehow?
 					case 0x26: sp--; break; // pop
@@ -566,10 +582,12 @@ namespace Cilbox
 							}
 							int staticOffset = (targetMethod.isStatic?0:1);
 							int numParams = targetMethod.signatureParameters.Length;
+
+							// TODO: Remove this somehow?
 							StackElement [] cparameters = new StackElement[numParams + staticOffset];
 
 							//Debug.Log( $"Getting values {numParams} {sp} {targetMethod.isStatic}" );
-							for( int i = 0; i < numParams; i++ )
+							for( int i = numParams - 1; i >= 0; i-- )
 								cparameters[i+staticOffset] = stack[--sp];
 
 							if( !targetMethod.isStatic )
@@ -921,12 +939,16 @@ namespace Cilbox
 					case 0x65: stack[sp].l = -stack[sp].l; break;
 					case 0x66: stack[sp].e ^= 0xffffffffffffffff; break;
 
-					case 0x67: stack[sp-1].LoadByte( (byte)stack[sp-1].CoerceToObject( typeof(sbyte)) ); break; // conv.i1
-					case 0x68: stack[sp-1].LoadShort( (short)stack[sp-1].CoerceToObject(typeof(short))); break; // conv.i2
-					case 0x69: stack[sp-1].LoadInt( (int)stack[sp-1].CoerceToObject(typeof(int)) ); break; // conv.i4
-					case 0x6A: stack[sp-1].LoadLong( (long)stack[sp-1].CoerceToObject(typeof(long)) ); break; // conv.i8
-					case 0x6B: stack[sp-1].LoadFloat( (float)stack[sp-1].CoerceToObject(typeof(float)) ); break; // conv.r4
-					case 0x6C: stack[sp-1].LoadDouble( (double)stack[sp-1].CoerceToObject(typeof(double)) ); break; // conv.r8
+					// XXX TODO: Perf improvement, detect float-to-int conversions and fast-path them.
+					// C# Does not want you to blindly interpret these.
+					case 0x67: { StackElement se = stack[sp-1]; stack[sp-1].LoadSByte( ((se.type < StackType.Float) ? (sbyte)se.u  : (sbyte)se.CoerceToObject(typeof(sbyte))) ); break; } // conv.i1
+					case 0x68: { StackElement se = stack[sp-1]; stack[sp-1].LoadShort( ((se.type < StackType.Float) ? (short)se.i  : (short)se.CoerceToObject(typeof(short))) ); break; } // conv.i2
+					case 0x69: { StackElement se = stack[sp-1]; stack[sp-1].LoadInt(   ((se.type < StackType.Float) ? (int)se.i    : (int)se.CoerceToObject(typeof(int)))   ); break; } // conv.i4
+					case 0x6A: { StackElement se = stack[sp-1]; stack[sp-1].LoadLong(  ((se.type < StackType.Float) ? (long)se.l   : (long)se.CoerceToObject(typeof(long)))  ); break; } // conv.i8
+					case 0x6B: { StackElement se = stack[sp-1]; stack[sp-1].LoadFloat( ((se.type < StackType.Float) ? (float)se.l  : (float)se.CoerceToObject(typeof(float))) ); break; } // conv.r4
+					case 0x6C: { StackElement se = stack[sp-1]; stack[sp-1].LoadDouble(((se.type < StackType.Float) ? (double)se.l : (double)se.CoerceToObject(typeof(double)))); break; } // conv.r8
+					case 0xD1: { StackElement se = stack[sp-1]; stack[sp-1].LoadUshort(((se.type < StackType.Float) ? (ushort)se.u : (ushort)se.CoerceToObject(typeof(ushort)))); break; } // conv.u2
+					case 0xD2: { StackElement se = stack[sp-1]; stack[sp-1].LoadByte(  ((se.type < StackType.Float) ? (byte)se.u   : (byte)se.CoerceToObject(typeof(byte)))  ); break; } // conv.u1
 
 					case 0x72:
 					{
@@ -939,10 +961,10 @@ namespace Cilbox
 					{
 						uint bc = BytecodeAsU32( ref pc );
 
-						object opths = stack[--sp].AsObject();
+						StackElement se = stack[--sp];
 
-						if( opths is CilboxProxy )
-							stack[sp++].Load( ((CilboxProxy)opths).fields[box.metadatas[bc].fieldIndex] );
+						if( se.o is CilboxProxy )
+							stack[sp++] = ((CilboxProxy)se.o).fields[box.metadatas[bc].fieldIndex];
 						else
 							throw new Exception( "Unimplemented.  Attempting to get field on non-cilbox object" );
 						break; //ldfld
@@ -950,10 +972,10 @@ namespace Cilbox
 					case 0x7c:
 					{
 						uint bc = BytecodeAsU32( ref pc );
-						object opths = stack[--sp].AsObject();
+						StackElement se = stack[--sp];
 
-						if( opths is CilboxProxy )
-							stack[sp++] = StackElement.CreateReference( (Array)(((CilboxProxy)opths).fields), (uint)box.metadatas[bc].fieldIndex );
+						if( se.o is CilboxProxy )
+							stack[sp++] = StackElement.CreateReference( (Array)(((CilboxProxy)se.o).fields), (uint)box.metadatas[bc].fieldIndex );
 						else
 							throw new Exception( "Unimplemented.  Attempting to get field on non-cilbox object" );
 						break;// ldflda
@@ -961,11 +983,12 @@ namespace Cilbox
 					case 0x7d:
 					{
 						uint bc = BytecodeAsU32( ref pc );
-						object o = stack[--sp].AsObject();
+						StackElement se = stack[--sp];
 						object opths = stack[--sp].AsObject();
 						if( opths is CilboxProxy )
 						{
-							((CilboxProxy)opths).fields[box.metadatas[bc].fieldIndex] = o;
+							((CilboxProxy)opths).fields[box.metadatas[bc].fieldIndex] = se;
+							//Debug.Log( "Type: " + ((CilboxProxy)opths).fields[box.metadatas[bc].fieldIndex].type );
 						}
 						else
 							throw new Exception( "Unimplemented.  Attempting to set field on non-cilbox object" );
@@ -1115,8 +1138,6 @@ namespace Cilbox
 
 						break; // ldtoken <token>
 					}
-					case 0xD1: stack[sp-1].LoadUshort( (ushort)stack[sp-1].CoerceToObject(typeof(ushort)) ); break; // conv.u2
-					case 0xD2: stack[sp-1].LoadByte( (byte)stack[sp-1].CoerceToObject(typeof(byte)) ); break; // conv.u1
 
 					case 0xfe: // Extended opcodes
 						b = byteCode[pc++];
@@ -1214,6 +1235,7 @@ namespace Cilbox
 							throw new Exception( "Infinite Loop @ " + pc + " In " + methodName + " (Timeout ticks: " + elapsed + "/" + Cilbox.timeoutLengthTicks + " )" );
 						}
 					}
+//pfm.End();
 				}
 				while( cont );
 			}

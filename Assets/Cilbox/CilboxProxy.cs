@@ -10,7 +10,7 @@ namespace Cilbox
 {
 	public class CilboxProxy : MonoBehaviour
 	{
-		public object [] fields;
+		public CilboxMethod.StackElement [] fields;
 		public UnityEngine.Object [] fieldsObjects;
 		public bool [] isFieldsObject;
 
@@ -120,12 +120,13 @@ namespace Cilbox
 
 		public void RuntimeProxyLoad()
 		{
+			Debug.Log( "Runtime Proxy Load " + proxyWasSetup + " " + transform.name + " " + className );
 			if( proxyWasSetup ) return;
 
 			cls = box.GetClass( className );
 			// Populate fields[]
 
-			fields = new object[cls.instanceFieldNames.Length];
+			fields = new CilboxMethod.StackElement[cls.instanceFieldNames.Length];
 
 			// Call interpreted constructor.
 			box.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
@@ -134,6 +135,7 @@ namespace Cilbox
 
 			for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
 			{
+				//Debug.Log( $"isObject: {isFieldsObject[i]} name {cls.instanceFieldNames[i]} Is Object: {fields[i] is object}  typ {cls.instanceFieldTypes[i]}" );
 				if( isFieldsObject[i] )
 				{
 					UnityEngine.Object o = fieldsObjects[i];
@@ -141,18 +143,18 @@ namespace Cilbox
 					{
 						if( o is CilboxProxy )
 							((CilboxProxy)o).RuntimeProxyLoad();
-						fields[i] = fieldsObjects[i];
+						fields[i].Load( fieldsObjects[i] );
 					}
 				}
-				else if( ! (fields[i] is object) )
+				else if( ! (fields[i] is object) ) // Has the constructor already filled it out?
 				{
 					String cfn = cls.instanceFieldNames[i];
 					object v = d[cfn];
 					if( v != null )
 					{
 						String fieldValue = (String)v;
-						Debug.Log( $"Deserializing: {cfn} from {fieldValue} type {cls.instanceFieldTypes[i]}" );
-						fields[i] = CilboxUtil.DeserializeDataForProxyField( cls.instanceFieldTypes[i], fieldValue );
+						//Debug.Log( $"Deserializing: {cfn} from {fieldValue} type {cls.instanceFieldTypes[i]}" );
+						fields[i].Load( CilboxUtil.DeserializeDataForProxyField( cls.instanceFieldTypes[i], fieldValue ) );
 					}
 					else
 					{
@@ -161,7 +163,7 @@ namespace Cilbox
 						Type t = cls.instanceFieldTypes[i];
 						if( t.IsValueType )
 						{
-							fields[i] = Activator.CreateInstance( t );
+							fields[i].Load( Activator.CreateInstance( t ) );
 						}
 					}
 				}
@@ -174,9 +176,12 @@ namespace Cilbox
 		}
 
 		void Start()  {
-			Debug.Log( "Starting Proxy: " + transform.name + " " + className );
 			box.BoxInitialize(); // In case it is not yet initialized.
-			if( string.IsNullOrEmpty( className ) ) return;
+			if( string.IsNullOrEmpty( className ) )
+			{
+				Debug.LogError( "Class name not set" );
+				return;
+			}
 
 			RuntimeProxyLoad();
 		}
