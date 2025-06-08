@@ -6,7 +6,7 @@
 
 The performance is surprisingly high for something that is written in C# and not JITting.
 
-Performance has been tested on Synergiance's 6502 emulator.  It is able to just barely hit 2MHz in-system. While running the 6502, the rate that this system executes CIL insturctions is about 168 MHz, when targeting IL2CPP in Unity 6.1.2f1 running on a 9950X3D.
+Performance has been tested on Synergiance's 6502 emulator.  It is able to just barely hit `2MHz` in-system. While running the 6502, verses about `240MHz` native, the rate that this system executes CIL insturctions is about `168 MHz`, when targeting IL2CPP in Unity 6.1.2f1 running on a 9950X3D.
 
 ## Security Disclaimer
 
