@@ -62,7 +62,7 @@ namespace Cilbox
 			{ "System.Int64", StackType.Long },
 			{ "System.UInt64", StackType.Ulong },
 			{ "System.Single", StackType.Float },
-			{ "System.Dobule", StackType.Double },
+			{ "System.Double", StackType.Double },
 			{ "object", StackType.Object } };
 
 		public StackElement Load( object o )
@@ -574,7 +574,6 @@ namespace Cilbox
 						uint bc = (b == 0x29) ? stackBuffer[sp--].u : BytecodeAsU32( ref pc );
 						object iko = null; // Returned value.
 						CilMetadataTokenInfo dt = box.metadatas[bc];
-
 						bool isVoid = false;
 						MethodBase st;
 
@@ -1153,18 +1152,21 @@ namespace Cilbox
 					{
 						uint md = BytecodeAsU32( ref pc ); // Let's hope that somehow this isn't needed?
 						CilMetadataTokenInfo mi = box.metadatas[md];
-						Type setType = null;
+						object loadedObject = null;
 						switch( mi.type )
 						{
 						case MetaTokenType.mtField: // Get type of field.
-							setType = mi.fieldIsStatic ?
+							loadedObject = mi.fieldIsStatic ?
 								parentClass.staticFieldTypes[mi.fieldIndex] :
 								parentClass.instanceFieldTypes[mi.fieldIndex];
+							break;
+						case MetaTokenType.mtArrayInitializer: // Get type of field.
+							loadedObject = mi.arrayInitializerData;
 							break;
 						default: throw new Exception( "Error: opcode 0xD0 called on token ID " + md.ToString( "X8" ) + " Which is not currently handled." );
 						}
 
-						stackBuffer[++sp].LoadObject( setType );
+						stackBuffer[++sp].LoadObject( loadedObject );
 
 						break; // ldtoken <token>
 					}
@@ -1392,6 +1394,21 @@ namespace Cilbox
 		}
 	}
 
+	public class CilboxPublicUtils
+	{
+		public static void InitializeArray(Array arr, byte[] initializer)
+		{
+			if (initializer == null || arr == null)
+			{
+				throw new Exception( "Error, array or initializer are null" );
+			}
+			if (initializer.Length != System.Runtime.InteropServices.Marshal.SizeOf(arr.GetType().GetElementType()) * arr.Length) {
+				throw new Exception( "InitializeArray requires identical array byte length " + initializer.Length );
+			}
+			Buffer.BlockCopy(initializer, 0, arr, 0, initializer.Length);
+		}
+	}
+
 	public class CilMetadataTokenInfo
 	{
 		public CilMetadataTokenInfo( MetaTokenType type, String [] fields ) { this.type = type; this.fields = fields; }
@@ -1403,6 +1420,8 @@ namespace Cilbox
 		public Type nativeType; // Used for types.
 		public bool nativeTypeIsStackType;
 		public StackType nativeTypeStackType;
+
+		public byte[] arrayInitializerData;
 
 		// Todo handle interpreted types.
 		public bool isNative;
@@ -1425,6 +1444,7 @@ namespace Cilbox
 		mtField = 4,
 		mtString = 0x70,
 		mtMethod = 10,
+		mtArrayInitializer = 13, // Made-up type. 13 is unused in HandleKind.
 	}
 
 	public class Cilbox : MonoBehaviour
@@ -1458,7 +1478,16 @@ namespace Cilbox
 		public static Type GetNativeTypeFromName( String typeName )
 		{
 			// XXX SECURITY: DECIDE HERE IF THIS TYPE IS OKAY FOR THE CLIENT TO HAVE.
-
+			if (typeName.Equals(typeof(System.Runtime.CompilerServices.RuntimeHelpers).FullName)) {
+				// Rewrite RuntimeHelpers.InitializeArray() class name.
+				// This probably should move somewhere else if we add sandboxing.
+				typeName = typeof(CilboxPublicUtils).FullName;
+			}
+			if (typeName.Equals(typeof(System.RuntimeFieldHandle).FullName)) {
+				// Rewrite RuntimeHelpers.InitializeArray() second argument.
+				// This probably should move somewhere else if we add sandboxing.
+				typeName = typeof(byte[]).FullName;
+			}
 			Type ret = Type.GetType( typeName );
 			if( ret != null ) return ret;
 
@@ -1582,6 +1611,10 @@ namespace Cilbox
 				if( metatype == MetaTokenType.mtString )
 				{
 					t.Name = st[1];
+				}
+				else if( metatype == MetaTokenType.mtArrayInitializer )
+				{
+					t.arrayInitializerData = Convert.FromBase64String(st[1]);
 				}
 				else if( metatype == MetaTokenType.mtField && st.Length > 5 )
 				{
@@ -1883,14 +1916,28 @@ namespace Cilbox
 										switch( operand>>24 )
 										{
 										case 0x04:
-											throw new Exception( "Exception decoding opcode at address (someone has to write this " + operand.ToString("X8") + ") " + i + " in " + m.Name + "\n" + asm );
-											//ot = CilboxUtil.OpCodes.OperandType.InlineField;
+											if( !assemblyMetadataReverseOriginal.TryGetValue( (int)operand, out writebackToken ) )
+											{
+												writebackToken = mdcount;
+												// Special <PrivateImplementationDetails>+__StaticArrayInitTypeSize=24 instance.
+												FieldInfo rf = proxyAssembly.ManifestModule.ResolveField( (int)operand );
+												// Extract raw bytes from initializer type
+												byte[] bytes = new byte[System.Runtime.InteropServices.Marshal.SizeOf(rf.FieldType)];
+												GCHandle h = GCHandle.Alloc(rf.GetValue(null), GCHandleType.Pinned);
+												Marshal.Copy(h.AddrOfPinnedObject(), bytes, 0, bytes.Length);
+												h.Free();
+												// Now, encode our array initializer to base64.
+												String inlineString = ((int)MetaTokenType.mtArrayInitializer) + "\t" + Convert.ToBase64String(bytes);
+												originalMetaToFriendlyName[mdcount] = rf.Name;
+												assemblyMetadata[(mdcount++).ToString()] = inlineString;
+											}
+											asm += "\t" + originalMetaToFriendlyName[writebackToken];
+											break;
 										default:
 											throw new Exception( "Exception decoding opcode at address (confusing meta " + operand.ToString("X8") + ") " + i + " in " + m.Name + "\n" + asm );
 										}
 									}
-
-									if( ot == CilboxUtil.OpCodes.OperandType.InlineSwitch )
+									else if( ot == CilboxUtil.OpCodes.OperandType.InlineSwitch )
 									{
 										asm += $" Switch {operand} cases";
 										int oin;
