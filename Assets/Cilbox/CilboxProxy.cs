@@ -10,7 +10,7 @@ namespace Cilbox
 {
 	public class CilboxProxy : MonoBehaviour
 	{
-		public CilboxMethod.StackElement [] fields;
+		public StackElement [] fields;
 		public UnityEngine.Object [] fieldsObjects;
 		public bool [] isFieldsObject;
 
@@ -126,7 +126,7 @@ namespace Cilbox
 			cls = box.GetClass( className );
 			// Populate fields[]
 
-			fields = new CilboxMethod.StackElement[cls.instanceFieldNames.Length];
+			fields = new StackElement[cls.instanceFieldNames.Length];
 
 			// Call interpreted constructor.
 			box.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
@@ -146,6 +146,9 @@ namespace Cilbox
 						fields[i].Load( fieldsObjects[i] );
 					}
 				}
+#if false
+				// What is this even for anyway?????
+
 				else if( ! (fields[i] is object) ) // Has the constructor already filled it out?
 				{
 					String cfn = cls.instanceFieldNames[i];
@@ -167,6 +170,7 @@ namespace Cilbox
 						}
 					}
 				}
+#endif
 			}
 
 			box.InterpretIID( cls, this, ImportFunctionID.Awake, null ); // Does this go before or after initialized fields.

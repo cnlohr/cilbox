@@ -5,8 +5,13 @@
 ### Cilbox has
  * `CilboxableAttribute` So you can add `[Cilboxable]` to your class as an attribute that will tell Cilbox to emulate it.
  * `CilboxProxy` - The MonoBehaviour that replaces your script.
- * `CilboxClass` - for holding information about classes that are being overridden.
  * `Cilbox` - A static thing for managing the whole system.
+
+### Cilbox internally uses
+ * `CilboxMethod` - for holding information about classes that are being overridden.
+ * `CilboxClass` - for holding information about classes that are being overridden.
+ * `StackElement` - a generic "object" like thing that can be written into/altered/etc, without needing to box/unbox/etc.
+ * 
 
 ### The general approach
 1. You mark your class as `[Cilboxable]`
@@ -25,9 +30,8 @@
  * Figure out where "The referenced script (Unknown) on this Behaviour is missing!" is coming from.
 
 ## TODO
- * Cleanup non-internal calls.  Current code is garbage.
  * Validate that you are working with int's more
- * Consider force-cleaning-up .o's when loading StackElements.
+ * Consider force-cleaning-up .o's when loading StackElements. << Ok, I really think we should do that.
  * Write filter system to allow for security to host functions.
  * Use a different serialization mechanism. (Preferably size/text).  The current one DOMINATES build / startup time.
  * ~~Make GetNativeTypeFromName so that we serialize the generic arguments to type.~~
