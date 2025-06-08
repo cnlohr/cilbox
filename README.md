@@ -50,6 +50,7 @@ Ideally the world could have a `Cilbox` and an avatar could also have a `Cilbox`
 ### Things you can't do (At least not today)
  * You cannot have arrays of properties on your object, for instance an array of GameObjects.  Each property must be a regular property.
  * You cannot arbitrarily add an externally accessable method to your script. For instance, you cannot add your script to Unity UI and select a function that is not available in the `CilboxProxy`
+ * It is unlikely any form of reflection would be possible, because, it would be extremely difficult to secure.
  * It will be tricky to allow compound types for security reasons.
  * You can't currently reference fields of objects outside Cilbox, but you can access properties that have getters/setters.
 
