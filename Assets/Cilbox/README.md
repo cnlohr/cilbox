@@ -25,13 +25,17 @@
  * Figure out where "The referenced script (Unknown) on this Behaviour is missing!" is coming from.
 
 ## TODO
+ * Cleanup non-internal calls.  Current code is garbage.
+ * Validate that you are working with int's more
+ * Consider force-cleaning-up .o's when loading StackElements.
  * Write filter system to allow for security to host functions.
- * Use a different serialization mechanism. (Preferably size/text)
+ * Use a different serialization mechanism. (Preferably size/text).  The current one DOMINATES build / startup time.
  * ~~Make GetNativeTypeFromName so that we serialize the generic arguments to type.~~
  * Find all references in the scene to the original scripts, and port them over to the proxy scripts.
  * ~~Possibly use Harmony or something to prevent execution of original script .ctor and Awake() i.e. near `CilboxScenePostprocessor` https://github.com/MerlinVR/UdonSharp/blob/master/Packages/com.merlin.UdonSharp/Editor/UdonSharpEditorManager.cs#L145~~
  * Test support for ref.
  * Optimize
+   * trick the ldelem.* functions to fast-path if the array type is StackElement[]
  * Do the rest of the opcodes.
  * Write a good version of `DeserializeDataForProxyField` that can handle various data types, like Vector3, etc...
  * Make it so you can access non-proxy object fields in other gameobjects (selectively)
