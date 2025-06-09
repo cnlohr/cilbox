@@ -14,6 +14,220 @@ using System.Reflection;
 
 namespace Cilbox
 {
+	public class Serializee
+	{
+		private Memory<byte> buffer;
+		private ElementType e;
+
+		// TODO: Version 2: Use a string dictionary.
+		// lsb 0..2 = # of bytes to describe length or # of elements (Bytes little endian) Only #'s 0..6 are valid.
+		//     3..5 = Type
+		//       0: Invalid
+		//       1: String
+		//       2: List
+		//       3: Map
+
+		public enum ElementType
+		{
+			Invalid = 0,
+			String = 1,
+			List = 2,
+			Map = 3,
+		};
+
+		public Serializee( byte[] data )
+		{
+			e = ElementType.Invalid;
+			buffer = data;
+		}
+
+		public Serializee( Memory<byte> bufferIn, ElementType eIn ) { buffer = bufferIn; e = eIn; }
+
+		public Serializee( String str )
+		{
+			int len = System.Text.Encoding.UTF8.GetByteCount( str );
+			byte lenBytes = ComputeLengthBytes( len );
+			byte[] bytes = new byte[len + 1 + lenBytes];
+			System.Text.Encoding.UTF8.GetBytes( str, 0, str.Length, bytes, 1 + lenBytes );
+			bytes[0] = (byte)(lenBytes | ((int)(ElementType.String)<<3));
+			buffer = new Memory<byte>(bytes);
+			FillBytesWithLength( len, lenBytes, buffer.Span.Slice(1) );
+			e = ElementType.String;
+		}
+
+		public Serializee( String [] listIn )
+		{
+			Serializee [] lst = new Serializee[listIn.Length];
+			for( int i = 0; i < lst.Length; i++ )
+				lst[i] = new Serializee( listIn[i] );
+			SetAsList( lst );
+		}
+
+		public Serializee( Serializee[] list )
+		{
+			SetAsList( list );
+		}
+
+		public Serializee( Dictionary<String, Serializee> dict )
+		{
+			Serializee [] serOut = new Serializee[dict.Count*2];
+			int n = 0;
+			int len = 1;
+			foreach( KeyValuePair< String, Serializee > k in dict )
+			{
+				Serializee s = new Serializee( k.Key );
+				serOut[n++] = s;
+				len += s.buffer.Length;
+
+				serOut[n++] = k.Value;
+				len += k.Value.buffer.Length;
+			}
+			SetAsList( serOut, ElementType.Map );
+		}
+
+		void SetAsList( Serializee[] list, ElementType intendedType = ElementType.List )
+		{
+			int len = 1;
+			for( int i = 0; i < list.Length; i++ )
+				len += list[i].buffer.Length;
+			byte lenBytes = ComputeLengthBytes( len );
+			len += lenBytes;
+			byte [] bytes = new byte[len];
+			bytes[0] = (byte)(lenBytes | (((byte)ElementType.List)<<3));
+			buffer = new Memory<byte>(bytes);
+			FillBytesWithLength( len, lenBytes, buffer.Span.Slice(1) );
+			int place = 1 + lenBytes;
+			for( int i = 0; i < list.Length; i++ )
+				place += list[i].SpliceInto( buffer.Span.Slice(place) );
+			e = intendedType;
+		}
+
+
+		public String AsString()
+		{
+			int l = buffer.Span[0];
+			int lenBytes = l & 0x7;
+			ElementType typ = (ElementType)((l>>3)&7);
+			if( typ != ElementType.String ) throw new Exception( $"Fault, got {typ} expected String" );
+			return System.Text.Encoding.UTF8.GetString( buffer.Span.Slice( lenBytes+1 ) );
+		}
+
+		public Serializee[] AsArray( ElementType intendedType = ElementType.List )
+		{
+			int ofs = 0;
+			(int elems, ElementType type) = PullInfo( buffer.Span, ref ofs );
+			if( type != intendedType ) throw new Exception( "Unpack List called on non-list element" );
+			Serializee[] ret = new Serializee[elems];
+			for( int i = 0; i < elems; i++ )
+				ret[i] = Pull( buffer, ref ofs );
+			return ret;
+		}
+
+		public Dictionary<String, Serializee> AsMap()
+		{
+			Dictionary<String, Serializee> ret = new Dictionary<String, Serializee>();
+			Serializee[] lst = AsArray( ElementType.Map );
+			for( int i = 0; i < lst.Length; i+=2 )
+			{
+				ret[lst[i+0].ToString()] = lst[i+1];
+			}
+			return ret;
+		}
+
+		public String[] AsStringArray()
+		{
+			Serializee[] lst = AsArray();
+			String[] ret = new String[lst.Length];
+			for( int i = 0; i < lst.Length; i++ )
+				ret[i] = lst[i].ToString();
+			return ret;
+		}
+
+		public Dictionary< String, String > AsStringMap()
+		{
+			Dictionary<String, String> ret = new Dictionary<String, String>();
+			Serializee[] lst = AsArray( ElementType.Map );
+			for( int i = 0; i < lst.Length; i+=2 )
+				ret[lst[i+0].ToString()] = lst[i+1].ToString();
+			return ret;
+		}
+
+		public String DumpAsString() { return System.Text.Encoding.ASCII.GetString(buffer.Span); }
+		static public Serializee CreateFromByteBuffer( byte[] buf )
+		{
+			Serializee ret = new Serializee();
+			ret.buffer = new Memory<byte>(buf);
+			return ret;
+		}
+
+		static public Serializee CreateFromString( String buf ) 
+		{
+			return CreateFromByteBuffer( System.Text.Encoding.ASCII.GetBytes(buf) );
+		}
+
+		// Serialization Helpers
+		private int SpliceInto( Span<byte> si )
+		{
+			buffer.Span.CopyTo( si );
+			return si.Length;
+		}
+
+		private byte ComputeLengthBytes( int len )
+		{
+			byte ret = 0;
+			do
+			{
+				if( len == 0 ) return ret;
+				len >>= 8;
+				ret++;
+			} while( ret < 6 );
+			throw new Exception( "Invalid ComputeLengthBytes" );
+		}
+
+		private void FillBytesWithLength( int length, int lengthBytes, Span<byte> sp )
+		{
+			if( lengthBytes > 6 ) throw new Exception( "Invalid FillBytesWithLength" );
+			for( int i = 0; i < lengthBytes; i++ )
+			{
+				sp[i] = (byte)(length&0xff);
+				length >>= 8;
+			}
+		}
+
+		// Deserialization Helpers
+		private (int, ElementType) PullInfo( Span<byte> b, ref int i )
+		{
+			if( buffer.Length <= 0 ) return ( 0, 0 );
+			byte bl = b[i++]; // info byte
+			int len = 0;
+			int lend = i + bl & 0x7;
+
+			for( int j = 0; j < lend; j++ )
+				len |= b[i++] << (j*8);
+
+			return (len, (ElementType)((bl>>3)&0x7) );
+		}
+
+		// Pull off a "thing" from the bitstream.  Return is the span, -6 = string, otherwise # of elements.
+		private Serializee Pull( Memory<byte> b, ref int i )
+		{
+			Span<byte> sb = b.Span;
+			if( buffer.Length <= 0 ) new Serializee( null, ElementType.Invalid );
+			byte bl = sb[i++]; // info byte
+			int len = 0;
+			int lend = i + bl & 0x7;
+			int ebcnt = (bl>>3) & 0x7;
+
+			for( int j = 0; j < lend; j++ )
+				len |= sb[i++] << (j * 8);
+
+			int iBeforeAdd = i;
+			i += len;
+			return new Serializee( b.Slice( iBeforeAdd, len ), (ElementType)len );
+		}
+	}
+	
+
 	public static class CilboxUtil
 	{
 		static public object DeserializeDataForProxyField( Type t, String sInitialize )
@@ -72,181 +286,6 @@ namespace Cilbox
 			if( c > '9' ) c = (char)( c + 'a' - '9' - 1);
 			return "" + c;
 		}
-		static public String Escape( String s )
-		{
-			String ret = "";
-			foreach( char c in s )
-			{
-				if( c == '\\' )
-					ret += "\\\\";
-				else if( c == '\t' )
-					ret += "\\t";
-				else if( c == '\n' )
-					ret += "\\n";
-				else if( c > 0x7f || c < 20 )
-					ret += "\\" + HexFromNum( c>>12 ) + HexFromNum( c >> 8 ) + HexFromNum( c >> 4 ) + HexFromNum( c >> 0 );
-				else
-					ret += c;
-			}
-			return ret;
-		}
-		static public String ParseString( String s, ref int pos, ref int poserror )
-		{
-			String ret = "";
-			int hexmode = 0;
-			int hexchar = 0;
-			for( ; pos < s.Length; pos++ )
-			{
-				char c = s[pos];
-				if( hexmode != 0 )
-				{
-					//Debug.Log( "TEX: " + (int)c + "/" + hexmode );
-					if( c == '\\' && hexmode == 1 )
-					{
-						ret += (char)'\\';
-						hexchar = 0; hexmode = 0;
-					}
-					else if( c == 't' && hexmode == 1 )
-					{
-						ret += (char)'\t';
-						hexchar = 0; hexmode = 0;
-					}
-					else if( c == 'n' && hexmode == 1 )
-					{
-						ret += (char)'\n';
-						hexchar = 0; hexmode = 0;
-					}
-					else
-					{
-						hexchar = hexchar << 4;
-						int v = IntFromHexChar( c );
-						if( v < 0 ) break;
-						hexchar |= v;
-						hexmode++;
-						if( hexmode == 4 )
-						{
-							ret += (char)hexchar;
-							hexchar = 0;
-							hexmode = 0;
-						}
-					}
-				}
-				else
-				{
-					//Debug.Log( c + " " + (c == '\t' || c == '\n') );
-					if( c == '\\' )
-						hexmode = 1;
-					else if( c == '\t' || c == '\n' )
-						break;
-					else
-						ret += c;
-				}
-			}
-			if( hexmode != 0 )
-			{
-				poserror = pos;
-			}
-			//Debug.Log( "PAX: " + poserror + " / " + hexmode );
-			return ret;
-		}
-
-		static public String SerializeDict( OrderedDictionary dict )
-		{
-			String ret = "";
-			foreach( DictionaryEntry s in dict )
-			{
-				ret += "\t" + Escape((String)s.Key) + "\t" + Escape((String)s.Value);
-			}
-			return ret + "\n";
-		}
-
-		static public String SerializeArray( String [] arr )
-		{
-			String ret = "";
-			int i;
-			for( i = 0; i < arr.Length; i++ )
-			{
-				ret += Escape(arr[i]);
-				if( i < arr.Length-1 ) ret += "\t";
-			}
-			return ret;
-		}
-
-		static public String [] DeserializeArray( String s )
-		{
-			if( s == null ) return new String[0];
-			int poserror = -1;
-			int pos = 0;
-			List< String > ret = new List< String >();
-			poserror = -1;
-			bool lastWasTab = false;
-			for( ; pos < s.Length; pos++ )
-			{
-				char c = s[pos];
-				if( c == '\n' ) break;
-				ret.Add( ParseString( s, ref pos, ref poserror ) );
-				if( poserror >= 0 )
-					break;
-				if( pos < s.Length && s[pos] == '\t' )
-					lastWasTab = true;
-				else
-					lastWasTab = false;
-			}
-			if( lastWasTab ) ret.Add( "" );
-
-			if( poserror >= 0 )
-			{
-				Debug.LogError( $"Erorr parsing dictionary at char {poserror}\n{s}" );
-			}
-			return ret.ToArray();
-		}
-
-		// \tkey\tvalue\tkey\tvalue\tkey\tvalue\n
-		static public OrderedDictionary DeserializeDict( String s )
-		{
-			if( s == null ) return null;
-			OrderedDictionary ret = new OrderedDictionary();
-			int poserror = -1;
-			int pos = 0;
-			int mode = 0;
-			String key = "";
-			poserror = -1;
-
-			for( ; pos < s.Length; pos++ )
-			{
-				char c = s[pos];
-				if( mode == 0 )
-				{
-					//Debug.Log( "NEXT" + (int)c );
-					if( c == '\n' ) { pos++; break; }
-					else if( c == '\t' ) { /* OK */ }
-					else { poserror = pos; break; }
-				}
-				else if( mode == 1 )
-				{
-					key = ParseString( s, ref pos, ref poserror );
-					pos--;
-				}
-				else if( mode == 2 )
-				{
-					if( c != '\t' ) { poserror = pos; break; }
-				}
-				else if( mode == 3 )
-				{
-					ret[key] = ParseString( s, ref pos, ref poserror );
-					pos--;
-				}
-				mode = (mode+1) % 4;
-				if( poserror >= 0 )
-					break;
-			}
-			if( poserror >= 0 )
-			{
-				Debug.LogError( $"Erorr parsing dictionary at char {poserror} ({s})" );
-			}
-			return ret;
-		}
-
 
 		public static ulong BytecodePullLiteral( byte[] byteCode, ref int i, int len )
 		{

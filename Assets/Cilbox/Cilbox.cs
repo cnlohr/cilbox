@@ -370,27 +370,26 @@ namespace Cilbox
 		ProfilerMarker perfMarkerInterpret;
 #endif
 
-		public void Load( CilboxClass cclass, String name, String payload )
+		public void Load( CilboxClass cclass, String name, Serializee payload )
 		{
 			methodName = name;
 			parentClass = cclass;
-			OrderedDictionary methodProps = CilboxUtil.DeserializeDict( payload );
+			Dictionary<String, Serializee> methodProps = payload.AsMap();
 
-			var vl = CilboxUtil.DeserializeDict( (String)methodProps["locals"] );
-			methodLocals = new String[vl.Count];
-			methodLocalTypes = new String[vl.Count];
+			Serializee [] vl = methodProps["locals"].AsArray();
+			methodLocals = new String[vl.Length];
+			methodLocalTypes = new String[vl.Length];
 			int iid = 0;
-			foreach( DictionaryEntry ln in vl )
+			for( int i = 0; i < vl.Length; i++ )
 			{
-				methodLocals[iid] = (String)ln.Key;
-				methodLocalTypes[iid] = (String)ln.Key;
+				Dictionary< String, String > local = vl[i].AsStringMap();
+				methodLocals[iid] = local["name"];
+				methodLocalTypes[iid] = local["type"];
 			}
 
-			var pl = (String)methodProps["body"];
+			var pl = methodProps["body"].ToString();
 			int bl = pl.Length/2;
 			byteCode = new byte[bl];
-
-			//Debug.Log( methodName + " " + pl );
 			for( int i = 0; i < bl; i++ )
 			{
 				int v = CilboxUtil.IntFromHexChar( pl[i*2+0] );
@@ -402,18 +401,20 @@ namespace Cilbox
 				byteCode[i] = b;
 			}
 
-			MaxStackSize = Convert.ToInt32(((String)methodProps["maxStack"]));
-			isVoid = Convert.ToInt32(((String)methodProps["isVoid"])) != 0;
-			isStatic = Convert.ToInt32(((String)methodProps["isStatic"])) != 0;
-			fullSignature = (String)methodProps["fullSignature"];
-			OrderedDictionary od = CilboxUtil.DeserializeDict( (String)methodProps["parameters"] );
-			signatureParameters = new String[od.Count];
-			signatureParameterTypes = new String[od.Count];
+			MaxStackSize = Convert.ToInt32((methodProps["maxStack"].ToString()));
+			isVoid = Convert.ToInt32((methodProps["isVoid"].ToString())) != 0;
+			isStatic = Convert.ToInt32((methodProps["isStatic"].ToString())) != 0;
+			fullSignature = methodProps["fullSignature"].ToString();
+
+			Serializee [] od = methodProps["parameters"].AsArray();
+			signatureParameters = new String[od.Length];
+			signatureParameterTypes = new String[od.Length];
 			int sn = 0;
-			foreach( DictionaryEntry v in od )
+			for( int p = 0; p < od.Length; p ++ )
 			{
-				signatureParameters[sn] = (String)v.Key;
-				signatureParameterTypes[sn] = (String)v.Value;
+				Dictionary< String, Serializee > thisp = od[p].AsMap();
+				signatureParameters[sn] = thisp["name"].ToString();
+				signatureParameterTypes[sn] = thisp["type"].ToString();
 				sn++;
 			}
 #if UNITY_EDITOR
@@ -1328,51 +1329,54 @@ namespace Cilbox
 
 		public uint [] importFunctionToId; // from ImportFunctionID
 
-		public CilboxClass( Cilbox box, String className, String classData )
+		public CilboxClass( Cilbox box, String className, Serializee classData )
 		{
 			this.box = box;
 			this.className = className;
-			OrderedDictionary classProps = CilboxUtil.DeserializeDict( classData );
+
+			Dictionary<String, Serializee> classProps = classData.AsMap();
 
 			uint id = 0;
-			OrderedDictionary staticFields = CilboxUtil.DeserializeDict( (String)classProps["staticFields"] );
-			int sfnum = staticFields.Count;
+			Serializee [] staticFields = classProps["staticFields"].AsArray();
+			int sfnum = staticFields.Length;
 			this.staticFields = new object[sfnum];
 			staticFieldNames = new String[sfnum];
 			staticFieldTypes = new Type[sfnum];
-			foreach( DictionaryEntry k in staticFields )
+			for( int k = 0; k < sfnum; k++ )
 			{
-				String fieldName = staticFieldNames[id] = (String)k.Key;
-				Type t = staticFieldTypes[id] = Type.GetType( (String)k.Value );
+				Dictionary< String, String > field = staticFields[k].AsStringMap();
+				String fieldName = staticFieldNames[id] = field["name"];
+				Type t = staticFieldTypes[id] = Cilbox.GetNativeTypeFromName( field["type"] );
 
 				//staticFieldIDs[id] = Cilbox.FindInternalMetadataID( className, 4, fieldName );
 				this.staticFields[id] = CilboxUtil.DeserializeDataForProxyField( t, "" );
 				id++;
 			}
 
-			OrderedDictionary instanceFields = CilboxUtil.DeserializeDict( (String)classProps["instanceFields"] );
-			int ifnum = instanceFields.Count;
+			Serializee [] instanceFields = classProps["instanceFields"].AsArray();
+			int ifnum = instanceFields.Length;
 			instanceFieldNames = new String[ifnum];
 			instanceFieldTypes = new Type[ifnum];
 
 			id = 0;
-			foreach( DictionaryEntry k in instanceFields )
+			for( int k = 0; k < ifnum; k++ )
 			{
-				String fieldName = instanceFieldNames[id] = (String)k.Key;
-				instanceFieldTypes[id] = Type.GetType( (String)k.Value );
+				Dictionary< String, String > field = staticFields[k].AsStringMap();
+				String fieldName = instanceFieldNames[id] = field["name"];
+				instanceFieldTypes[id] = Cilbox.GetNativeTypeFromName( field["type"] );
 				id++;
 			}
 
 			id = 0;
-			OrderedDictionary deserMethods = CilboxUtil.DeserializeDict( (String)classProps["methods"] );
+			Dictionary< String, Serializee > deserMethods = classProps["methods"].AsMap();
 			int mnum = deserMethods.Count;
 			methods = new CilboxMethod[mnum];
 			methodNameToIndex = new Dictionary< String, uint >();
 			methodFullSignatureToIndex = new Dictionary< String, uint >();
-			foreach( DictionaryEntry k in deserMethods )
+			foreach( var k in deserMethods )
 			{
 				methods[id] = new CilboxMethod();
-				methods[id].Load( this, (String)k.Key, (String)k.Value );
+				methods[id].Load( this, k.Key, k.Value );
 				methodNameToIndex[(String)k.Key] = id;
 				methodFullSignatureToIndex[methods[id].fullSignature] = id;
 				id++;
@@ -1571,9 +1575,9 @@ namespace Cilbox
 			initialized = true;
 			Debug.Log( "Cilbox Initialize Metadata:" + assemblyData.Length );
 
-			OrderedDictionary assemblyRoot = CilboxUtil.DeserializeDict( assemblyData );
-			OrderedDictionary classData = CilboxUtil.DeserializeDict( (String)assemblyRoot["classes"] );
-			OrderedDictionary metaData = CilboxUtil.DeserializeDict( (String)assemblyRoot["metadata"] );
+			Dictionary< String, Serializee > assemblyRoot = Serializee.CreateFromString( assemblyData ).AsMap();
+			Dictionary< String, Serializee > classData = assemblyRoot["classes"].AsMap();
+			Dictionary< String, Serializee > metaData = assemblyRoot["metadata"].AsMap();
 
 			metadatas = new CilMetadataTokenInfo[metaData.Count+1]; // element 0 is invalid.
 			metadatas[0] = new CilMetadataTokenInfo( 0, new String[]{ "INVALID METADATA" } );
@@ -1581,27 +1585,22 @@ namespace Cilbox
 			int clsid = 0;
 			classes = new Dictionary< String, int >();
 			classesList = new CilboxClass[classData.Count];
-			foreach( DictionaryEntry v in classData )
+			foreach( var v in classData )
 			{
-				CilboxClass cls = new CilboxClass( this, (String)v.Key, (String)v.Value );
+				CilboxClass cls = new CilboxClass( this, v.Key, v.Value );
 				classesList[clsid] = cls;
 				classes[(String)v.Key] = clsid;
 				clsid++;
 			}
 
-			foreach( DictionaryEntry v in metaData )
+			foreach( var v in metaData )
 			{
 				int mid = Convert.ToInt32((String)v.Key);
-				String [] st = CilboxUtil.DeserializeArray( (String)v.Value );
+				Serializee [] st = v.Value.AsArray();
 
-				//Debug.Log( $"ST {(String)v.Value} => {st.Length} from {(String)v.Key}" );
-				if( st.Length < 2 )
-				{
-					Debug.LogWarning( $"Metadata read error on {(String)v.Key} Could not interpret {(String)v.Value}" );
-					continue;
-				}
-				String [] fields = new String[st.Length-1];
-				Array.Copy( st, 1, fields, 0, st.Length-1 );
+//				String [] fields = new String[st.Length-1];
+//				Array.Copy( st, 1, fields, 0, st.Length-1 );
+xxx
 				MetaTokenType metatype = (MetaTokenType)Convert.ToInt32(st[0]);
 				CilMetadataTokenInfo t = metadatas[mid] = new CilMetadataTokenInfo( metatype, fields );
 
@@ -1815,7 +1814,7 @@ namespace Cilbox
 
 			Assembly proxyAssembly = typeof(CilboxProxy).Assembly;
 
-			OrderedDictionary assemblyMetadata = new OrderedDictionary();
+			Dictionary< String, Serializee > assemblyMetadata = new Dictionary< String, Serializee >();
 			Dictionary< uint, String > originalMetaToFriendlyName = new Dictionary< uint, String >();
 			Dictionary< int, uint> assemblyMetadataReverseOriginal = new Dictionary< int, uint >();
 
@@ -1927,9 +1926,12 @@ namespace Cilbox
 												Marshal.Copy(h.AddrOfPinnedObject(), bytes, 0, bytes.Length);
 												h.Free();
 												// Now, encode our array initializer to base64.
-												String inlineString = ((int)MetaTokenType.mtArrayInitializer) + "\t" + Convert.ToBase64String(bytes);
+												Dictionary< String, Serializee > thisMeta;
+												thisMeta["mt"] = ((int)MetaTokenType.mtArrayInitializer).ToString();
+												thisMeta["name"] = rf.Name;
+												thisMeta["data"] = Convert.ToBase64String(bytes);
 												originalMetaToFriendlyName[mdcount] = rf.Name;
-												assemblyMetadata[(mdcount++).ToString()] = inlineString;
+												assemblyMetadata[(mdcount++).ToString()] = new Serializee( thisMeta );
 											}
 											asm += "\t" + originalMetaToFriendlyName[writebackToken];
 											break;
@@ -1966,7 +1968,7 @@ namespace Cilbox
 											writebackToken = mdcount;
 											MethodBase tmb = proxyAssembly.ManifestModule.ResolveMethod( (int)operand );
 
-											OrderedDictionary methodProps = new OrderedDictionary();
+											Serializee.IOrderedDictionary<String, Serializee> methodProps = new Serializee.IOrderedDictionary<String, Serializee>();
 
 											// "Generic constructors are not supported in the .NET Framework version 2.0"
 											if( !tmb.IsConstructor )
@@ -1977,12 +1979,12 @@ namespace Cilbox
 													String [] argtypes = new String[templateArguments.Length];
 													for( int a = 0; a < templateArguments.Length; a++ )
 														argtypes[a] = templateArguments[a].ToString();  //Was FullName
-													methodProps["genericArguments"] = CilboxUtil.SerializeArray( argtypes );
+													methodProps["genericArguments"] = new Serializee( argtypes );
 												}
 											}
 
-											methodProps["declaringType"] = tmb.DeclaringType.ToString(); // Was FullName
-											methodProps["name"] = tmb.Name;
+											methodProps["declaringType"] = new Serializee( tmb.DeclaringType.ToString() ); // Was FullName
+											methodProps["name"] = new Serializee( tmb.Name );
 
 											System.Reflection.ParameterInfo[] parameterInfos = tmb.GetParameters();
 											if( parameterInfos.Length > 0 )
@@ -1993,14 +1995,15 @@ namespace Cilbox
 													Type ty = parameterInfos[j].ParameterType;
 													sParameters[j] = ty.ToString(); //Was FullName;
 												}
-												methodProps["parameters"] = CilboxUtil.SerializeArray( sParameters );
+												methodProps["parameters"] = new Serializee( sParameters );
 											}
-											methodProps["fullSignature"] = tmb.ToString();
-											methodProps["assembly"] = tmb.DeclaringType.Assembly.GetName().Name;
+											methodProps["fullSignature"] = new Serializee( tmb.ToString() );
+											methodProps["assembly"] = new Serializee( tmb.DeclaringType.Assembly.GetName().Name );
 
 											originalMetaToFriendlyName[mdcount] = tmb.DeclaringType.ToString() + "." + tmb.ToString();
-											assemblyMetadata[(mdcount++).ToString()] = CilboxUtil.SerializeArray( new String[]{
-												((int)MetaTokenType.mtMethod).ToString(), CilboxUtil.SerializeDict( methodProps ) } );
+											assemblyMetadata[(mdcount++).ToString()] = new Serializee( new Serializee[]{
+												new Serializee(((int)MetaTokenType.mtMethod).ToString()),
+												new Serializee( methodProps ) } );
 										}
 
 										asm += "\t" + originalMetaToFriendlyName[writebackToken];
@@ -2060,19 +2063,27 @@ namespace Cilbox
 						bytecodeLength += byteCode.Length;
 						MethodProps["body"] = byteCodeStr;
 
-						OrderedDictionary localVars = new OrderedDictionary();
+						List< Serializee > localVars = new Dictionary< Serializee >();
 						foreach (LocalVariableInfo lvi in mb.LocalVariables)
-							localVars[lvi.ToString()] = lvi.GetType().FullName;
-						MethodProps["locals"] = CilboxUtil.SerializeDict( localVars );
+						{
+							Dictionary< String, Serializee > local;
+							local["name"] = lvi.ToString();
+							local["type"] = lvi.ToString();
+							localVars.Add(local);
+						}
+						MethodProps["locals"] = localVars.ToArray();
 
 						ParameterInfo [] parameters = m.GetParameters();
 
-						OrderedDictionary argVars = new OrderedDictionary();
-						foreach (ParameterInfo p in parameters)
+						Serializee [] parameterList = new Serializee[parameters.Length];
+						for( int i = 0; i < parameters.Length; i++ )
 						{
-							argVars[p.Name] = p.ParameterType.ToString();
+							Dictionary< String, Serializee > parameterInfo = new Dictionary< String, Serializee >();
+							parameterInfo["name"] = new Serializee( p.Name );
+							parameterInfo["type"] = new Serializee( p.ParameterType.ToString() );
+							parameterList[i] = Serializee( parameterInfo );
 						}
-						MethodProps["parameters"] = CilboxUtil.SerializeDict( argVars );
+						MethodProps["parameters"] = Serializee( parameterList );
 						MethodProps["maxStack"] = mb.MaxStackSize.ToString();
 						MethodProps["isVoid"] = (m is MethodInfo)?(((MethodInfo)m).ReturnType == typeof(void) ? "1" : "0" ): "0";
 						MethodProps["isStatic"] = m.IsStatic ? "1" : "0";
@@ -2101,12 +2112,15 @@ namespace Cilbox
 
 				ProfilerMarker perfType = new ProfilerMarker(type.ToString()); perfType.Begin();
 
-				OrderedDictionary staticFields = new OrderedDictionary();
+				List< Serializee > staticFields = new OrderedDictionary();
 				int sfid = 0;
 				FieldInfo[] fi = type.GetFields( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static );
 				foreach( var f in fi )
 				{
-					staticFields[f.Name] = f.FieldType.FullName;
+					Dictionary< String, String > dictField;
+					dictField["name"] = f.Name;
+					dictField["type"] = f.FieldType.FullName;
+					staticFields.Add( new Serializee( dictField ) );
 
 					// Fill in our metadata with a class-specific field ID, if this field ID was used in code anywhere.
 					uint mdid;
@@ -2132,7 +2146,7 @@ namespace Cilbox
 
 				OrderedDictionary classProps = new OrderedDictionary();
 				classProps["methods"] = CilboxUtil.SerializeDict( allClassMethods[type.FullName] );
-				classProps["staticFields"] = CilboxUtil.SerializeDict( staticFields );
+				classProps["staticFields"] = new Serializee( staticFields.ToArray() );
 				classProps["instanceFields"] = CilboxUtil.SerializeDict( instanceFields );
 				classes[type.FullName] = CilboxUtil.SerializeDict( classProps );
 				perfType.End();

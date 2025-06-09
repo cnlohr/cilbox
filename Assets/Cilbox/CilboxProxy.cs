@@ -36,7 +36,7 @@ namespace Cilbox
 			fieldsObjects = new UnityEngine.Object[cls.instanceFieldNames.Length];
 			isFieldsObject = new bool[cls.instanceFieldNames.Length];
 
-			OrderedDictionary instanceFields = new OrderedDictionary();
+			List<String> instanceFields = new List<String>();
 			FieldInfo[] fi = mToSteal.GetType().GetFields( BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance );
 			foreach( var f in fi )
 			{
@@ -98,18 +98,20 @@ namespace Cilbox
 							}
 							else
 							{
-								instanceFields[f.Name] = null;
+								instanceFields.Add( f.Name );
+								instanceFields.Add( null );
 							}
 						}
 						else
 						{
-							instanceFields[f.Name] = fv.ToString();
+							instanceFields.Add( f.Name );
+							instanceFields.Add( fv.ToString());
 						}
 					}
 				}
 				//Debug.Log( "Serializing: " + serializedObjectData );
 			}
-			serializedObjectData = CilboxUtil.SerializeDict( instanceFields );
+			serializedObjectData = new Serializee(instanceFields.ToArray()).DumpAsString();
 		}
 #endif
 
@@ -131,7 +133,7 @@ namespace Cilbox
 			// Call interpreted constructor.
 			box.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
 
-			OrderedDictionary d = CilboxUtil.DeserializeDict( serializedObjectData );
+			Serializee des = Serializee.CreateFromString( serializedObjectData );
 
 			for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
 			{
