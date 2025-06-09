@@ -35,6 +35,12 @@ namespace Cilbox
 			Map = 3,
 		};
 
+		public Serializee( Memory<byte> data )
+		{
+			e = ElementType.Invalid;
+			buffer = data;
+		}
+
 		public Serializee( byte[] data )
 		{
 			e = ElementType.Invalid;
@@ -72,36 +78,57 @@ namespace Cilbox
 		{
 			Serializee [] serOut = new Serializee[dict.Count*2];
 			int n = 0;
-			int len = 1;
 			foreach( KeyValuePair< String, Serializee > k in dict )
 			{
 				Serializee s = new Serializee( k.Key );
 				serOut[n++] = s;
-				len += s.buffer.Length;
-
 				serOut[n++] = k.Value;
-				len += k.Value.buffer.Length;
+			}
+			SetAsList( serOut, ElementType.Map );
+		}
+
+		public Serializee( Dictionary<String, String> dict )
+		{
+			Serializee [] serOut = new Serializee[dict.Count*2];
+			int n = 0;
+			foreach( KeyValuePair< String, String > k in dict )
+			{
+				Serializee s = new Serializee( k.Key );
+				serOut[n++] = s;
+				s = new Serializee( k.Value );
+				serOut[n++] = s;
 			}
 			SetAsList( serOut, ElementType.Map );
 		}
 
 		void SetAsList( Serializee[] list, ElementType intendedType = ElementType.List )
 		{
-			int len = 1;
+			int len = 2;
 			for( int i = 0; i < list.Length; i++ )
 				len += list[i].buffer.Length;
 			byte lenBytes = ComputeLengthBytes( len );
 			len += lenBytes;
+			byte lenElems = ComputeLengthBytes( list.Length );
+			len += lenElems;
 			byte [] bytes = new byte[len];
-			bytes[0] = (byte)(lenBytes | (((byte)ElementType.List)<<3));
 			buffer = new Memory<byte>(bytes);
+
+			bytes[0] = (byte)(lenBytes | (((byte)intendedType)<<3));
 			FillBytesWithLength( len, lenBytes, buffer.Span.Slice(1) );
-			int place = 1 + lenBytes;
+			bytes[1+lenBytes] = (byte)(lenElems | (((byte)ElementType.Invalid)<<3));
+			FillBytesWithLength( list.Length, lenElems, buffer.Span.Slice(2+lenBytes) );
+
+			int place = 2 + lenBytes + lenElems;
 			for( int i = 0; i < list.Length; i++ )
 				place += list[i].SpliceInto( buffer.Span.Slice(place) );
 			e = intendedType;
 		}
 
+		public override String ToString()
+		{
+			Debug.Log( "XXXXXXXXXXXXXXXXXXXXXXXXX t0 STRING" );
+			return AsString();
+		}
 
 		public String AsString()
 		{
@@ -115,11 +142,16 @@ namespace Cilbox
 		public Serializee[] AsArray( ElementType intendedType = ElementType.List )
 		{
 			int ofs = 0;
-			(int elems, ElementType type) = PullInfo( buffer.Span, ref ofs );
-			if( type != intendedType ) throw new Exception( "Unpack List called on non-list element" );
+			(int len, ElementType typ) = PullInfo( buffer.Span, ref ofs );
+			if( typ != intendedType ) throw new Exception( $"Fault, got {typ} expected {intendedType}" );
+			(int elems, ElementType typ_dump) = PullInfo( buffer.Span, ref ofs );
 			Serializee[] ret = new Serializee[elems];
+			Debug.Log( "ELEMS: " + elems + " " + typ + " " + typ_dump + " getlen:" + len + " bufferlen:" + buffer.Length );
 			for( int i = 0; i < elems; i++ )
+			{
+				Debug.Log( "Eleme: " + i + " @ " + ofs );
 				ret[i] = Pull( buffer, ref ofs );
+			}
 			return ret;
 		}
 
@@ -129,7 +161,8 @@ namespace Cilbox
 			Serializee[] lst = AsArray( ElementType.Map );
 			for( int i = 0; i < lst.Length; i+=2 )
 			{
-				ret[lst[i+0].ToString()] = lst[i+1];
+				Debug.Log( "Decoding Map: " + lst[i+0].AsString() );
+				ret[lst[i+0].AsString()] = lst[i+1];
 			}
 			return ret;
 		}
@@ -152,11 +185,11 @@ namespace Cilbox
 			return ret;
 		}
 
+		public Memory<byte> DumpAsMemory() { return buffer; }
 		public String DumpAsString() { return System.Text.Encoding.ASCII.GetString(buffer.Span); }
 		static public Serializee CreateFromByteBuffer( byte[] buf )
 		{
-			Serializee ret = new Serializee();
-			ret.buffer = new Memory<byte>(buf);
+			Serializee ret = new Serializee( new Memory<byte>(buf) );
 			return ret;
 		}
 
@@ -169,7 +202,7 @@ namespace Cilbox
 		private int SpliceInto( Span<byte> si )
 		{
 			buffer.Span.CopyTo( si );
-			return si.Length;
+			return buffer.Length;
 		}
 
 		private byte ComputeLengthBytes( int len )
@@ -186,7 +219,7 @@ namespace Cilbox
 
 		private void FillBytesWithLength( int length, int lengthBytes, Span<byte> sp )
 		{
-			if( lengthBytes > 6 ) throw new Exception( "Invalid FillBytesWithLength" );
+			if( lengthBytes > 6 ) throw new Exception( $"Invalid FillBytesWithLength {length} {lengthBytes}" );
 			for( int i = 0; i < lengthBytes; i++ )
 			{
 				sp[i] = (byte)(length&0xff);
@@ -200,11 +233,12 @@ namespace Cilbox
 			if( buffer.Length <= 0 ) return ( 0, 0 );
 			byte bl = b[i++]; // info byte
 			int len = 0;
-			int lend = i + bl & 0x7;
+			int lend = bl & 0x7;
 
 			for( int j = 0; j < lend; j++ )
-				len |= b[i++] << (j*8);
+				len |= ((int)b[i++]) << (j*8);
 
+Debug.Log( "INFO: " + bl + " / " + len );
 			return (len, (ElementType)((bl>>3)&0x7) );
 		}
 
@@ -213,16 +247,18 @@ namespace Cilbox
 		{
 			Span<byte> sb = b.Span;
 			if( buffer.Length <= 0 ) new Serializee( null, ElementType.Invalid );
+Debug.Log( $"Pulling In: {buffer.Length} i: {i}" );
 			byte bl = sb[i++]; // info byte
 			int len = 0;
-			int lend = i + bl & 0x7;
-			int ebcnt = (bl>>3) & 0x7;
+			int blct = bl & 0x7;
+			int etype = (bl>>3) & 0x7;
 
-			for( int j = 0; j < lend; j++ )
-				len |= sb[i++] << (j * 8);
+			for( int j = 0; j < blct; j++ )
+				len |= ((int)sb[i++]) << (j * 8);
 
 			int iBeforeAdd = i;
 			i += len;
+Debug.Log( $"Pulling: {iBeforeAdd}, {bl}, {blct}, {len} Len: {b.Length}" );
 			return new Serializee( b.Slice( iBeforeAdd, len ), (ElementType)len );
 		}
 	}
