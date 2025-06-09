@@ -261,6 +261,8 @@ Debug.Log( $"Pulling In: {buffer.Length} i: {i}" );
 Debug.Log( $"Pulling: {iBeforeAdd}, {bl}, {blct}, {len} Len: {b.Length}" );
 			return new Serializee( b.Slice( iBeforeAdd, len ), (ElementType)len );
 		}
+		
+		public void Dump() { String s = ""; for( int i = 0; i < buffer.Length; i++ ) s += buffer.Span[i].ToString("X2") + " "; Debug.Log( s ); }
 	}
 	
 
