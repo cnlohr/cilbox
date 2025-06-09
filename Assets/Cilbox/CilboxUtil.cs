@@ -22,10 +22,6 @@ namespace Cilbox
 		// TODO: Version 2: Use a string dictionary.
 		// lsb 0..2 = # of bytes to describe length or # of elements (Bytes little endian) Only #'s 0..6 are valid.
 		//     3..5 = Type
-		//       0: Invalid
-		//       1: String
-		//       2: List
-		//       3: Map
 
 		public enum ElementType
 		{
@@ -120,14 +116,18 @@ namespace Cilbox
 
 			int place = 2 + lenBytes + lenElems;
 			for( int i = 0; i < list.Length; i++ )
+			{
 				place += list[i].SpliceInto( buffer.Span.Slice(place) );
+			}
 			e = intendedType;
 		}
 
 		public override String ToString()
 		{
-			Debug.Log( "XXXXXXXXXXXXXXXXXXXXXXXXX t0 STRING" );
-			return AsString();
+			String s = "";
+			for( int i = 0; i < buffer.Length; i++ )
+				s += buffer.Span[i].ToString("X2") + " ";
+			return s;
 		}
 
 		public String AsString()
@@ -146,12 +146,8 @@ namespace Cilbox
 			if( typ != intendedType ) throw new Exception( $"Fault, got {typ} expected {intendedType}" );
 			(int elems, ElementType typ_dump) = PullInfo( buffer.Span, ref ofs );
 			Serializee[] ret = new Serializee[elems];
-			Debug.Log( "ELEMS: " + elems + " " + typ + " " + typ_dump + " getlen:" + len + " bufferlen:" + buffer.Length );
 			for( int i = 0; i < elems; i++ )
-			{
-				Debug.Log( "Eleme: " + i + " @ " + ofs );
 				ret[i] = Pull( buffer, ref ofs );
-			}
 			return ret;
 		}
 
@@ -161,7 +157,6 @@ namespace Cilbox
 			Serializee[] lst = AsArray( ElementType.Map );
 			for( int i = 0; i < lst.Length; i+=2 )
 			{
-				Debug.Log( "Decoding Map: " + lst[i+0].AsString() );
 				ret[lst[i+0].AsString()] = lst[i+1];
 			}
 			return ret;
@@ -208,8 +203,7 @@ namespace Cilbox
 		private byte ComputeLengthBytes( int len )
 		{
 			byte ret = 0;
-			do
-			{
+			do {
 				if( len == 0 ) return ret;
 				len >>= 8;
 				ret++;
@@ -234,11 +228,8 @@ namespace Cilbox
 			byte bl = b[i++]; // info byte
 			int len = 0;
 			int lend = bl & 0x7;
-
 			for( int j = 0; j < lend; j++ )
 				len |= ((int)b[i++]) << (j*8);
-
-Debug.Log( "INFO: " + bl + " / " + len );
 			return (len, (ElementType)((bl>>3)&0x7) );
 		}
 
@@ -246,8 +237,8 @@ Debug.Log( "INFO: " + bl + " / " + len );
 		private Serializee Pull( Memory<byte> b, ref int i )
 		{
 			Span<byte> sb = b.Span;
+			int iStart = i;
 			if( buffer.Length <= 0 ) new Serializee( null, ElementType.Invalid );
-Debug.Log( $"Pulling In: {buffer.Length} i: {i}" );
 			byte bl = sb[i++]; // info byte
 			int len = 0;
 			int blct = bl & 0x7;
@@ -256,13 +247,9 @@ Debug.Log( $"Pulling In: {buffer.Length} i: {i}" );
 			for( int j = 0; j < blct; j++ )
 				len |= ((int)sb[i++]) << (j * 8);
 
-			int iBeforeAdd = i;
 			i += len;
-Debug.Log( $"Pulling: {iBeforeAdd}, {bl}, {blct}, {len} Len: {b.Length}" );
-			return new Serializee( b.Slice( iBeforeAdd, len ), (ElementType)len );
+			return new Serializee( b.Slice( iStart, i - iStart ), (ElementType)len );
 		}
-		
-		public void Dump() { String s = ""; for( int i = 0; i < buffer.Length; i++ ) s += buffer.Span[i].ToString("X2") + " "; Debug.Log( s ); }
 	}
 	
 
