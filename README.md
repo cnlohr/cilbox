@@ -61,19 +61,4 @@ Ideally the world could have a `Cilbox` and an avatar could also have a `Cilbox`
  * Try to make sense of when we should be init/start/awakening'ing.
  * Figure out where "The referenced script (Unknown) on this Behaviour is missing!" is coming from.
 
-## TODO
- * Validate that you are working with int's more
- * Consider force-cleaning-up .o's when loading StackElements. << Ok, I really think we should do that.
- * Write filter system to allow for security to host functions.
- * Use a different serialization mechanism. (Preferably size/text).  The current one DOMINATES build / startup time.
- * Find all references in the scene to the original scripts, and port them over to the proxy scripts.
- * Test support for ref.
- * Optimize
-   * trick the ldelem.
-   * functions to fast-path if the array type is StackElement[]
- * Do the rest of the opcodes.
- * Write a good version of `DeserializeDataForProxyField` that can handle various data types, like Vector3, etc...
- * Make it so you can access non-proxy object fields in other gameobjects (selectively)
- * Need types to also be searched out and destroyed, for things like unbox, etc.  So we need a new section in metadata for types.
- * WRITE LOTS OF TESTS
 
