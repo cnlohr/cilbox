@@ -99,18 +99,19 @@ namespace Cilbox
 
 		void SetAsList( Serializee[] list, ElementType intendedType = ElementType.List )
 		{
-			int len = 2;
+			int len = 1;
 			for( int i = 0; i < list.Length; i++ )
 				len += list[i].buffer.Length;
-			byte lenBytes = ComputeLengthBytes( len );
-			len += lenBytes;
 			byte lenElems = ComputeLengthBytes( list.Length );
 			len += lenElems;
+			int lenToEncode = len;
+			byte lenBytes = ComputeLengthBytes( lenToEncode );
+			len += lenBytes + 1;
 			byte [] bytes = new byte[len];
 			buffer = new Memory<byte>(bytes);
 
 			bytes[0] = (byte)(lenBytes | (((byte)intendedType)<<3));
-			FillBytesWithLength( len, lenBytes, buffer.Span.Slice(1) );
+			FillBytesWithLength( lenToEncode, lenBytes, buffer.Span.Slice(1) );
 			bytes[1+lenBytes] = (byte)(lenElems | (((byte)ElementType.Invalid)<<3));
 			FillBytesWithLength( list.Length, lenElems, buffer.Span.Slice(2+lenBytes) );
 
@@ -147,7 +148,10 @@ namespace Cilbox
 			(int elems, ElementType typ_dump) = PullInfo( buffer.Span, ref ofs );
 			Serializee[] ret = new Serializee[elems];
 			for( int i = 0; i < elems; i++ )
+			{
+				//Debug.Log( $"OFS {ofs} {i}/{elems}" );
 				ret[i] = Pull( buffer, ref ofs );
+			}
 			return ret;
 		}
 
@@ -167,7 +171,7 @@ namespace Cilbox
 			Serializee[] lst = AsArray();
 			String[] ret = new String[lst.Length];
 			for( int i = 0; i < lst.Length; i++ )
-				ret[i] = lst[i].ToString();
+				ret[i] = lst[i].AsString();
 			return ret;
 		}
 
@@ -176,7 +180,7 @@ namespace Cilbox
 			Dictionary<String, String> ret = new Dictionary<String, String>();
 			Serializee[] lst = AsArray( ElementType.Map );
 			for( int i = 0; i < lst.Length; i+=2 )
-				ret[lst[i+0].ToString()] = lst[i+1].ToString();
+				ret[lst[i+0].AsString()] = lst[i+1].AsString();
 			return ret;
 		}
 
@@ -191,6 +195,11 @@ namespace Cilbox
 		static public Serializee CreateFromString( String buf ) 
 		{
 			return CreateFromByteBuffer( System.Text.Encoding.ASCII.GetBytes(buf) );
+		}
+
+		static public Serializee CreateFromBlob( byte [] buf ) 
+		{
+			return CreateFromByteBuffer( buf );
 		}
 
 		// Serialization Helpers
@@ -236,6 +245,7 @@ namespace Cilbox
 		// Pull off a "thing" from the bitstream.  Return is the span, -6 = string, otherwise # of elements.
 		private Serializee Pull( Memory<byte> b, ref int i )
 		{
+			//Debug.Log( ToString() );
 			Span<byte> sb = b.Span;
 			int iStart = i;
 			if( buffer.Length <= 0 ) new Serializee( null, ElementType.Invalid );
@@ -248,6 +258,7 @@ namespace Cilbox
 				len |= ((int)sb[i++]) << (j * 8);
 
 			i += len;
+			//Debug.Log( $"Pulling {iStart} BL:{bl.ToString("X2")} {blct} {i} {len} BSL:{b.Length}" );
 			return new Serializee( b.Slice( iStart, i - iStart ), (ElementType)len );
 		}
 	}

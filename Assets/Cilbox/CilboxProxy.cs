@@ -6,6 +6,10 @@ using System.Collections.Specialized;
 using System.Collections.Generic;
 using System.Reflection;
 
+#if UNITY_EDITOR
+using Unity.Profiling;
+#endif
+
 namespace Cilbox
 {
 	public class CilboxProxy : MonoBehaviour
@@ -183,6 +187,11 @@ namespace Cilbox
 
 		void Start()  {
 			box.BoxInitialize(); // In case it is not yet initialized.
+
+#if UNITY_EDITOR
+			new ProfilerMarker( "Initialize " + className ).Auto();
+#endif
+
 			if( string.IsNullOrEmpty( className ) )
 			{
 				Debug.LogError( "Class name not set" );
