@@ -12,8 +12,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
     - name: Compile And Run
-      run: >
-        dotnet --version
+      run: |
         dotnet run --project TestCilbox
 
 
