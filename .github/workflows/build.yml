@@ -11,8 +11,8 @@ jobs:
         dotnet-version: '8.x'
     - name: Checkout
       uses: actions/checkout@v4
-    - name: Compile And Run
-      run: |
-        dotnet run --project TestCilbox
-
+    - name: Build
+      run: dotnet build --configuration Release
+    - name: Test
+      run: dotnet test --configuration Release --no-build
 

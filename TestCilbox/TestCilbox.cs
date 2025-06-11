@@ -1,12 +1,14 @@
 using System;
 
-namespace TestCilbox
+using Xunit.Abstractions;
+
+public class TestCilbox
 {
-	public class Program
+
+    [Fact]
+	public void TestTester()
 	{
-		public static void Main()
-		{
-			Console.WriteLine( "Test" );
-		}
+		Assert.Equal(4, 2+2);
 	}
 }
+
