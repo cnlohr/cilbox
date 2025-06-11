@@ -29,23 +29,12 @@ namespace Cilbox
 			String = 1,
 			List = 2,
 			Map = 3,
+			Blob = 4,
 		};
-
-		public Serializee( Memory<byte> data )
-		{
-			e = ElementType.Invalid;
-			buffer = data;
-		}
-
-		public Serializee( byte[] data )
-		{
-			e = ElementType.Invalid;
-			buffer = data;
-		}
 
 		public Serializee( Memory<byte> bufferIn, ElementType eIn ) { buffer = bufferIn; e = eIn; }
 
-		public Serializee( String str )
+		public Serializee( String str ) // Tricky, this actually is like create-from-string.
 		{
 			int len = System.Text.Encoding.UTF8.GetByteCount( str );
 			byte lenBytes = ComputeLengthBytes( len );
@@ -55,6 +44,19 @@ namespace Cilbox
 			buffer = new Memory<byte>(bytes);
 			FillBytesWithLength( len, lenBytes, buffer.Span.Slice(1) );
 			e = ElementType.String;
+		}
+
+		static public Serializee CreateFromBlob( byte [] bytes ) 
+		{
+			int len = bytes.Length;
+			byte lenBytes = ComputeLengthBytes( len );
+			byte [] newBytes = new byte[len + 1 + lenBytes];
+			Memory<byte> b = new Memory<byte>(newBytes);
+			FillBytesWithLength( len, lenBytes, b.Span.Slice(1) );
+			bytes.CopyTo( newBytes, 1 + lenBytes );
+			b.Span[0] = (byte)(lenBytes | ((int)(ElementType.Blob)<<3));
+			Serializee s = new Serializee( b, ElementType.Blob );
+			return s;
 		}
 
 		public Serializee( String [] listIn )
@@ -140,6 +142,15 @@ namespace Cilbox
 			return System.Text.Encoding.UTF8.GetString( buffer.Span.Slice( lenBytes+1 ) );
 		}
 
+		public byte[] AsBlob()
+		{
+			int l = buffer.Span[0];
+			int lenBytes = l & 0x7;
+			ElementType typ = (ElementType)((l>>3)&7);
+			if( typ != ElementType.Blob ) throw new Exception( $"Fault, got {typ} expected String" );
+			return buffer.Span.Slice( lenBytes+1 ).ToArray();
+		}
+
 		public Serializee[] AsArray( ElementType intendedType = ElementType.List )
 		{
 			int ofs = 0;
@@ -185,22 +196,6 @@ namespace Cilbox
 		}
 
 		public Memory<byte> DumpAsMemory() { return buffer; }
-		public String DumpAsString() { return System.Text.Encoding.ASCII.GetString(buffer.Span); }
-		static public Serializee CreateFromByteBuffer( byte[] buf )
-		{
-			Serializee ret = new Serializee( new Memory<byte>(buf) );
-			return ret;
-		}
-
-		static public Serializee CreateFromString( String buf ) 
-		{
-			return CreateFromByteBuffer( System.Text.Encoding.ASCII.GetBytes(buf) );
-		}
-
-		static public Serializee CreateFromBlob( byte [] buf ) 
-		{
-			return CreateFromByteBuffer( buf );
-		}
 
 		// Serialization Helpers
 		private int SpliceInto( Span<byte> si )
@@ -209,7 +204,7 @@ namespace Cilbox
 			return buffer.Length;
 		}
 
-		private byte ComputeLengthBytes( int len )
+		static private byte ComputeLengthBytes( int len )
 		{
 			byte ret = 0;
 			do {
@@ -220,7 +215,7 @@ namespace Cilbox
 			throw new Exception( "Invalid ComputeLengthBytes" );
 		}
 
-		private void FillBytesWithLength( int length, int lengthBytes, Span<byte> sp )
+		static private void FillBytesWithLength( int length, int lengthBytes, Span<byte> sp )
 		{
 			if( lengthBytes > 6 ) throw new Exception( $"Invalid FillBytesWithLength {length} {lengthBytes}" );
 			for( int i = 0; i < lengthBytes; i++ )
@@ -376,9 +371,6 @@ namespace Cilbox
 		//  DEFS FROM CECIL FOR PARSING CIL  //////////////////////////////////////
 		///////////////////////////////////////////////////////////////////////////
 
-
-
-
 		// From https://raw.githubusercontent.com/jbevain/cecil/refs/heads/master/Mono.Cecil.Cil/OpCodes.cs
 		//
 		// Author:
@@ -389,7 +381,6 @@ namespace Cilbox
 		//
 		// Licensed under the MIT/X11 license.
 		//
-
 		public static class OpCodes {
 
 			public enum FlowControl {

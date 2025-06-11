@@ -115,7 +115,9 @@ namespace Cilbox
 				}
 				//Debug.Log( "Serializing: " + serializedObjectData );
 			}
-			serializedObjectData = new Serializee(instanceFields.ToArray()).DumpAsString();
+
+
+			serializedObjectData = Convert.ToBase64String(new Serializee(instanceFields.ToArray()).DumpAsMemory().ToArray());
 		}
 #endif
 
@@ -137,7 +139,7 @@ namespace Cilbox
 			// Call interpreted constructor.
 			box.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
 
-			Serializee des = Serializee.CreateFromString( serializedObjectData );
+			Serializee des = Serializee.CreateFromBlob( Convert.FromBase64String( serializedObjectData ) );
 
 			for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
 			{

@@ -387,19 +387,7 @@ namespace Cilbox
 				methodLocalTypes[iid] = local["type"];
 			}
 
-			var pl = methodProps["body"].AsString();
-			int bl = pl.Length/2;
-			byteCode = new byte[bl];
-			for( int i = 0; i < bl; i++ )
-			{
-				int v = CilboxUtil.IntFromHexChar( pl[i*2+0] );
-				if( v < 0 ) break;
-				byte b = (byte)v;
-				v = CilboxUtil.IntFromHexChar( pl[i*2+1] );
-				if( v < 0 ) break;
-				b = (byte)(v | (b<<4));
-				byteCode[i] = b;
-			}
+			byteCode = methodProps["body"].AsBlob();
 
 			MaxStackSize = Convert.ToInt32((methodProps["maxStack"].AsString()));
 			isVoid = Convert.ToInt32((methodProps["isVoid"].AsString())) != 0;
@@ -430,7 +418,7 @@ namespace Cilbox
 
 		public object Interpret( CilboxProxy ths, object [] parametersIn )
 		{
-			//StackElement [] parameters, int parameterPlace, int stackHead
+			StackElement [] parameters;
 			StackElement [] stackBuffer = new StackElement[Cilbox.defaultStackSize];
 
 			int plen = 0;
@@ -441,27 +429,30 @@ namespace Cilbox
 
 			if( isStatic )
 			{
+				parameters = new StackElement[plen];
 				for( int p = 0; p < plen; p++ )
-					stackBuffer[p].Load( parametersIn[p] );
+					parameters[p].Load( parametersIn[p] );
 			}
 			else
 			{
-				stackBuffer[0].Load( ths );
+				parameters = new StackElement[plen+1];
+				parameters[0].Load( ths );
 				for( int p = 0; p < plen; p++ )
-					stackBuffer[p+1].Load( parametersIn[p] );
+					parameters[p+1].Load( parametersIn[p] );
 				plen++;
 			}
 
-			return InterpretInner( stackBuffer, 0, plen ).AsObject();
+			return InterpretInner( stackBuffer, parameters ).AsObject();
 		}
 
 
-		public StackElement InterpretInner( StackElement [] stackBuffer, int parameterStart, int stackHead )
+		public StackElement InterpretInner( ArraySegment<StackElement> stackBufferIn, ArraySegment<StackElement> parametersIn )
 		{
+			Span<StackElement> stackBuffer = stackBufferIn.AsSpan();
+			Span<StackElement> parameters = parametersIn.AsSpan();
+
 			if( byteCode == null || byteCode.Length == 0 || disabled )
-			{
 				return StackElement.nil;
-			}
 
 #if UNITY_EDITOR
 			perfMarkerInterpret.Begin();
@@ -476,27 +467,23 @@ namespace Cilbox
 			}
 			box.nestingDepth++;
 
-			int localVarsHead = stackHead + MaxStackSize;
+			int localVarsHead = MaxStackSize;
 			int stackContinues = localVarsHead + methodLocals.Length;
 
-			// Add a little buffer for possible function calls.
-			if( stackContinues + 16 >= stackBuffer.Length ) throw new Exception( "Error: Interpreted stack overflow in " + methodName );
-
-//			bool bDeepDebug = false;
+			bool bDeepDebug = false;
 			// Uncomment for debugging.
-/*
-			if( fullSignature.Contains( "Start" ) )
+
+/*			if( true ) // fullSignature.Contains( "Start" ) )
 			{
 				bDeepDebug = true;
-				String parmSt = ""; for( int sk = parameterStart; sk < stackHead; sk++ ) {
-					parmSt += "/"; parmSt += stackBuffer[sk].AsObject() + "+" + stackBuffer[sk].type;
+				String parmSt = ""; for( int sk = 0; sk < parameters.Length; sk++ ) {
+					parmSt += "/"; parmSt += parameters[sk].AsObject() + "+" + parameters[sk].type;
 				}
-				Debug.Log( "***** FUNCTION ENTRY " + parentClass.className + " " + methodName + " " + parameterStart + "-" + stackHead + " PARM:" + parmSt);
+				Debug.Log( "***** FUNCTION ENTRY " + parentClass.className + " " + methodName + " " + parametersIn.Offset + " PARM:" + parmSt);
 				bDeepDebug = true;
 			}
 */
-
-			int sp = stackHead-1;
+			int sp = -1;
 			bool cont = true;
 			int ctr = 0;
 			int pc = 0;
@@ -506,27 +493,28 @@ namespace Cilbox
 				{
 					byte b = byteCode[pc];
 
-//					// Uncomment for debugging.
-//					if( bDeepDebug )
-//					{
-//						String stackSt = ""; for( int sk = stackHead; sk < localVarsHead; sk++ ) { stackSt += "/"; if( sk == sp ) stackSt += ">"; stackSt += stackBuffer[sk].AsObject() + "+" + stackBuffer[sk].type; if( sk == sp ) stackSt += "<"; }
-//						int icopy = pc; CilboxUtil.OpCodes.OpCode opc = CilboxUtil.OpCodes.ReadOpCode ( byteCode, ref icopy );
-//						Debug.Log( "Bytecode " + opc + " (" + b.ToString("X2") + ") @ " + pc + "/" + byteCode.Length + " " + stackSt);
-//					}
+/*
+					// Uncomment for debugging.
+					if( bDeepDebug )
+					{
+						String stackSt = ""; for( int sk = 0; sk < stackBufferIn.Count; sk++ ) { stackSt += "/"; if( sk == sp ) stackSt += ">"; stackSt += stackBuffer[sk].AsObject() + "+" + stackBuffer[sk].type; if( sk == sp ) stackSt += "<"; }
+						int icopy = pc; CilboxUtil.OpCodes.OpCode opc = CilboxUtil.OpCodes.ReadOpCode ( byteCode, ref icopy );
+						Debug.Log( "Bytecode " + opc + " (" + b.ToString("X2") + ") @ " + pc + "/" + byteCode.Length + " " + stackSt);
+					}
+*/
 // For itty bitty profiling.
 //int xicopy = pc; CilboxUtil.OpCodes.OpCode opcx = CilboxUtil.OpCodes.ReadOpCode ( byteCode, ref xicopy );
-//ProfilerMarker pfm = new ProfilerMarker(opcx.ToString());
-//pfm.Begin();
+//new ProfilerMarker(opcx.ToString()).Auto();
 
 					pc++;
 					switch( b )
 					{
 					case 0x00: break; // nop
 					case 0x01: cont = false; Breakwarn( "Debug Break", pc ); break; // break
-					case 0x02: stackBuffer[++sp] = stackBuffer[parameterStart+0]; break; //ldarg.0
-					case 0x03: stackBuffer[++sp] = stackBuffer[parameterStart+1]; break; //ldarg.1
-					case 0x04: stackBuffer[++sp] = stackBuffer[parameterStart+2]; break; //ldarg.2
-					case 0x05: stackBuffer[++sp] = stackBuffer[parameterStart+3]; break; //ldarg.3
+					case 0x02: stackBuffer[++sp] = parameters[0]; break; //ldarg.0
+					case 0x03: stackBuffer[++sp] = parameters[1]; break; //ldarg.1
+					case 0x04: stackBuffer[++sp] = parameters[2]; break; //ldarg.2
+					case 0x05: stackBuffer[++sp] = parameters[3]; break; //ldarg.3
 					case 0x06: stackBuffer[++sp] = stackBuffer[localVarsHead+0]; break; //ldloc.0
 					case 0x07: stackBuffer[++sp] = stackBuffer[localVarsHead+1]; break; //ldloc.1
 					case 0x08: stackBuffer[++sp] = stackBuffer[localVarsHead+2]; break; //ldloc.2
@@ -535,13 +523,13 @@ namespace Cilbox
 					case 0x0b: stackBuffer[localVarsHead+1] = stackBuffer[sp--]; break; //stloc.1
 					case 0x0c: stackBuffer[localVarsHead+2] = stackBuffer[sp--]; break; //stloc.2
 					case 0x0d: stackBuffer[localVarsHead+3] = stackBuffer[sp--]; break; //stloc.3
-					case 0x0e: stackBuffer[++sp] = stackBuffer[parameterStart+byteCode[pc++]]; break; // ldarg.s <uint8 (argNum)>
-					case 0x0f: stackBuffer[++sp] = StackElement.CreateReference( stackBuffer, (uint)parameterStart+byteCode[pc++] ); break; // ldarga.s <uint8 (argNum)>
+					case 0x0e: stackBuffer[++sp] = parameters[byteCode[pc++]]; break; // ldarg.s <uint8 (argNum)>
+					case 0x0f: stackBuffer[++sp] = StackElement.CreateReference( parametersIn.Array, (uint)parametersIn.Offset + (uint)byteCode[pc++] ); break; // ldarga.s <uint8 (argNum)>
 					case 0x11: stackBuffer[++sp] = stackBuffer[localVarsHead+byteCode[pc++]]; break; //ldloc.s
 					case 0x12:
 					{
 						uint whichLocal = byteCode[pc++];
-						stackBuffer[++sp] = StackElement.CreateReference( stackBuffer, (uint)(localVarsHead+whichLocal) );
+						stackBuffer[++sp] = StackElement.CreateReference( stackBufferIn.Array, (uint)(localVarsHead+whichLocal+stackBufferIn.Offset) );
 						break; //ldloca.s // Load address of local variable.
 					}
 					case 0x13: stackBuffer[localVarsHead+byteCode[pc++]] = stackBuffer[sp--]; break; //stloc.s
@@ -591,19 +579,14 @@ namespace Cilbox
 							CilboxMethod targetMethod = targetClass.methods[dt.interpretiveMethod];
 							isVoid = targetMethod.isVoid;
 							if( targetMethod == null )
-							{
 								throw( new Exception( $"Function {dt.Name} not found" ) );
-							}
+
 							int staticOffset = (targetMethod.isStatic?0:1);
 							int numParams = targetMethod.signatureParameters.Length;
-
-							// TODO: Remove this somehow?
-							//StackElement [] cparameters = new StackElement[numParams + staticOffset];
 
 							int nextParameterStart = stackContinues;
 							int nextStackHead = nextParameterStart + numParams + staticOffset;
 
-							//Debug.Log( $"Getting values {numParams} {sp} {targetMethod.isStatic}" );
 							for( int i = numParams - 1; i >= 0; i-- )
 								stackBuffer[nextParameterStart+i+staticOffset] = stackBuffer[sp--];
 
@@ -611,9 +594,9 @@ namespace Cilbox
 								stackBuffer[nextParameterStart] = stackBuffer[sp--];
 
 							if( !isVoid )
-								stackBuffer[++sp] = targetMethod.InterpretInner( stackBuffer, nextParameterStart, nextStackHead );
+								stackBuffer[++sp] = targetMethod.InterpretInner( stackBufferIn.Slice( nextStackHead ), stackBufferIn.Slice( nextParameterStart, numParams + staticOffset ) );
 							else
-								targetMethod.InterpretInner( stackBuffer, nextParameterStart, nextStackHead );
+								targetMethod.InterpretInner( stackBufferIn.Slice( nextStackHead ), stackBufferIn.Slice( nextParameterStart, numParams + staticOffset ) );
 
 							if( b == 0x27 )
 							{
@@ -625,7 +608,6 @@ namespace Cilbox
 						}
 						else
 						{
-							//st = dt.assembly.ManifestModule.ResolveMethod((int)dt.nativeToken);
 							st = dt.nativeMethod;
 							if( st is MethodInfo )
 								isVoid = ((MethodInfo)st).ReturnType == typeof(void);
@@ -1268,7 +1250,6 @@ namespace Cilbox
 							throw new Exception( "Infinite Loop @ " + pc + " In " + methodName + " (Timeout ticks: " + elapsed + "/" + Cilbox.timeoutLengthTicks + " )" );
 						}
 					}
-//pfm.End();
 				}
 				while( cont );
 			}
@@ -1573,14 +1554,15 @@ namespace Cilbox
 		public void BoxInitialize()
 		{
 #if UNITY_EDITOR
-			new ProfilerMarker( "Initialize Cilbox" ).Auto();
+			var pfm = new ProfilerMarker( "Initialize Cilbox" );
+			pfm.Auto();
 #endif
 
 			if( initialized ) return;
 			initialized = true;
 			Debug.Log( "Cilbox Initialize Metadata:" + assemblyData.Length );
 
-			Dictionary< String, Serializee > assemblyRoot = Serializee.CreateFromBlob( Convert.FromBase64String( assemblyData ) ).AsMap();
+			Dictionary< String, Serializee > assemblyRoot = new Serializee( Convert.FromBase64String( assemblyData ), Serializee.ElementType.Map ).AsMap();
 			Dictionary< String, Serializee > classData = assemblyRoot["classes"].AsMap();
 			Dictionary< String, Serializee > metaData = assemblyRoot["metadata"].AsMap();
 
@@ -2080,14 +2062,14 @@ namespace Cilbox
 							}
 						}
 
-						String byteCodeStr = "";
-						for( int i = 0; i < byteCode.Length; i++ )
-							byteCodeStr += byteCode[i].ToString( "x2" );
+						//String byteCodeStr = "";
+						//for( int i = 0; i < byteCode.Length; i++ )
+						//	byteCodeStr += byteCode[i].ToString( "x2" );
 
 						CLog.WriteLine( type.FullName + "." + methodName + " (" + byteCode.Length + ")\n" + asm );
 
 						bytecodeLength += byteCode.Length;
-						MethodProps["body"] = new Serializee(byteCodeStr);
+						MethodProps["body"] = Serializee.CreateFromBlob(byteCode);
 
 						List< Serializee > localVars = new List< Serializee >();
 						foreach (LocalVariableInfo lvi in mb.LocalVariables)
