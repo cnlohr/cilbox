@@ -9,7 +9,8 @@ jobs:
       with:
         # Semantic version range syntax or exact version of a dotnet version
         dotnet-version: '8.x'
-    - uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
     - name: Setup dotnet ${{ matrix.dotnet-version }}
       uses: actions/setup-dotnet@v4
       with:
