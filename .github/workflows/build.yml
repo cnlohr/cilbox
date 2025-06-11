@@ -3,19 +3,19 @@ on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
-      - name: Setup .NET 8.x
-        uses: actions/setup-dotnet@v4
-        with:
-          # Semantic version range syntax or exact version of a dotnet version
-          dotnet-version: '8.x'
     steps:
-      - uses: actions/checkout@v4
-      - name: Setup dotnet ${{ matrix.dotnet-version }}
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ matrix.dotnet-version }}
-        run: >
-          dotnet --version
-          dotnet run --project TestCilbox
+    - name: Setup .NET 8.x
+      uses: actions/setup-dotnet@v4
+      with:
+        # Semantic version range syntax or exact version of a dotnet version
+        dotnet-version: '8.x'
+    - uses: actions/checkout@v4
+    - name: Setup dotnet ${{ matrix.dotnet-version }}
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ matrix.dotnet-version }}
+      run: >
+        dotnet --version
+        dotnet run --project TestCilbox
 
 
