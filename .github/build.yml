@@ -18,5 +18,6 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ matrix.dotnet-version }}
-        run: dotnet --version
+        run:
+          dotnet --version
 
