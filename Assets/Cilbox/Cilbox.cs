@@ -312,6 +312,7 @@ namespace Cilbox
 								// XXX TRICKY TRICKY: This is kinda cheating.  We
 								// Only really get here by constructor code, when we
 								// were already constructed.
+
 								if( st.DeclaringType == typeof( MonoBehaviour ) )
 									callthis = this;
 								else if( st.DeclaringType == typeof( UnityEngine.Events.UnityAction ) )
@@ -319,7 +320,7 @@ namespace Cilbox
 									CilboxPlatform.DelegateRepackage rp = new CilboxPlatform.DelegateRepackage();
 									rp.meth = (CilboxMethod)callpar[1];
 									rp.o = (CilboxProxy)callpar[0];
-									UnityEngine.Events.UnityAction act = ()=> { rp.ActionCallback(); };
+									UnityEngine.Events.UnityAction act = ()=> { rp.ActionCallback( new object[0] ); };
 									iko = act;
 									isVoid = false;
 								}
@@ -1575,7 +1576,7 @@ namespace Cilbox
 												}
 											}
 
-											methodProps["dt"] = new Serializee( tmb.DeclaringType.ToString() ); // Was FullName
+											methodProps["dt"] = new Serializee( tmb.DeclaringType.FullName ); // Was FullName
 											methodProps["name"] = new Serializee( tmb.Name );
 
 											System.Reflection.ParameterInfo[] parameterInfos = tmb.GetParameters();
@@ -1585,7 +1586,7 @@ namespace Cilbox
 												for( var j = 0; j < parameterInfos.Length; j++ )
 												{
 													Type ty = parameterInfos[j].ParameterType;
-													sParameters[j] = ty.ToString(); //Was FullName;
+													sParameters[j] = ty.FullName; //Was FullName;
 												}
 												methodProps["parameters"] = new Serializee( sParameters );
 											}
@@ -1668,7 +1669,7 @@ namespace Cilbox
 						{
 							Dictionary< String, String > local = new Dictionary< String, String >();
 							local["name"] = lvi.ToString();
-							local["type"] = lvi.GetType().ToString();
+							local["type"] = lvi.GetType().FullName;
 							localVars.Add( new Serializee(local));
 						}
 						MethodProps["locals"] = new Serializee( localVars.ToArray() );
@@ -1680,7 +1681,7 @@ namespace Cilbox
 						{
 							Dictionary< String, String > tpi = new Dictionary< String, String >();
 							tpi["name"] = parameters[i].Name;
-							tpi["type"] = parameters[i].ParameterType.ToString();
+							tpi["type"] = parameters[i].ParameterType.FullName;
 							parameterList[i] = new Serializee( tpi );
 						}
 						MethodProps["parameters"] = new Serializee( parameterList );
