@@ -19,7 +19,6 @@
 		<Using Include="Xunit"/>
 	</ItemGroup>
 
-
 	<ItemGroup>
 		<Compile Include="../Assets/Cilbox/Cilbox.cs" />
 		<Compile Include="../Assets/Cilbox/CilboxProxy.cs" />
