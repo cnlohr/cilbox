@@ -22,13 +22,26 @@ namespace Cilbox
 
 		public CilboxUsage( Cilbox b ) { box = b; }
 
-		public Type GetNativeTypeFromName( String typeName )
+		public Type GetNativeTypeFromSerializee( Serializee s )
 		{
-//Debug.Log( $"TN INPUT: {typeName}" );
-//			typeName = typeName.Replace("CilboxPlatform", "CilboxPlatformActual");
-//Debug.Log( $"TN OUTPUT: {typeName}" );
+			Dictionary< String, Serializee > ses = s.AsMap();
+			String typeName = ses["n"].AsString();
+			// Perform security!!
 
-			// XXX SECURITY: DECIDE HERE IF THIS TYPE IS OKAY FOR THE CLIENT TO HAVE.
+
+
+			Serializee g;
+			Type [] ga = null;
+			if( ses.TryGetValue( "g", out g ) )
+			{
+				Serializee [] gs = g.AsArray();
+				ga = new Type[gs.Length];
+				for( int i = 0; i < gs.Length; i++ )
+					ga[i] = GetNativeTypeFromSerializee( gs[i] );
+				typeName += "`" + gs.Length;
+			}
+
+
 			if (typeName.Equals(typeof(System.Runtime.CompilerServices.RuntimeHelpers).FullName)) {
 				// Rewrite RuntimeHelpers.InitializeArray() class name.
 				// This probably should move somewhere else if we add sandboxing.
@@ -39,6 +52,7 @@ namespace Cilbox
 				// This probably should move somewhere else if we add sandboxing.
 				typeName = typeof(byte[]).FullName;
 			}
+
 			Type ret = Type.GetType( typeName );
 			if( ret == null )
 			{
@@ -50,87 +64,84 @@ namespace Cilbox
 				}
 			}
 
-#if false
-			bool isGeneric = false;
-			int numGenerics = 0;
-Debug.Log( "INPUT TYPENAME: " + typeName );
-			String [] parts = typeName.Split("`");
-
-			String [] preGenericsArray = null;
-
-			if( parts.Length > 1 )
-			{
-				preGenericsArray = parts[1].Split( "[" );
-				if( Int32.TryParse( preGenericsArray[0], out numGenerics ) )
-				{
-					Debug.Log( "GENERIC" + parts[0] );
-					isGeneric = true;
-					typeName = parts[0] + "`" + numGenerics;
-				}
-				else
-				{
-					Debug.LogError( $"Could not parse type {typeName}" );
-					return null;
-				}
-			}
-Debug.Log( "TYPEPRE: " + typeName + " " + parts.Length );
-			Type ret = Type.GetType( typeName );
 			if( ret == null )
 			{
-				System.Reflection.Assembly [] assys = AppDomain.CurrentDomain.GetAssemblies();
-				foreach( System.Reflection.Assembly a in assys )
-				{
-					Debug.Log( "TYPENAME: " + typeName );
-					ret = a.GetType( typeName );
-					if( ret != null ) break;
-				}
+				Debug.LogError( $"Could not find type {typeName}" );
+				return null;
 			}
-Debug.Log( "Is Generic: " + isGeneric );
-			if( isGeneric )
-			{
-				int i;
-Debug.Log( "REXXXXX" + preGenericsArray[1] );
-				String[] args = preGenericsArray[1].Split( "]" )[0].Split(",");
-				Type[] types = new Type[args.Length];
-				Debug.Log( "ARRRR: " + preGenericsArray[1].Split( "]" )[0] );
-				for( i = 0; i < args.Length; i++ )
-				{
-					Debug.Log( "Extracting From:" + args[i] );
-					types[i] = GetNativeTypeFromName( args[i] );
-				}
-				ret = ret.MakeGenericType( types );
-			}
-#endif
-Debug.Log( "GOT OUT: " + ret + " from " + typeName );
+
+			if( ga != null )
+				ret = ret.MakeGenericType(ga);
+
 			return ret;
 		}
 
-		public Type[] TypeNamesToArrayOfNativeTypes( String [] parameterNames )
+		public Type [] TypeNamesToArrayOfNativeTypes( Serializee [] sa )
 		{
-			// XXX SECURITY: DECIDE HERE IF A GIVEN NATIVE TYPE GROUP
-
-			if( parameterNames == null ) return null;
-			Type[] ret = new Type[parameterNames.Length];
-			for( int i = 0; i < parameterNames.Length; i++ )
-			{
-				Type pt = ret[i] = GetNativeTypeFromName(  parameterNames[i]  );
-					//GetNativeTypeFromName( assemblyAndTypeName[0], assemblyAndTypeName[1] );
-			}
+			Type [] ret = new Type[sa.Length];
+			for( int i = 0; i < sa.Length; i++ )
+				ret[i] = GetNativeTypeFromSerializee( sa[i] );
 			return ret;
 		}
 
-		public MethodBase GetNativeMethodFromTypeAndName( Type declaringType, String name, Type [] parameters, String [] genericArguments, String fullSignature )
+		// This does not check any rules, so it can be static.
+		static public String GetNativeTypeNameFromSerializee( Serializee s )
 		{
+			Dictionary< String, Serializee > m = s.AsMap();
+			Serializee g;
+			if( m.TryGetValue( "g", out g ) )
+			{
+				String ret = m["n"].AsString() + "`[";
+				Serializee [] gs = g.AsArray();
+				for( int i = 0; i < gs.Length; i++ )
+					ret += (i==0?"":",") + GetNativeTypeNameFromSerializee( gs[i] );
+				return ret + "]";
+			}
+			else
+			{
+				return m["n"].AsString();
+			}
+		}
+
+		// This does not check any rules, so it can be static.
+		public static Serializee GetSerializeeFromNativeType( Type t )
+		{
+			Dictionary< String, Serializee > ret = new Dictionary< String, Serializee >();
+
+			if( t.IsGenericType )
+			{
+				String [] sn = t.FullName.Split( "`" );
+				ret["n"] = new Serializee( sn[0] );
+				Type [] ta = t.GenericTypeArguments;
+				Serializee [] sg = new Serializee[ta.Length];
+				for( int i = 0; i < ta.Length; i++ )
+					sg[i] = GetSerializeeFromNativeType( ta[i] );
+				ret["g"] = new Serializee( sg );
+			}
+			else
+			{
+				ret["n"] = new Serializee( t.FullName );
+			}
+			return new Serializee( ret );
+		}
+
+		public MethodBase GetNativeMethodFromTypeAndName( Type declaringType, String name, Type [] parameters, Serializee [] genericArguments, String fullSignature )
+		{
+			MethodBase m;
 			// XXX SECURITY: DECIDE HERE IF A GIVEN METHOD IS OK
 
-//Debug.Log( $"MT INPUT: {declaringType}" );
-//			fullSignature = fullSignature.Replace("CilboxPlatform", "CilboxPlatformActual");
-//Debug.Log( $"MT OUTPUT: {declaringType}" );
-
+			if( typeof(Delegate).IsAssignableFrom(declaringType) )
+			{
+				int argct = declaringType.GenericTypeArguments.Length;
+				Type specific = typeof(CilboxPlatform);
+				MethodInfo mi = specific.GetMethod( "ProxyForGeneratingActions" );
+				mi = mi.MakeGenericMethod( declaringType );
+				return mi;
+			}
 
 
 			// XXX Can we combine Constructor + Method?
-			MethodBase m = declaringType.GetMethod(
+			m = declaringType.GetMethod(
 				name,
 				genericArguments.Length,
 				BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static,
@@ -179,46 +190,30 @@ Debug.Log( "GOT OUT: " + ret + " from " + typeName );
 
 	public class CilboxPlatform
 	{
-
-		public class DelegateRepackage
+		// This is called only when creating a new action, not when it's called.
+		// T is the delegate, not the arguments of the delegate.
+		static public object ProxyForGeneratingActions<T>( CilboxProxy proxy, CilboxMethod method )
 		{
-			public CilboxMethod meth;
-			public CilboxProxy o;
-		    public void ActionCallback( object[] parameters )
-			{
-				meth.Interpret( o, parameters );
-			}
-		}
-	}
-#if false
-	public class CilboxPlatform
-	{
-		static public UnityEngine.Events.UnityAction GenerateButtonClickedEvent( UnityEngine.Events.UnityAction o )
-		{
-			return (UnityEngine.Events.UnityAction)o;
-		}
-	}
-
-	public class CilboxPlatformActual
-	{
-		static public UnityEngine.Events.UnityAction GenerateButtonClickedEvent( DelegateRepackage o )
-		{
-			DelegateRepackage octx = o;
-			return octx.ActionCallback;
+			CilboxPlatform.DelegateRepackage rp = new CilboxPlatform.DelegateRepackage();
+			rp.meth = method;
+			rp.o = proxy;
+			MethodInfo mthis = typeof(CilboxPlatform.DelegateRepackage)
+				.GetMethod("ActionCallback"+(typeof(T).GenericTypeArguments.Length).ToString());
+			if( mthis.IsGenericMethod )
+				mthis = mthis.MakeGenericMethod( typeof(T).GenericTypeArguments );
+			return Delegate.CreateDelegate( typeof(T), rp, mthis );
 		}
 
 		public class DelegateRepackage
 		{
 			public CilboxMethod meth;
 			public CilboxProxy o;
-		    public void ActionCallback()
-			{
-				Debug.Log( "ActionCallback" );
-				meth.Interpret( o, new object[0] );
-			}
+		    public void ActionCallback0( ) { meth.Interpret( o, new object[0] ); }
+		    public void ActionCallback1<T0>( T0 o0 ) { meth.Interpret( o, new object[]{o0} ); }
+		    public void ActionCallback2<T0,T1>( T0 o0, T1 o1 ) { meth.Interpret( o, new object[]{o0,o1} ); }
+		    public void ActionCallback3<T0,T1,T2>( T0 o0, T1 o1, T2 o2 ) { meth.Interpret( o, new object[]{o0,o1,o2} ); }
+		    public void ActionCallback4<T0,T1,T2,T3>( T0 o0, T1 o1, T2 o2, T3 o3 ) { meth.Interpret( o, new object[]{o0,o1,o2,o3} ); }
 		}
 	}
-#endif
-
 }
 

@@ -37,7 +37,7 @@ public class TestScript : MonoBehaviour
 		Debug.Log( $"RecursionTest :{rc} Time:{ts.Milliseconds}ms" );
 		buttonControl1.onClick.AddListener( () => ClickDelegate("Button 1") );
 		buttonControl2.onClick.AddListener( () => ClickDelegate("Button 2") );
-		//inputField.onValueChanged.AddListener( (String s) => ClickDelegate(s) );
+		inputField.onValueChanged.AddListener( (String s) => ClickDelegate(s) );
 	}
 
 	public void ClickDelegate(String s) { Debug.Log( $"Delegate {s}" ); lastButton = s; delegateCount++; }
@@ -71,4 +71,5 @@ public class TestScript : MonoBehaviour
 	public void PublicFunction() { Debug.Log( "Public Function" ); }
 	public void PublicStaticFunction() { Debug.Log( "Public Staic Function" ); }
 	private void PrivateStaticFunction() { Debug.Log( "Private Static Function" ); }
+
 }

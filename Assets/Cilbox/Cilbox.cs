@@ -27,12 +27,10 @@ namespace Cilbox
 		public String methodName;
 		public String fullSignature;
 		public String[] methodLocals;
-		public String[] methodLocalTypes;
 		public byte[] byteCode;
 		public bool isStatic;
 		public bool isVoid;
 		public String[] signatureParameters;
-		public String[] signatureParameterTypes;
 #if UNITY_EDITOR
 		ProfilerMarker perfMarkerInterpret;
 #endif
@@ -45,13 +43,12 @@ namespace Cilbox
 
 			Serializee [] vl = methodProps["locals"].AsArray();
 			methodLocals = new String[vl.Length];
-			methodLocalTypes = new String[vl.Length];
 			int iid = 0;
 			for( int i = 0; i < vl.Length; i++ )
 			{
-				Dictionary< String, String > local = vl[i].AsStringMap();
-				methodLocals[iid] = local["name"];
-				methodLocalTypes[iid] = local["type"];
+				Dictionary< String, Serializee > local = vl[i].AsMap();
+				methodLocals[iid] = local["name"].AsString();
+				// TODO: We actually have the type for the locals.
 			}
 
 			byteCode = methodProps["body"].AsBlob();
@@ -63,13 +60,12 @@ namespace Cilbox
 
 			Serializee [] od = methodProps["parameters"].AsArray();
 			signatureParameters = new String[od.Length];
-			signatureParameterTypes = new String[od.Length];
 			int sn = 0;
 			for( int p = 0; p < od.Length; p ++ )
 			{
 				Dictionary< String, Serializee > thisp = od[p].AsMap();
 				signatureParameters[sn] = thisp["name"].AsString();
-				signatureParameterTypes[sn] = thisp["type"].AsString();
+				// TODO: we have access to ["type"] here.  Should we use it?
 				sn++;
 			}
 #if UNITY_EDITOR
@@ -137,9 +133,9 @@ namespace Cilbox
 			int localVarsHead = MaxStackSize;
 			int stackContinues = localVarsHead + methodLocals.Length;
 
-			bool bDeepDebug = false;
 			// Uncomment for debugging.
 #if false
+			bool bDeepDebug = false;
 			if( true ) // fullSignature.Contains( "Start" ) )
 			{
 				bDeepDebug = true;
@@ -306,25 +302,10 @@ namespace Cilbox
 							}
 							if( st.IsConstructor )
 							{
-//								I don't remember why this mattered.
-//									callthis = Activator.CreateInstance(st.DeclaringType);
-
-								// XXX TRICKY TRICKY: This is kinda cheating.  We
-								// Only really get here by constructor code, when we
-								// were already constructed.
-
+								// TRICKY: This generally can only be arrived at when scripts run their own constructors.
 								if( st.DeclaringType == typeof( MonoBehaviour ) )
-									callthis = this;
-								else if( st.DeclaringType == typeof( UnityEngine.Events.UnityAction ) )
-								{
-									CilboxPlatform.DelegateRepackage rp = new CilboxPlatform.DelegateRepackage();
-									rp.meth = (CilboxMethod)callpar[1];
-									rp.o = (CilboxProxy)callpar[0];
-									UnityEngine.Events.UnityAction act = ()=> { rp.ActionCallback( new object[0] ); };
-									iko = act;
-									isVoid = false;
-								}
-								else
+									iko = this; 
+								else // Otherwise it's normal.
 									iko = ((ConstructorInfo)st).Invoke( callpar );
 							}
 							else if( !st.IsStatic )
@@ -1006,9 +987,9 @@ namespace Cilbox
 			staticFieldTypes = new Type[sfnum];
 			for( int k = 0; k < sfnum; k++ )
 			{
-				Dictionary< String, String > field = staticFields[k].AsStringMap();
-				String fieldName = staticFieldNames[id] = field["name"];
-				Type t = staticFieldTypes[id] = box.usage.GetNativeTypeFromName( field["type"] );
+				Dictionary< String, Serializee > field = staticFields[k].AsMap();
+				String fieldName = staticFieldNames[id] = field["name"].AsString();
+				Type t = staticFieldTypes[id] = box.usage.GetNativeTypeFromSerializee( field["type"] );
 
 				//staticFieldIDs[id] = Cilbox.FindInternalMetadataID( className, 4, fieldName );
 				this.staticFields[id] = CilboxUtil.DeserializeDataForProxyField( t, "" );
@@ -1023,9 +1004,9 @@ namespace Cilbox
 			id = 0;
 			for( int k = 0; k < ifnum; k++ )
 			{
-				Dictionary< String, String > field = instanceFields[k].AsStringMap();
-				String fieldName = instanceFieldNames[id] = field["name"];
-				instanceFieldTypes[id] = box.usage.GetNativeTypeFromName( field["type"] );
+				Dictionary< String, Serializee > field = instanceFields[k].AsMap();
+				String fieldName = instanceFieldNames[id] = field["name"].AsString();
+				instanceFieldTypes[id] = box.usage.GetNativeTypeFromSerializee( field["type"] );
 				id++;
 			}
 
@@ -1198,60 +1179,52 @@ namespace Cilbox
 					t.fieldIndex = Convert.ToInt32(st["index"].AsString());
 					t.fieldIsStatic = Convert.ToInt32(st["isStatic"].AsString()) != 0;
 					t.Name = st["name"].AsString();
-					t.declaringTypeName = st["dt"].AsString();
+					t.declaringTypeName = CilboxUsage.GetNativeTypeNameFromSerializee( st["dt"] );
 
 					t.isValid = true;
 					break;
 				case MetaTokenType.mtType:
 				{
-					String hostTypeName = st["name"].AsString();
-					String useAssembly = st["assy"].AsString();
-					StackType nst;
-					t.nativeType = usage.GetNativeTypeFromName( hostTypeName );
-
-					if( StackElement.TypeToStackType.TryGetValue( hostTypeName, out nst ) )
+					Serializee typ = st["dt"];
+					t.nativeType = usage.GetNativeTypeFromSerializee( typ );
+					StackType seType = StackElement.StackTypeFromType( t.nativeType );
+					if( seType < StackType.Object )
 					{
 						t.nativeTypeIsStackType = true;
-						t.nativeTypeStackType = nst;
+						t.nativeTypeStackType = seType;
 					}
 					else
 					{
 						t.isValid = t.nativeType != null;
 
 						if( !t.isValid )
-						{
-							Debug.LogError( $"Error: Could not find type: {hostTypeName}" );
-						}
+							Debug.LogError( $"Error: Could not find type: {typ.AsMap()["name"].AsString()}" );
 						else
-						{
-							t.Name = "Type: " + hostTypeName;
-						}
+							t.Name = "Type: " + typ.AsMap()["n"].AsString();
 					}
 					break;
 				}
 				case MetaTokenType.mtMethod:
 				{
-					String declaringTypeName = st["dt"].AsString();
-					String [] parameterNames = null;
 					String name = st["name"].AsString();
 					String fullSignature = st["fullSignature"].AsString();
 					String useAssembly = st["assembly"].AsString();
-					String [] genericArguments = null;
+					Serializee [] genericArguments = null;
 					t.Name = "Method: " + name;
-					t.declaringTypeName = st["dt"].AsString();
+					string declaringTypeName = t.declaringTypeName = CilboxUsage.GetNativeTypeNameFromSerializee( st["dt"] );
 
 					//Possibly get genericArguments
 					Serializee temp;
 					if( st.TryGetValue( "ga", out temp ) )
-						genericArguments = temp.AsStringArray();
+						genericArguments = temp.AsArray();
 					else
-						genericArguments = new String[0];
+						genericArguments = new Serializee[0];
 
+					Serializee [] parametersSer = null;
 					if( st.TryGetValue( "parameters", out temp ) )
-						parameterNames = temp.AsStringArray();
+						parametersSer = temp.AsArray();
 					else
-						parameterNames = new String[0];
-
+						parametersSer = new Serializee[0];
 
 					// First, see if this is to a class we are responsible for. Like does it come from _this_ class?
 					int classid;
@@ -1275,14 +1248,15 @@ namespace Cilbox
 					}
 					else
 					{
-						Type declaringType = usage.GetNativeTypeFromName( declaringTypeName );
+						Type declaringType = usage.GetNativeTypeFromSerializee( st["dt"] );
 						if( declaringType == null )
 						{
 							throw new Exception( $"Error: Could not find referenced type {useAssembly}/{declaringTypeName}/" );
 						}
 
-						Type [] parameters = usage.TypeNamesToArrayOfNativeTypes( parameterNames );
-						MethodBase m = usage.GetNativeMethodFromTypeAndName( declaringType, name, parameters, genericArguments, fullSignature );
+						Type [] parameters = usage.TypeNamesToArrayOfNativeTypes( parametersSer );
+						MethodBase m = usage.GetNativeMethodFromTypeAndName( declaringType, name, parameters,
+							genericArguments, fullSignature );
 
 						if( m != null )
 						{
@@ -1450,7 +1424,6 @@ namespace Cilbox
 
 						String methodName = m.Name;
 						Dictionary< String, Serializee > MethodProps = new Dictionary< String, Serializee >();
-						//CLog.WriteLine( type + " / " + m.Name );
 						MethodBody mb = m.GetMethodBody();
 						if( mb == null )
 						{
@@ -1569,26 +1542,26 @@ namespace Cilbox
 												Type[] templateArguments = tmb.GetGenericArguments();
 												if( templateArguments.Length > 0 )
 												{
-													String [] argtypes = new String[templateArguments.Length];
+													Serializee [] argtypes = new Serializee[templateArguments.Length];
 													for( int a = 0; a < templateArguments.Length; a++ )
-														argtypes[a] = templateArguments[a].ToString();  //Was FullName
+														argtypes[a] = CilboxUsage.GetSerializeeFromNativeType( templateArguments[a] );
 													methodProps["ga"] = new Serializee( argtypes );
 												}
 											}
 
-											methodProps["dt"] = new Serializee( tmb.DeclaringType.FullName ); // Was FullName
+											methodProps["dt"] = CilboxUsage.GetSerializeeFromNativeType( tmb.DeclaringType ); // Was FullName
 											methodProps["name"] = new Serializee( tmb.Name );
 
 											System.Reflection.ParameterInfo[] parameterInfos = tmb.GetParameters();
 											if( parameterInfos.Length > 0 )
 											{
-												String [] sParameters = new String[parameterInfos.Length];
+												Serializee [] parametersSer = new Serializee[parameterInfos.Length];
 												for( var j = 0; j < parameterInfos.Length; j++ )
 												{
 													Type ty = parameterInfos[j].ParameterType;
-													sParameters[j] = ty.FullName; //Was FullName;
+													parametersSer[j] = CilboxUsage.GetSerializeeFromNativeType( ty ); //Was FullName;
 												}
-												methodProps["parameters"] = new Serializee( sParameters );
+												methodProps["parameters"] = new Serializee( parametersSer );
 											}
 											methodProps["fullSignature"] = new Serializee( tmb.ToString() );
 											methodProps["assembly"] = new Serializee( tmb.DeclaringType.Assembly.GetName().Name );
@@ -1606,12 +1579,12 @@ namespace Cilbox
 											writebackToken = mdcount;
 											FieldInfo rf = proxyAssembly.ManifestModule.ResolveField( (int)operand );
 
-											Dictionary<String, String> fieldProps = new Dictionary<String, String>();
-											fieldProps["mt"] = ((int)MetaTokenType.mtField).ToString();
-											fieldProps["dt"] = rf.DeclaringType.ToString();
-											fieldProps["name"] = rf.Name;
-											fieldProps["fullName"] = rf.FieldType.FullName;
-											fieldProps["isStatic"] = (rf.IsStatic?1:0).ToString();
+											Dictionary<String, Serializee> fieldProps = new Dictionary<String, Serializee>();
+											fieldProps["mt"] = new Serializee( ((int)MetaTokenType.mtField).ToString() );
+											fieldProps["dt"] = CilboxUsage.GetSerializeeFromNativeType( rf.DeclaringType );
+											fieldProps["name"] = new Serializee( rf.Name );
+											//fieldProps["fullName"] = rf.FieldType.FullName;
+											fieldProps["isStatic"] = new Serializee( (rf.IsStatic?1:0).ToString() );
 											originalMetaToFriendlyName[writebackToken] = rf.Name;
 											assemblyMetadata[(mdcount++).ToString()] = new Serializee(fieldProps);
 										}
@@ -1624,10 +1597,9 @@ namespace Cilbox
 											writebackToken = mdcount;
 											Type ty = proxyAssembly.ManifestModule.ResolveType( (int)operand );
 
-											Dictionary<String, String> fieldProps = new Dictionary<String, String>();
-											fieldProps["mt"] = ((int)MetaTokenType.mtType).ToString();
-											fieldProps["assy"] = ty.Assembly.GetName().Name;
-											fieldProps["name"] = ty.ToString();
+											Dictionary<String, Serializee> fieldProps = new Dictionary<String, Serializee>();
+											fieldProps["mt"] = new Serializee( ((int)MetaTokenType.mtType).ToString() );
+											fieldProps["dt"] = CilboxUsage.GetSerializeeFromNativeType( ty );
 											assemblyMetadata[(mdcount++).ToString()] = new Serializee( fieldProps );
 											typeLog += ty.ToString() + "\n";
 											originalMetaToFriendlyName[writebackToken] = ty.FullName;
@@ -1664,24 +1636,25 @@ namespace Cilbox
 						bytecodeLength += byteCode.Length;
 						MethodProps["body"] = Serializee.CreateFromBlob(byteCode);
 
-						List< Serializee > localVars = new List< Serializee >();
-						foreach (LocalVariableInfo lvi in mb.LocalVariables)
+						Serializee [] localVars = new Serializee[mb.LocalVariables.Count];
+						for( int i = 0; i < mb.LocalVariables.Count; i++ )
 						{
-							Dictionary< String, String > local = new Dictionary< String, String >();
-							local["name"] = lvi.ToString();
-							local["type"] = lvi.GetType().FullName;
-							localVars.Add( new Serializee(local));
+							LocalVariableInfo lvi = mb.LocalVariables[i];
+							Dictionary< String, Serializee > local = new Dictionary< String, Serializee >();
+							local["name"] = new Serializee( lvi.ToString() );
+							local["dt"] = CilboxUsage.GetSerializeeFromNativeType( lvi.GetType() );
+							localVars[i] = new Serializee( local );
 						}
-						MethodProps["locals"] = new Serializee( localVars.ToArray() );
+						MethodProps["locals"] = new Serializee( localVars );
 
 						ParameterInfo [] parameters = m.GetParameters();
 
 						Serializee [] parameterList = new Serializee[parameters.Length];
 						for( int i = 0; i < parameters.Length; i++ )
 						{
-							Dictionary< String, String > tpi = new Dictionary< String, String >();
-							tpi["name"] = parameters[i].Name;
-							tpi["type"] = parameters[i].ParameterType.FullName;
+							Dictionary< String, Serializee > tpi = new Dictionary< String, Serializee >();
+							tpi["name"] = new Serializee( parameters[i].Name );
+							tpi["type"] = CilboxUsage.GetSerializeeFromNativeType( parameters[i].ParameterType );
 							parameterList[i] = new Serializee( tpi );
 						}
 						MethodProps["parameters"] = new Serializee( parameterList );
@@ -1724,24 +1697,19 @@ namespace Cilbox
 				FieldInfo[] fi = type.GetFields( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static );
 				foreach( var f in fi )
 				{
-					Dictionary< String, String > dictField = new Dictionary< String, String >();
-					dictField["name"] = f.Name;
-					dictField["type"] = f.FieldType.FullName;
+					Dictionary< String, Serializee > dictField = new Dictionary< String, Serializee >();
+					dictField["name"] = new Serializee( f.Name ); 
+					dictField["type"] = CilboxUsage.GetSerializeeFromNativeType( f.FieldType );
 					staticFields.Add( new Serializee( dictField ) );
 
 					// Fill in our metadata with a class-specific field ID, if this field ID was used in code anywhere.
 					uint mdid;
 					if( assemblyMetadataReverseOriginal.TryGetValue(f.MetadataToken, out mdid) )
 					{
-						// XXX TODO: Clean me up.
-						//Debug.Log( "RESEALING: " + mdid.ToString() );
 						Serializee sOpen = assemblyMetadata[mdid.ToString()];
-						//Debug.Log( "SOPEN: " + sOpen.DumpAsMemory() );
 						Dictionary< String, Serializee > m = sOpen.AsMap();
-						//Debug.Log( "GOT IT! " + m.Count );
 						m["index"] = new Serializee( sfid.ToString() );
 						assemblyMetadata[mdid.ToString()] = new Serializee( m );
-						//Debug.Log( "SOPEN: " + assemblyMetadata[mdid.ToString()].DumpAsMemory() );
 					}
 					sfid++;
 				}
@@ -1753,7 +1721,7 @@ namespace Cilbox
 				{
 					Dictionary< String, Serializee > thisInstanceField = new Dictionary< String, Serializee >();
 					thisInstanceField["name"] = new Serializee( f.Name );
-					thisInstanceField["type"] = new Serializee( f.FieldType.FullName );
+					thisInstanceField["type"] = CilboxUsage.GetSerializeeFromNativeType( f.FieldType );
 					// Fill in our metadata with a class-specific field ID, if this field ID was used in code anywhere.
 					uint mdid;
 					if( assemblyMetadataReverseOriginal.TryGetValue(f.MetadataToken, out mdid) )
