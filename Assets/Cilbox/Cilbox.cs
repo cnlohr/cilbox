@@ -27,10 +27,12 @@ namespace Cilbox
 		public String methodName;
 		public String fullSignature;
 		public String[] methodLocals;
+		public Type[] typeLocals;
 		public byte[] byteCode;
 		public bool isStatic;
 		public bool isVoid;
 		public String[] signatureParameters;
+		public Type[]   typeParameters;
 #if UNITY_EDITOR
 		ProfilerMarker perfMarkerInterpret;
 #endif
@@ -43,12 +45,14 @@ namespace Cilbox
 
 			Serializee [] vl = methodProps["locals"].AsArray();
 			methodLocals = new String[vl.Length];
+			typeLocals = new Type[vl.Length];
 			int iid = 0;
 			for( int i = 0; i < vl.Length; i++ )
 			{
 				Dictionary< String, Serializee > local = vl[i].AsMap();
 				methodLocals[iid] = local["name"].AsString();
-				// TODO: We actually have the type for the locals.
+				typeLocals[iid] = parentClass.box.usage.GetNativeTypeFromSerializee( local["dt"] );
+				iid++;
 			}
 
 			byteCode = methodProps["body"].AsBlob();
@@ -60,12 +64,13 @@ namespace Cilbox
 
 			Serializee [] od = methodProps["parameters"].AsArray();
 			signatureParameters = new String[od.Length];
+			typeParameters = new Type[od.Length];
 			int sn = 0;
 			for( int p = 0; p < od.Length; p ++ )
 			{
 				Dictionary< String, Serializee > thisp = od[p].AsMap();
 				signatureParameters[sn] = thisp["name"].AsString();
-				// TODO: we have access to ["type"] here.  Should we use it?
+				typeParameters[sn] = parentClass.box.usage.GetNativeTypeFromSerializee( thisp["dt"] );
 				sn++;
 			}
 #if UNITY_EDITOR
@@ -697,20 +702,8 @@ namespace Cilbox
 //						Array a = ((Array)(stackBuffer[sp].o));
 						switch( b - 0x90 )
 						{
-/*
-// Old way
-						case 0: stackBuffer[sp].LoadSByte( (sbyte)(a.GetValue( index )) ); break; // ldelem.i1
-						case 1: stackBuffer[sp].LoadByte( (byte)(a.GetValue( index )) ); break; // ldelem.u1
-						case 2: stackBuffer[sp].LoadShort( (short)(a.GetValue( index )) ); break; // ldelem.i2
-						case 3: stackBuffer[sp].LoadUshort( (ushort)(a.GetValue( index )) ); break; // ldelem.u2
-						case 4: stackBuffer[sp].LoadInt( (int)(a.GetValue( index )) ); break; // ldelem.i4
-						case 5: stackBuffer[sp].LoadUint( (uint)(a.GetValue( index )) ); break; // ldelem.u4
-						case 6: stackBuffer[sp].LoadUlong( (ulong)(a.GetValue( index )) ); break; // ldelem.u8 / ldelem.i8
-						case 7: stackBuffer[sp].LoadInt( (int)(a.GetValue( index )) ); break; // ldelem.i
-						case 8: stackBuffer[sp].LoadFloat( (float)(a.GetValue( index )) ); break; // ldelem.r4
-						case 9: stackBuffer[sp].LoadDouble( (double)(a.GetValue( index )) ); break; // ldelem.r8
-*/
 						// Does this way work universally?  Can we assume the compiler knows what it's doing?
+						// Previously it looked more like a.GetValue( index ).
 						case 0: stackBuffer[sp].LoadSByte( (sbyte)(((sbyte[])stackBuffer[sp].o)[index]) ); break; // ldelem.i1
 						case 1: stackBuffer[sp].LoadByte( (byte)(((byte[])stackBuffer[sp].o)[index]) ); break; // ldelem.u1
 						case 2: stackBuffer[sp].LoadShort( (short)(((short[])stackBuffer[sp].o)[index]) ); break; // ldelem.i2
@@ -972,7 +965,7 @@ namespace Cilbox
 
 		public uint [] importFunctionToId; // from ImportFunctionID
 
-		public CilboxClass( Cilbox box, String className, Serializee classData )
+		public bool LoadCilboxClass( Cilbox box, String className, Serializee classData )
 		{
 			this.box = box;
 			this.className = className;
@@ -1038,6 +1031,7 @@ namespace Cilbox
 					importFunctionToId[i] = idx;
 				}
 			}
+			return true;
 		}
 	}
 
@@ -1149,11 +1143,15 @@ namespace Cilbox
 			classesList = new CilboxClass[classData.Count];
 			foreach( var v in classData )
 			{
-				CilboxClass cls = new CilboxClass( this, v.Key, v.Value );
+				CilboxClass cls = new CilboxClass();
 				classesList[clsid] = cls;
 				classes[(String)v.Key] = clsid;
 				clsid++;
 			}
+
+			clsid = 0;
+			foreach( var v in classData )
+				classesList[clsid++].LoadCilboxClass( this, v.Key, v.Value );
 
 			foreach( var v in metaData )
 			{
@@ -1654,7 +1652,7 @@ namespace Cilbox
 						{
 							Dictionary< String, Serializee > tpi = new Dictionary< String, Serializee >();
 							tpi["name"] = new Serializee( parameters[i].Name );
-							tpi["type"] = CilboxUsage.GetSerializeeFromNativeType( parameters[i].ParameterType );
+							tpi["dt"] = CilboxUsage.GetSerializeeFromNativeType( parameters[i].ParameterType );
 							parameterList[i] = new Serializee( tpi );
 						}
 						MethodProps["parameters"] = new Serializee( parameterList );
