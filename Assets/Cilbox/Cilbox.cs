@@ -1035,21 +1035,6 @@ namespace Cilbox
 		}
 	}
 
-	public class CilboxPublicUtils
-	{
-		public static void InitializeArray(Array arr, byte[] initializer)
-		{
-			if (initializer == null || arr == null)
-			{
-				throw new Exception( "Error, array or initializer are null" );
-			}
-			if (initializer.Length != System.Runtime.InteropServices.Marshal.SizeOf(arr.GetType().GetElementType()) * arr.Length) {
-				throw new Exception( "InitializeArray requires identical array byte length " + initializer.Length );
-			}
-			Buffer.BlockCopy(initializer, 0, arr, 0, initializer.Length);
-		}
-	}
-
 	public class CilMetadataTokenInfo
 	{
 		public CilMetadataTokenInfo( MetaTokenType type ) { this.type = type; }
@@ -1169,7 +1154,7 @@ namespace Cilbox
 					t.Name = st["s"].AsString();
 					break;
 				case MetaTokenType.mtArrayInitializer:
-					t.arrayInitializerData = Convert.FromBase64String(st["data"].AsString());
+					t.arrayInitializerData = st["data"].AsBlob();
 					break;
 				case MetaTokenType.mtField:
 					// The type has been "sealed" so-to-speak. In that we have an index for it.
@@ -1488,9 +1473,9 @@ namespace Cilbox
 												Marshal.Copy(h.AddrOfPinnedObject(), bytes, 0, bytes.Length);
 												h.Free();
 												// Now, encode our array initializer to base64.
-												Dictionary< String, String > thisMeta = new Dictionary< String, String >();
-												thisMeta["mt"] = ((int)MetaTokenType.mtArrayInitializer).ToString();
-												thisMeta["data"] = Convert.ToBase64String(bytes);
+												Dictionary< String, Serializee > thisMeta = new Dictionary< String, Serializee >();
+												thisMeta["mt"] = new Serializee(((int)MetaTokenType.mtArrayInitializer).ToString());
+												thisMeta["data"] = Serializee.CreateFromBlob( bytes );
 												originalMetaToFriendlyName[mdcount] = rf.Name;
 												assemblyMetadata[(mdcount++).ToString()] = new Serializee( thisMeta );
 											}

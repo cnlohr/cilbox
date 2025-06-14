@@ -26,6 +26,7 @@ namespace Cilbox
 		{
 			Dictionary< String, Serializee > ses = s.AsMap();
 			String typeName = ses["n"].AsString();
+			if( box.classes.ContainsKey( typeName ) ) return null;
 			// Perform security!!
 
 
@@ -184,6 +185,23 @@ namespace Cilbox
 			}
 
 			return m;
+		}
+	}
+
+
+	// This overrides System.Runtime.CompilerServices.RuntimeHelpers
+	public class CilboxPublicUtils
+	{
+		public static void InitializeArray(Array arr, byte[] initializer)
+		{
+			if (initializer == null || arr == null)
+			{
+				throw new Exception( "Error, array or initializer are null" );
+			}
+			if (initializer.Length != System.Runtime.InteropServices.Marshal.SizeOf(arr.GetType().GetElementType()) * arr.Length) {
+				throw new Exception( "InitializeArray requires identical array byte length " + initializer.Length );
+			}
+			Buffer.BlockCopy(initializer, 0, arr, 0, initializer.Length);
 		}
 	}
 
