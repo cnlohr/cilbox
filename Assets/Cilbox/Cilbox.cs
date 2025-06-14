@@ -12,6 +12,8 @@ using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Callbacks;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 #endif
 
 // To add [Cilboxable] to your classes that you want exported.
@@ -889,7 +891,6 @@ namespace Cilbox
 						}
 						break;
 
-
 					default: Breakwarn( $"Opcode 0x{b.ToString("X2")} unimplemented", pc ); disabled = true; cont = false; break;
 					}
 
@@ -1018,6 +1019,8 @@ namespace Cilbox
 				id++;
 			}
 
+			// These imports are for things like Start(), Update(), Awake(), etc...
+			// so that we can call back into the class.
 			int numImportFunctions = Enum.GetNames(typeof(ImportFunctionID)).Length;
 			importFunctionToId = new uint[numImportFunctions];
 			for( int i = 0; i < numImportFunctions; i++ )
@@ -1090,10 +1093,10 @@ namespace Cilbox
 		public static readonly int defaultStackSize = 1024;
 
 		public bool showFunctionProfiling;
-
+		public bool exportDebuggingData;
 		public CilboxUsage usage;
 
-		Cilbox()
+		public Cilbox()
 		{
 			initialized = false;
 			usage = new CilboxUsage( this );
@@ -1104,7 +1107,7 @@ namespace Cilbox
 			initialized = false;
 		}
 
-		public void BoxInitialize()
+		public void BoxInitialize( )
 		{
 #if UNITY_EDITOR
 			var pfm = new ProfilerMarker( "Initialize Cilbox" );
@@ -1113,7 +1116,7 @@ namespace Cilbox
 
 			if( initialized ) return;
 			initialized = true;
-			Debug.Log( "Cilbox Initialize Metadata:" + assemblyData.Length );
+			//Debug.Log( "Cilbox Initialize Metadata:" + assemblyData.Length );
 
 			Dictionary< String, Serializee > assemblyRoot = new Serializee( Convert.FromBase64String( assemblyData ), Serializee.ElementType.Map ).AsMap();
 			Dictionary< String, Serializee > classData = assemblyRoot["classes"].AsMap();
@@ -1175,6 +1178,7 @@ namespace Cilbox
 					{
 						t.nativeTypeIsStackType = true;
 						t.nativeTypeStackType = seType;
+						t.Name = t.nativeType.ToString();
 					}
 					else
 					{
@@ -1315,22 +1319,6 @@ namespace Cilbox
 		public int callbackOrder { get { return 0; } }
 		public void OnPreprocessBuild(UnityEditor.Build.Reporting.BuildReport report)
 		{
-/*
-			This does not work >:(
-
-			UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
-				UnityEngine.SceneManagement.SceneManager.GetActiveScene() );
-
-			object[] objToCheck = GameObject.FindObjectsByType<GameObject>( FindObjectsSortMode.None );
-			foreach (object o in objToCheck)
-			{
-				GameObject g = (GameObject) o;
-				EditorUtility.SetDirty( g );
-			}
-			UnityEditor.SceneManagement.EditorSceneManager.SaveScene( UnityEngine.SceneManagement.SceneManager.GetActiveScene() );
-			AssetDatabase.ImportAsset(UnityEngine.SceneManagement.SceneManager.GetActiveScene().path, ImportAssetOptions.ForceUpdate);
-*/
-
 			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing();
 
 			if( allBehavioursThatNeedCilboxing.Length == 0 )
@@ -1370,9 +1358,6 @@ namespace Cilbox
 			int bytecodeLength = 0;
 			Dictionary< String, Serializee > classes = new Dictionary<String, Serializee>();
 			Dictionary< String, Serializee > allClassMethods = new Dictionary< String, Serializee >();
-
-			StreamWriter CLog = File.CreateText( Application.dataPath + "/CilboxLog.txt" );
-			String typeLog = "";
 
 			perf.End(); perf = new ProfilerMarker( "Main Getting Types" ); perf.Begin();
 
@@ -1420,7 +1405,6 @@ namespace Cilbox
 						byte [] byteCode = new byte[byteCodeIn.Length];
 						Array.Copy( byteCodeIn, byteCode, byteCodeIn.Length );
 
-						String asm = "";
 						//if( !ExtractAndTransformMetas( proxyAssembly, ref ba, ref assemblyMetadata, ref assemblyMetadataReverseOriginal, ref mdcount ) ) continue;
 						//static bool ExtractAndTransformMetas( Assembly proxyAssembly, ref byte [] byteCode, ref OrderedDictionary od, ref Dictionary< uint, uint > assemblyMetadataReverseOriginal, ref int mdcount )
 						{
@@ -1436,7 +1420,7 @@ namespace Cilbox
 									} catch( Exception e )
 									{
 										Debug.LogError( e );
-										Debug.LogError( "Exception decoding opcode at address " + i + " in " + m.Name + "\n" + asm );
+										Debug.LogError( "Exception decoding opcode at address " + i + " in " + m.Name );
 										throw;
 									}
 									int opLen = CilboxUtil.OpCodes.OperandLength[(int)oc.OperandType];
@@ -1445,9 +1429,6 @@ namespace Cilbox
 
 									bool changeOperand = true;
 									uint writebackToken = mdcount;
-
-									asm += "\t" + String.Format("{0,-5}{1,-10}", starti, oc.ToString() );
-									if( opLen > 0 ) asm += "\t0x" + operand.ToString("X"+opLen*2);
 
 									// Check to see if this is a meta that we care about.  Then rewrite in a new identifier.
 									// ResolveField, ResolveMember, ResolveMethod, ResolveSignature, ResolveString, ResolveType
@@ -1479,21 +1460,13 @@ namespace Cilbox
 												originalMetaToFriendlyName[mdcount] = rf.Name;
 												assemblyMetadata[(mdcount++).ToString()] = new Serializee( thisMeta );
 											}
-											asm += "\t" + originalMetaToFriendlyName[writebackToken];
 											break;
 										default:
-											throw new Exception( "Exception decoding opcode at address (confusing meta " + operand.ToString("X8") + ") " + i + " in " + m.Name + "\n" + asm );
+											throw new Exception( "Exception decoding opcode at address (confusing meta " + operand.ToString("X8") + ") " + i + " in " + m.Name );
 										}
 									}
 									else if( ot == CilboxUtil.OpCodes.OperandType.InlineSwitch )
 									{
-										asm += $" Switch {operand} cases";
-										int oin;
-										for( oin = 0; oin < operand; oin++ )
-										{
-											int sws = (int)(uint)CilboxUtil.BytecodePullLiteral( byteCode, ref i, 4 );
-											asm += " " + sws;
-										}
 										changeOperand = false;
 									}
 									else if( ot == CilboxUtil.OpCodes.OperandType.InlineString )
@@ -1508,7 +1481,6 @@ namespace Cilbox
 											originalMetaToFriendlyName[mdcount] = st;
 											assemblyMetadata[(mdcount++).ToString()] = new Serializee( thisMeta );
 										}
-										asm += "\t" + originalMetaToFriendlyName[writebackToken];
 									}
 									else if( ot == CilboxUtil.OpCodes.OperandType.InlineMethod )
 									{
@@ -1552,8 +1524,6 @@ namespace Cilbox
 											originalMetaToFriendlyName[writebackToken] = tmb.DeclaringType.ToString() + "." + tmb.ToString();
 											assemblyMetadata[(mdcount++).ToString()] = new Serializee( methodProps );
 										}
-
-										asm += "\t" + originalMetaToFriendlyName[writebackToken];
 									}
 									else if( ot == CilboxUtil.OpCodes.OperandType.InlineField )
 									{
@@ -1571,7 +1541,6 @@ namespace Cilbox
 											originalMetaToFriendlyName[writebackToken] = rf.Name;
 											assemblyMetadata[(mdcount++).ToString()] = new Serializee(fieldProps);
 										}
-										asm += "\t" + originalMetaToFriendlyName[writebackToken];
 									}
 									else if( ot == CilboxUtil.OpCodes.OperandType.InlineType )
 									{
@@ -1584,15 +1553,11 @@ namespace Cilbox
 											fieldProps["mt"] = new Serializee( ((int)MetaTokenType.mtType).ToString() );
 											fieldProps["dt"] = CilboxUsage.GetSerializeeFromNativeType( ty );
 											assemblyMetadata[(mdcount++).ToString()] = new Serializee( fieldProps );
-											typeLog += ty.ToString() + "\n";
 											originalMetaToFriendlyName[writebackToken] = ty.FullName;
 										}
-										asm += "\t" + originalMetaToFriendlyName[writebackToken];
 									}
 									else
 										changeOperand = false;
-
-									asm += "\n";
 
 									if( changeOperand )
 									{
@@ -1609,12 +1574,6 @@ namespace Cilbox
 								continue;
 							}
 						}
-
-						//String byteCodeStr = "";
-						//for( int i = 0; i < byteCode.Length; i++ )
-						//	byteCodeStr += byteCode[i].ToString( "x2" );
-
-						CLog.WriteLine( type.FullName + "." + methodName + " (" + byteCode.Length + ")\n" + asm );
 
 						bytecodeLength += byteCode.Length;
 						MethodProps["body"] = Serializee.CreateFromBlob(byteCode);
@@ -1656,8 +1615,6 @@ namespace Cilbox
 			}
 
 			perf.End(); perf = new ProfilerMarker( "Secondary Getting Types" ); perf.Begin();
-
-			CLog.WriteLine( typeLog );
 
 			// Now that we've iterated through all classes, and collected all possible uses of field IDs,
 			// go through the classes again, collecting the fields themselves.
@@ -1714,21 +1671,11 @@ namespace Cilbox
 			Dictionary< String, Serializee > assemblyRoot = new Dictionary< String, Serializee >();
 			assemblyRoot["classes"] = new Serializee( classes );
 			assemblyRoot["metadata"] = new Serializee( assemblyMetadata );
-
-			perf.End(); perf = new ProfilerMarker( "Logging Entries" ); perf.Begin();
-
-			foreach( var v in assemblyMetadata )
-			{
-				Dictionary< String, Serializee > fields = v.Value.AsMap();
-				String sf = v.Key;
-				foreach( var f in fields )
-					sf += " " + f.ToString();
-				CLog.WriteLine( sf );
-			}
+			Serializee assemblySerializee = new Serializee( assemblyRoot );
 
 			perf.End(); perf = new ProfilerMarker( "Serializing" ); perf.Begin();
 
-			String sAllAssemblyData = Convert.ToBase64String(new Serializee( assemblyRoot ).DumpAsMemory().ToArray() );
+			String sAllAssemblyData = Convert.ToBase64String(assemblySerializee.DumpAsMemory().ToArray() );
 
 			perf.End(); perf = new ProfilerMarker( "Checking If Assembly Changed" ); perf.Begin();
 
@@ -1742,12 +1689,14 @@ namespace Cilbox
 			else
 			{
 				GameObject cilboxDataObject = new GameObject("CilboxData " + new System.Random().Next(0,10000000));
-				//cilboxDataObject.hideFlags = HideFlags.HideInHierarchy;
 				tac = cilboxDataObject.AddComponent( typeof(Cilbox) ) as Cilbox;
 				EditorUtility.SetDirty( tac );
 			}
 
 			perf.End(); perf = new ProfilerMarker( "Applying Assembly" ); perf.Begin();
+
+			if( tac.exportDebuggingData )
+				new Task( () => { CilboxUtil.AssemblyLoggerTask( Application.dataPath + "/CilboxLog.txt", sAllAssemblyData ); } ).Start();
 
 			if( bytecodeLength == 0 )
 			{
@@ -1757,8 +1706,6 @@ namespace Cilbox
 			{
 				tac.assemblyData = sAllAssemblyData;
 				tac.ForceReinit();
-				//Debug.Log( "Outputting Assembly Data: " + sAllAssemblyData + " byteCode: " + bytecodeLength + " bytes " );
-				CLog.WriteLine( "ByteCode: " + sAllAssemblyData.Length + " bytes " );
 			}
 
 			Dictionary< MonoBehaviour, CilboxProxy > refToProxyMap = new Dictionary< MonoBehaviour, CilboxProxy >();

@@ -10,6 +10,7 @@ using System.Runtime.InteropServices;
 using UnityEditor;
 using UnityEditor.Callbacks;
 using System.Reflection;
+using System.IO;
 #endif
 
 namespace Cilbox
@@ -481,7 +482,7 @@ namespace Cilbox
 			int l = buffer.Span[0];
 			int lenBytes = l & 0x7;
 			ElementType typ = (ElementType)((l>>3)&7);
-			if( typ != ElementType.Blob ) throw new Exception( $"Fault, got {typ} expected String" );
+			if( typ != ElementType.Blob ) throw new Exception( $"Fault, got {typ} expected Blob" );
 			return buffer.Span.Slice( lenBytes+1 ).ToArray();
 		}
 
@@ -654,7 +655,228 @@ namespace Cilbox
 			}
 		}
 
+		///////////////////////////////////////////////////////////////////////////
+		//  ASSEMBLY DEBUG LOGGER  ////////////////////////////////////////////////
+		///////////////////////////////////////////////////////////////////////////
+#if UNITY_EDITOR
+		public static void AssemblyLoggerTask( String fileName, String assemblyData )
+		{
+			StreamWriter CLog = File.CreateText( fileName );
+			CLog.WriteLine( "Cilbox Size: " + assemblyData.Length + " bytes." );
 
+			try
+			{
+				Cilbox b = new Cilbox();
+				b.assemblyData = assemblyData;
+				b.BoxInitialize();
+
+				Dictionary< String, int > classes;
+				CilboxClass [] classesList;
+
+				Dictionary< String, Serializee > assemblyRoot = new Serializee( Convert.FromBase64String( assemblyData ), Serializee.ElementType.Map ).AsMap();
+				Dictionary< String, Serializee > classData = assemblyRoot["classes"].AsMap();
+				Dictionary< String, Serializee > metaData = assemblyRoot["metadata"].AsMap();
+
+				int clsid = 0;
+				classes = new Dictionary< String, int >();
+				classesList = new CilboxClass[classData.Count];
+				foreach( var v in classData )
+				{
+					CilboxClass cls = new CilboxClass();
+					classesList[clsid] = cls;
+					classes[(String)v.Key] = clsid;
+					clsid++;
+				}
+
+				clsid = 0;
+				foreach( var v in classData )
+				{
+					CilboxClass c = classesList[clsid++];
+
+					c.LoadCilboxClass( b, v.Key, v.Value );
+
+					CLog.WriteLine( $"Class: {c.className}" );
+
+					String imports = "";
+					int numImportFunctions = Enum.GetNames(typeof(ImportFunctionID)).Length;
+					for( int i = 0; i < numImportFunctions; i++ )
+					{
+						String fn = Enum.GetName(typeof(ImportFunctionID), i);
+						if( i == 0 ) fn = ".ctor";
+						if( c.importFunctionToId[i] != 0xffffffff )
+							imports += " " + fn;
+					}
+					CLog.WriteLine( $"Imports:{imports}" );
+
+					CLog.WriteLine( "Static Fields:" );
+					for( int i = 0; i < c.staticFieldNames.Length; i++ )
+						CLog.WriteLine( $"\t{c.staticFieldTypes[i]} {c.staticFieldNames}[i]" );
+
+					CLog.WriteLine( "Instance Fields:" );
+					for( int i = 0; i < c.instanceFieldNames.Length; i++ )
+						CLog.WriteLine( $"\t{c.instanceFieldTypes[i]} {c.instanceFieldNames[i]}" );
+
+					for( int k = 0; k < c.methods.Length; k++ )
+					{
+						CilboxMethod m = c.methods[k];
+
+						CLog.WriteLine( $"{c.className}.{m.methodName} - {m.fullSignature}" );
+						for( int j = 0; j < m.signatureParameters.Length; j++ )
+						{
+							CLog.WriteLine( $"\t{m.typeParameters[j]} {m.signatureParameters[j]}" );
+						}
+						CLog.WriteLine( $"\tBody: Max Stack: {m.MaxStackSize}" );
+						for( int j = 0; j < m.methodLocals.Length; j++ )
+						{
+							CLog.WriteLine( $"\t\t{m.typeLocals[j]} {m.methodLocals[j]}" );
+						}
+
+						byte[] byteCode = m.byteCode;
+
+						int i = 0;
+						i = 0;
+						try {
+							do
+							{
+								int starti = i;
+								CilboxUtil.OpCodes.OpCode oc;
+								try {
+									oc = CilboxUtil.OpCodes.ReadOpCode( byteCode, ref i );
+								} catch( Exception e )
+								{
+									CLog.WriteLine( e );
+									CLog.WriteLine( "Exception decoding opcode at address " + i + " in " + m.methodName );
+									throw;
+								}
+								int opLen = CilboxUtil.OpCodes.OperandLength[(int)oc.OperandType];
+								int backupi = i;
+								uint operand = (uint)CilboxUtil.BytecodePullLiteral( byteCode, ref i, opLen );
+
+								String stline = $"\t\t {starti,-4} {oc,-10}";
+
+								// Check to see if this is a meta that we care about.  Then rewrite in a new identifier.
+								// ResolveField, ResolveMember, ResolveMethod, ResolveSignature, ResolveString, ResolveType
+								// We sort of want to let the other end know what they are. So we mark them with the code
+								// from here: https://github.com/jbevain/cecil/blob/master/Mono.Cecil.Metadata/TableHeap.cs#L16
+
+								CilboxUtil.OpCodes.OperandType ot = oc.OperandType;
+
+								if( ot == CilboxUtil.OpCodes.OperandType.InlineTok )
+								{
+									CilMetadataTokenInfo md = b.metadatas[operand];
+									stline += " ";
+									if( md != null )
+										stline += md.Name;
+									else
+										stline += operand.ToString("X4") + " ";
+								}
+								else if( ot == CilboxUtil.OpCodes.OperandType.InlineSwitch )
+								{
+									stline += $" Switch {operand} cases";
+									int oin;
+									for( oin = 0; oin < operand; oin++ )
+									{
+										int sws = (int)(uint)CilboxUtil.BytecodePullLiteral( byteCode, ref i, 4 );
+										stline += " " + sws;
+									}
+								}
+								else if( ot == CilboxUtil.OpCodes.OperandType.InlineString )
+								{
+									CilMetadataTokenInfo md = b.metadatas[operand];
+									stline += " " + ((md!=null)?md.Name:"UNDEFINED");
+								}
+								else if( ot == CilboxUtil.OpCodes.OperandType.InlineMethod )
+								{
+									CilMetadataTokenInfo md = b.metadatas[operand];
+									stline += " ";
+									if( md == null )
+										stline += operand.ToString("X4");
+									else
+										stline += md.declaringTypeName + " " + md.Name;
+								}
+								else if( ot == CilboxUtil.OpCodes.OperandType.InlineField )
+								{
+									CilMetadataTokenInfo md = b.metadatas[operand];
+									stline += " " + ((md!=null)?md.Name:operand.ToString("X4"));
+								}
+								else if( ot == CilboxUtil.OpCodes.OperandType.InlineType )
+								{
+									CilMetadataTokenInfo md = b.metadatas[operand];
+									stline += " " + ((md!=null)?md.Name:operand.ToString("X4"));
+								}
+								CLog.WriteLine( stline );
+								if( i >= byteCode.Length ) break;
+							} while( true );
+						} catch( Exception e )
+						{
+							CLog.WriteLine( e.ToString() );
+							Debug.LogError( e.ToString() );
+						}
+					}
+				}
+
+				foreach( var v in metaData )
+				{
+					int mid = Convert.ToInt32((String)v.Key);
+					Dictionary< String, Serializee > st = v.Value.AsMap();
+					MetaTokenType metatype = (MetaTokenType)Convert.ToInt32(st["mt"].AsString());
+					//CilMetadataTokenInfo t = metadatas[mid] = new CilMetadataTokenInfo( metatype );
+
+					//t.type = metatype;
+					//t.Name = "<UNKNOWN>";
+
+					String metaLine = $"\t{mid.ToString("X4")} {metatype} ";
+
+					switch( metatype )
+					{
+					case MetaTokenType.mtString:
+						metaLine += st["s"].AsString();
+						break;
+					case MetaTokenType.mtArrayInitializer:
+						metaLine += Convert.ToBase64String( st["data"].AsBlob() );
+						break;
+					case MetaTokenType.mtField:
+						Type t = b.usage.GetNativeTypeFromSerializee( st["dt"] );
+						//metaLine += $"{Convert.ToInt32(st["index"].AsString())} {(Convert.ToInt32(st["isStatic"].AsString()) != 0?"static":"")} {st["name"].AsString()} {t.ToString()}";
+						metaLine += "TODO (field)";
+						break;
+					case MetaTokenType.mtType:
+					{
+						Serializee typ = st["dt"];
+						Type nt = b.usage.GetNativeTypeFromSerializee( typ );
+						StackType seType = StackElement.StackTypeFromType( nt );
+						if( seType < StackType.Object )
+						{
+							metaLine += $"{nt.ToString()} {seType}";
+						}
+						else
+						{
+							metaLine += $"{nt.ToString()}";
+							if( nt == null )
+							{
+								throw new Exception( $"Type {typ.AsString()} not available." );
+							}
+						}
+						break;
+					}
+					case MetaTokenType.mtMethod:
+					{
+						metaLine += $"{st["name"].AsString()} {st["fullSignature"].AsString()} {st["assembly"].AsString()}";
+						break;
+					}
+					}
+
+					CLog.WriteLine( metaLine );
+				}
+			}
+			catch( Exception e )
+			{
+				Debug.LogError( e.ToString() );
+				CLog.WriteLine( e.ToString() );
+			}
+			CLog.Close();
+		}
+#endif
 
 		///////////////////////////////////////////////////////////////////////////
 		//  REFLECTION HELPERS  ///////////////////////////////////////////////////
@@ -682,7 +904,6 @@ namespace Cilbox
 			}
 			return ret.ToArray();
 		}
-
 
 		///////////////////////////////////////////////////////////////////////////
 		//  DEFS FROM CECIL FOR PARSING CIL  //////////////////////////////////////
