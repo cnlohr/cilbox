@@ -1669,61 +1669,42 @@ namespace Cilbox
 
 				ProfilerMarker perfType = new ProfilerMarker(type.ToString()); perfType.Begin();
 
+				Dictionary< String, Serializee > classProps = new Dictionary< String, Serializee >();
 
 				// This portion extracts the index information from the current type, and
 				// Writes it back in where it was needed above in the Method call.
 				//
-				// XXX TODO REFACTOR ME.
-
-				List< Serializee > staticFields = new List< Serializee >();
-				int sfid = 0;
-				FieldInfo[] fi = type.GetFields( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static );
-				foreach( var f in fi )
+				for( int lst = 0; lst < 2; lst++ )
 				{
-					Dictionary< String, Serializee > dictField = new Dictionary< String, Serializee >();
-					dictField["name"] = new Serializee( f.Name ); 
-					dictField["type"] = CilboxUsage.GetSerializeeFromNativeType( f.FieldType );
-					staticFields.Add( new Serializee( dictField ) );
-
-					// Fill in our metadata with a class-specific field ID, if this field ID was used in code anywhere.
-					uint mdid;
-					if( assemblyMetadataReverseOriginal.TryGetValue(f.MetadataToken, out mdid) )
+					List< Serializee > fields = new List< Serializee >();
+					int sfid = 0;
+					FieldInfo[] fi;
+					if( lst == 0 )
+						fi = type.GetFields( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static );
+					else
+						fi = type.GetFields( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance );
+					foreach( var f in fi )
 					{
-						Serializee sOpen = assemblyMetadata[mdid.ToString()];
-						Dictionary< String, Serializee > m = sOpen.AsMap();
-						m["index"] = new Serializee( sfid.ToString() );
-						assemblyMetadata[mdid.ToString()] = new Serializee( m );
+						Dictionary< String, Serializee > dictField = new Dictionary< String, Serializee >();
+						dictField["name"] = new Serializee( f.Name ); 
+						dictField["type"] = CilboxUsage.GetSerializeeFromNativeType( f.FieldType );
+						fields.Add( new Serializee( dictField ) );
+
+						// Fill in our metadata with a class-specific field ID, if this field ID was used in code anywhere.
+						uint mdid;
+						if( assemblyMetadataReverseOriginal.TryGetValue(f.MetadataToken, out mdid) )
+						{
+							Serializee sOpen = assemblyMetadata[mdid.ToString()];
+							Dictionary< String, Serializee > m = sOpen.AsMap();
+							m["index"] = new Serializee( sfid.ToString() );
+							assemblyMetadata[mdid.ToString()] = new Serializee( m );
+						}
+						sfid++;
 					}
-					sfid++;
+					classProps[(lst == 0 )?"staticFields":"instanceFields"] = new Serializee( fields.ToArray() );
 				}
 
-				List< Serializee > instanceFields = new List< Serializee >();
-				fi = type.GetFields( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance );
-				int ifid = 0;
-				foreach( var f in fi )
-				{
-					Dictionary< String, Serializee > thisInstanceField = new Dictionary< String, Serializee >();
-					thisInstanceField["name"] = new Serializee( f.Name );
-					thisInstanceField["type"] = CilboxUsage.GetSerializeeFromNativeType( f.FieldType );
-					// Fill in our metadata with a class-specific field ID, if this field ID was used in code anywhere.
-					uint mdid;
-					if( assemblyMetadataReverseOriginal.TryGetValue(f.MetadataToken, out mdid) )
-					{
-						//Debug.Log( "RESEALING: B " + mdid.ToString() );
-						// XXX TODO: Clean me up.
-						Serializee sOpen = assemblyMetadata[mdid.ToString()];
-						Dictionary< String, Serializee > m = sOpen.AsMap();
-						m["index"] = new Serializee( ifid.ToString() );
-						assemblyMetadata[mdid.ToString()] = new Serializee( m );
-					}
-					instanceFields.Add( new Serializee( thisInstanceField ) );
-					ifid++;
-				}
-
-				Dictionary< String, Serializee > classProps = new Dictionary< String, Serializee >();
 				classProps["methods"] = allClassMethods[type.FullName];
-				classProps["staticFields"] = new Serializee( staticFields.ToArray() );
-				classProps["instanceFields"] = new Serializee( instanceFields.ToArray() );
 				classes[type.FullName] = new Serializee( classProps );
 				perfType.End();
 			}

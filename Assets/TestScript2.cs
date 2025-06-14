@@ -18,8 +18,8 @@ public class TestScript2 : MonoBehaviour
 		test["hello"] = 5;
 		test["world"] = 6;
 		Debug.Log( $"{test["hello"]} {test["world"]}" );
-		Debug.Log(datafloat[2]); // 0.5
-		Debug.Log(dataint[2]); // 1056964608
+		Debug.Log($"Should be 0.5 {datafloat[2]}"); // 0.5
+		Debug.Log($"Should be 1056964608 {dataint[2]}"); // 1056964608
 	}
 
 	public void AnotherThing()

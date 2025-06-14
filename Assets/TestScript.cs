@@ -38,6 +38,8 @@ public class TestScript : MonoBehaviour
 		buttonControl1.onClick.AddListener( () => ClickDelegate("Button 1") );
 		buttonControl2.onClick.AddListener( () => ClickDelegate("Button 2") );
 		inputField.onValueChanged.AddListener( (String s) => ClickDelegate(s) );
+		float[] testStaticInitializer = new float[]{ 0.5f, 1.5f, 2.5f };
+		Debug.Log( $"This should be 0.5, 1.5, 2.5: {testStaticInitializer[0]} {testStaticInitializer[1]} {testStaticInitializer[2]}" );
 	}
 
 	public void ClickDelegate(String s) { Debug.Log( $"Delegate {s}" ); lastButton = s; delegateCount++; }
