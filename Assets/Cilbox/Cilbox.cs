@@ -1405,6 +1405,7 @@ namespace Cilbox
 						byte [] byteCode = new byte[byteCodeIn.Length];
 						Array.Copy( byteCodeIn, byteCode, byteCodeIn.Length );
 
+						String sOpcodeStr = ""; int iOpcodeStrI = 0;
 						//if( !ExtractAndTransformMetas( proxyAssembly, ref ba, ref assemblyMetadata, ref assemblyMetadataReverseOriginal, ref mdcount ) ) continue;
 						//static bool ExtractAndTransformMetas( Assembly proxyAssembly, ref byte [] byteCode, ref OrderedDictionary od, ref Dictionary< uint, uint > assemblyMetadataReverseOriginal, ref int mdcount )
 						{
@@ -1414,13 +1415,21 @@ namespace Cilbox
 								do
 								{
 									int starti = i;
+									for( ; iOpcodeStrI <= starti; iOpcodeStrI++ )
+										sOpcodeStr += ((iOpcodeStrI < starti)?" ":"*") + byteCode[iOpcodeStrI].ToString("X2");
+
 									CilboxUtil.OpCodes.OpCode oc;
 									try {
 										oc = CilboxUtil.OpCodes.ReadOpCode( byteCode, ref i );
 									} catch( Exception e )
 									{
 										Debug.LogError( e );
-										Debug.LogError( "Exception decoding opcode at address " + i + " in " + m.Name );
+										sOpcodeStr += " XXXX ";
+										for( ; iOpcodeStrI < byteCode.Length; iOpcodeStrI++ )
+										{
+											sOpcodeStr += byteCode[iOpcodeStrI].ToString("X2") + " ";
+										}
+										Debug.LogError( "Exception decoding opcode at address " + i + " in " + m.Name + "\n" + sOpcodeStr );
 										throw;
 									}
 									int opLen = CilboxUtil.OpCodes.OperandLength[(int)oc.OperandType];
@@ -1467,6 +1476,7 @@ namespace Cilbox
 									}
 									else if( ot == CilboxUtil.OpCodes.OperandType.InlineSwitch )
 									{
+										i += (int)operand*4;
 										changeOperand = false;
 									}
 									else if( ot == CilboxUtil.OpCodes.OperandType.InlineString )
