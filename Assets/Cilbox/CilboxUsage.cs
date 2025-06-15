@@ -10,22 +10,18 @@
 //     3. GetNativeMethodFromTypeAndName - Sometimes rewrites stuff
 //        a. If rewritten, overrides all further security and fast-paths.
 //     4. InternalGetNativeMethodFromTypeAndNameNoSecurity
-//     5. Parameters and Arguments are checked with CheckTypeSecurityRecursive.
+//     5. Parameters and Arguments are checked with CheckTypeSecurityRecursive
+//     6. CheckTypeSecurityRecursive calls CheckTypeSecurity
 //
 //   GetNativeTypeNameFromSerializee mimics GetNativeTypeFromSerializee
 //
 //   GetNativeTypeFromSerializee (can only be used on non-templated types)
 //     1. Checks to see if it's a type from within this cilbox.  If so GO!
-//     2. CheckReplaceType ON BASE TYPE ONLY
+//     2. CheckReplaceTypeNotRecursive ON BASE TYPE ONLY
 //     3. Recursively check all template types through GetNativeTypeFromSerializee
 //     4. Type.GetType
 //     5. MakeGenericType 
 //
-//  CheckTypeSecurityRecursive handles templated arguments.
-//   It uses CheckTypeSecurity
-//
-// TODO:
-//   * CheckReplaceType Cannot yet validate templated types.  Only CheckTypeSecurityRecursive can.
 
 
 using UnityEngine;
@@ -175,7 +171,7 @@ namespace Cilbox
 
 		// WARNING: This DOES NOT appropriately handle templated types.
 		// TODO: IF YOU WANT THIS TO HANDLE TEMPLATE TYPES, YOU MUST DO SO RECURSIVELY.
-		String CheckReplaceType( String typeName )
+		String CheckReplaceTypeNotRecursive( String typeName )
 		{
 			if (typeName.Equals(typeof(System.Runtime.CompilerServices.RuntimeHelpers).FullName)) {
 				// Rewrite RuntimeHelpers.InitializeArray() class name.
@@ -223,7 +219,7 @@ namespace Cilbox
 			Dictionary< String, Serializee > ses = s.AsMap();
 			String typeName = ses["n"].AsString();
 			if( box.classes.ContainsKey( typeName ) ) return null;
-			typeName = CheckReplaceType( typeName );
+			typeName = CheckReplaceTypeNotRecursive( typeName );
 			if( typeName == null ) return null;
 
 			Serializee g;
@@ -265,7 +261,7 @@ namespace Cilbox
 			Dictionary< String, Serializee > ses = s.AsMap();
 			String typeName = ses["n"].AsString();
 			if( box.classes.ContainsKey( typeName ) ) return typeName;
-			typeName = CheckReplaceType( typeName );
+			typeName = CheckReplaceTypeNotRecursive( typeName );
 			if( typeName == null ) return null;
 
 			Serializee g;

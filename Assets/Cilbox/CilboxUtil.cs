@@ -834,7 +834,7 @@ namespace Cilbox
 					//t.type = metatype;
 					//t.Name = "<UNKNOWN>";
 
-					String metaLine = $"\t{mid.ToString("X4")} {metatype} ";
+					String metaLine = $"\t{mid.ToString("X4")} {metatype.ToString().Substring(2),-7} ";
 
 					switch( metatype )
 					{
@@ -846,8 +846,11 @@ namespace Cilbox
 						break;
 					case MetaTokenType.mtField:
 						Type t = b.usage.GetNativeTypeFromSerializee( st["dt"] );
-						//metaLine += $"{Convert.ToInt32(st["index"].AsString())} {(Convert.ToInt32(st["isStatic"].AsString()) != 0?"static":"")} {st["name"].AsString()} {t.ToString()}";
-						metaLine += "TODO (field)";
+						if( Int32.Parse( st["isStatic"].AsString() ) > 0 ) metaLine += "static ";
+						String tname = t?.ToString();
+						if( t == null )
+							tname = "NR:" + st["dt"].AsMap()["n"].AsString() + " ";
+						metaLine += tname + st["name"].AsString();
 						break;
 					case MetaTokenType.mtType:
 					{
