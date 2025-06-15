@@ -7,13 +7,12 @@
 //   For Methods:
 //     1. HandleEarlyMethodRewrite() -- This can rewrite declaring type + method.
 //     2. GetNativeTypeNameFromSerializee on declaring type
-//     3. GetNativeMethodFromTypeAndName - Sometimes rewrites stuff
+//     3. GetNativeMethodFromTypeAndName - Sometimes swap-out stuff
 //        a. If rewritten, overrides all further security and fast-paths.
 //     4. InternalGetNativeMethodFromTypeAndNameNoSecurity
 //     5. Parameters and Arguments are checked with CheckTypeSecurityRecursive
 //     6. CheckTypeSecurityRecursive calls CheckTypeSecurity
 //
-//   GetNativeTypeNameFromSerializee mimics GetNativeTypeFromSerializee
 //
 //   GetNativeTypeFromSerializee (can only be used on non-templated types)
 //     1. Checks to see if it's a type from within this cilbox.  If so GO!
@@ -22,7 +21,11 @@
 //     4. Type.GetType
 //     5. MakeGenericType 
 //
-
+//   GetNativeTypeNameFromSerializee mimics GetNativeTypeFromSerializee
+//
+//
+// TODO: Check UnityAction / UnityEvent
+//
 
 using UnityEngine;
 using System.Collections.Generic;
@@ -47,6 +50,7 @@ namespace Cilbox
 			"System.Char",
 			"System.Collections.Generic.Dictionary",
 			"System.DateTime",
+			"System.DayOfWeek",
 			"System.Diagnostics.Stopwatch",
 			"System.Int32",
 			"System.MathF",
@@ -56,6 +60,8 @@ namespace Cilbox
 			"System.TimeSpan",
 			"System.UInt16",
 			"System.UInt32",
+			"System.ValueTuple",
+			"System.Void",
 			"UnityEngine.Component",
 			"UnityEngine.Debug",
 			"UnityEngine.Events.UnityAction",
@@ -71,8 +77,10 @@ namespace Cilbox
 			"UnityEngine.Renderer",
 			"UnityEngine.Time",
 			"UnityEngine.Texture",
+			"UnityEngine.UI.Button+ButtonClickedEvent",
 			"UnityEngine.UI.Button",
 			"UnityEngine.UI.InputField",
+			"UnityEngine.UI.InputField+OnChangeEvent",
 			"UnityEngine.UI.Scrollbar",
 			"UnityEngine.UI.Selectable",
 			"UnityEngine.UI.Slider",
@@ -96,31 +104,11 @@ namespace Cilbox
 		public MethodBase GetNativeMethodFromTypeAndName( Type declaringType, String name, Serializee [] parametersIn, Serializee [] genericArgumentsIn, String fullSignature )
 		{
 			// Perform any needed security here.
-			if( declaringType == typeof(UnityEngine.MonoBehaviour) )
-			{
-				if( name != ".ctor" )
-				{
-					// You're allowed to get access to the constructor, nothing else.
-					Debug.LogError( $"Privelege failed {declaringType}.{name}" );
-					return null;
-				}
-			}
-			if( declaringType == typeof(UnityEngine.Events.UnityAction) )
-			{
-				if( name != ".ctor" )
-				{
-					// You're allowed to get access to the constructor, nothing else.
-					Debug.LogError( $"Privelege failed {declaringType}.{name}" );
-					return null;
-				}
-			}
-			if( declaringType.Name == "<PrivateImplementationDetails>" )
-			{
-				if( name == "ComputeStringHash" )
-				{
-					return typeof(CilboxPublicUtils).GetMethod("ComputeStringHashProxy");
-				}
-			}
+
+			// You're allowed to get access to the constructor, nothing else.
+			if( declaringType == typeof(UnityEngine.MonoBehaviour) && name != ".ctor" ) goto disallowed;
+			if( declaringType == typeof(UnityEngine.Events.UnityAction) && name != ".ctor" ) goto disallowed;
+			if( name.Contains( "Invoke" ) ) goto disallowed;
 
 			// Replace any delegate creations with their proxies.
 			if( typeof(Delegate).IsAssignableFrom(declaringType) )
@@ -131,6 +119,7 @@ namespace Cilbox
 				mi = mi.MakeGenericMethod( declaringType );
 				return mi;
 			}
+
 			Type[] parameters = TypeNamesToArrayOfNativeTypes( parametersIn );
 			Type[] genericArguments = TypeNamesToArrayOfNativeTypes( genericArgumentsIn );
 
@@ -138,16 +127,15 @@ namespace Cilbox
 
 			// Check all parameters for type safety.
 			foreach( Type t in parameters )
-				if( CheckTypeSecurityRecursive( t ) == null )
-					m = null;
+				if( CheckTypeSecurityRecursive( t ) == null ) goto disallowed;
 			foreach( Type t in genericArguments )
-				if( CheckTypeSecurityRecursive( t ) == null )
-					m = null;
-
-			if( m == null )
-				Debug.LogError( $"Method {declaringType}:{name} unavailable." );
+				if( CheckTypeSecurityRecursive( t ) == null ) goto disallowed;
+			if( m is MethodInfo && CheckTypeSecurityRecursive( ((MethodInfo)m).ReturnType ) == null ) goto disallowed;
 
 			return m;
+		disallowed:
+			Debug.LogError( $"Privelege failed {declaringType}.{name}" );
+			return null;
 		}
 
 
