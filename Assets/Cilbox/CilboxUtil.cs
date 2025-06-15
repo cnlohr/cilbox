@@ -15,6 +15,10 @@ using System.IO;
 
 namespace Cilbox
 {
+	///////////////////////////////////////////////////////////////////////////
+	//  STACK ELEMENT CONTAINER  //////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////
+
 	public enum StackType
 	{
 		Boolean,
@@ -348,6 +352,9 @@ namespace Cilbox
 
 	}
 
+	///////////////////////////////////////////////////////////////////////////
+	//  SERIALIZATION / DESERIALIZATION  //////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////
 
 	public class Serializee
 	{
@@ -357,6 +364,8 @@ namespace Cilbox
 		// TODO: Version 2: Use a string dictionary.
 		// lsb 0..2 = # of bytes to describe length or # of elements (Bytes little endian) Only #'s 0..6 are valid.
 		//     3..5 = Type
+		//
+		// When serializing, buffer does not have header.  When Deserializing, it has header.
 
 		public enum ElementType
 		{
@@ -904,6 +913,29 @@ namespace Cilbox
 			}
 			return ret.ToArray();
 		}
+
+		// This does not check any rules, so it can be static.
+		public static Serializee GetSerializeeFromNativeType( Type t )
+		{
+			Dictionary< String, Serializee > ret = new Dictionary< String, Serializee >();
+
+			if( t.IsGenericType )
+			{
+				String [] sn = t.FullName.Split( "`" );
+				ret["n"] = new Serializee( sn[0] );
+				Type [] ta = t.GenericTypeArguments;
+				Serializee [] sg = new Serializee[ta.Length];
+				for( int i = 0; i < ta.Length; i++ )
+					sg[i] = GetSerializeeFromNativeType( ta[i] );
+				ret["g"] = new Serializee( sg );
+			}
+			else
+			{
+				ret["n"] = new Serializee( t.FullName );
+			}
+			return new Serializee( ret );
+		}
+
 
 		///////////////////////////////////////////////////////////////////////////
 		//  DEFS FROM CECIL FOR PARSING CIL  //////////////////////////////////////

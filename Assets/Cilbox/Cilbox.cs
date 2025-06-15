@@ -1165,7 +1165,7 @@ namespace Cilbox
 					t.fieldIndex = Convert.ToInt32(st["index"].AsString());
 					t.fieldIsStatic = Convert.ToInt32(st["isStatic"].AsString()) != 0;
 					t.Name = st["name"].AsString();
-					t.declaringTypeName = CilboxUsage.GetNativeTypeNameFromSerializee( st["dt"] );
+					t.declaringTypeName = usage.GetNativeTypeNameFromSerializee( st["dt"] );
 
 					t.isValid = true;
 					break;
@@ -1198,7 +1198,11 @@ namespace Cilbox
 					String useAssembly = st["assembly"].AsString();
 					Serializee [] genericArguments = null;
 					t.Name = "Method: " + name;
-					string declaringTypeName = t.declaringTypeName = CilboxUsage.GetNativeTypeNameFromSerializee( st["dt"] );
+
+					Serializee stDt;
+					(name, stDt) = usage.HandleEarlyMethodRewrite( name, st["dt"] );
+
+					string declaringTypeName = t.declaringTypeName = usage.GetNativeTypeNameFromSerializee( stDt );
 
 					//Possibly get genericArguments
 					Serializee temp;
@@ -1215,7 +1219,11 @@ namespace Cilbox
 
 					// First, see if this is to a class we are responsible for. Like does it come from _this_ class?
 					int classid;
-					if( classes.TryGetValue( declaringTypeName, out classid ) )
+					if( declaringTypeName == null )
+					{
+						Debug.LogError( $"Error: Could not find internal type in {fullSignature}" );
+					}
+					else if( classes.TryGetValue( declaringTypeName, out classid ) )
 					{
 						CilboxClass matchingClass = classesList[classid];
 						uint imid = 0;
@@ -1235,14 +1243,11 @@ namespace Cilbox
 					}
 					else
 					{
-						Type declaringType = usage.GetNativeTypeFromSerializee( st["dt"] );
+						Type declaringType = usage.GetNativeTypeFromSerializee( stDt );
 						if( declaringType == null )
-						{
 							throw new Exception( $"Error: Could not find referenced type {useAssembly}/{declaringTypeName}/" );
-						}
 
-						Type [] parameters = usage.TypeNamesToArrayOfNativeTypes( parametersSer );
-						MethodBase m = usage.GetNativeMethodFromTypeAndName( declaringType, name, parameters,
+						MethodBase m = usage.GetNativeMethodFromTypeAndName( declaringType, name, parametersSer,
 							genericArguments, fullSignature );
 
 						if( m != null )
@@ -1509,12 +1514,12 @@ namespace Cilbox
 												{
 													Serializee [] argtypes = new Serializee[templateArguments.Length];
 													for( int a = 0; a < templateArguments.Length; a++ )
-														argtypes[a] = CilboxUsage.GetSerializeeFromNativeType( templateArguments[a] );
+														argtypes[a] = CilboxUtil.GetSerializeeFromNativeType( templateArguments[a] );
 													methodProps["ga"] = new Serializee( argtypes );
 												}
 											}
 
-											methodProps["dt"] = CilboxUsage.GetSerializeeFromNativeType( tmb.DeclaringType ); // Was FullName
+											methodProps["dt"] = CilboxUtil.GetSerializeeFromNativeType( tmb.DeclaringType );
 											methodProps["name"] = new Serializee( tmb.Name );
 
 											System.Reflection.ParameterInfo[] parameterInfos = tmb.GetParameters();
@@ -1524,7 +1529,7 @@ namespace Cilbox
 												for( var j = 0; j < parameterInfos.Length; j++ )
 												{
 													Type ty = parameterInfos[j].ParameterType;
-													parametersSer[j] = CilboxUsage.GetSerializeeFromNativeType( ty ); //Was FullName;
+													parametersSer[j] = CilboxUtil.GetSerializeeFromNativeType( ty );
 												}
 												methodProps["parameters"] = new Serializee( parametersSer );
 											}
@@ -1544,7 +1549,7 @@ namespace Cilbox
 
 											Dictionary<String, Serializee> fieldProps = new Dictionary<String, Serializee>();
 											fieldProps["mt"] = new Serializee( ((int)MetaTokenType.mtField).ToString() );
-											fieldProps["dt"] = CilboxUsage.GetSerializeeFromNativeType( rf.DeclaringType );
+											fieldProps["dt"] = CilboxUtil.GetSerializeeFromNativeType( rf.DeclaringType );
 											fieldProps["name"] = new Serializee( rf.Name );
 											//fieldProps["fullName"] = rf.FieldType.FullName;
 											fieldProps["isStatic"] = new Serializee( (rf.IsStatic?1:0).ToString() );
@@ -1561,7 +1566,7 @@ namespace Cilbox
 
 											Dictionary<String, Serializee> fieldProps = new Dictionary<String, Serializee>();
 											fieldProps["mt"] = new Serializee( ((int)MetaTokenType.mtType).ToString() );
-											fieldProps["dt"] = CilboxUsage.GetSerializeeFromNativeType( ty );
+											fieldProps["dt"] = CilboxUtil.GetSerializeeFromNativeType( ty );
 											assemblyMetadata[(mdcount++).ToString()] = new Serializee( fieldProps );
 											originalMetaToFriendlyName[writebackToken] = ty.FullName;
 										}
@@ -1594,7 +1599,7 @@ namespace Cilbox
 							LocalVariableInfo lvi = mb.LocalVariables[i];
 							Dictionary< String, Serializee > local = new Dictionary< String, Serializee >();
 							local["name"] = new Serializee( lvi.ToString() );
-							local["dt"] = CilboxUsage.GetSerializeeFromNativeType( lvi.GetType() );
+							local["dt"] = CilboxUtil.GetSerializeeFromNativeType( lvi.LocalType );
 							localVars[i] = new Serializee( local );
 						}
 						MethodProps["locals"] = new Serializee( localVars );
@@ -1606,7 +1611,7 @@ namespace Cilbox
 						{
 							Dictionary< String, Serializee > tpi = new Dictionary< String, Serializee >();
 							tpi["name"] = new Serializee( parameters[i].Name );
-							tpi["dt"] = CilboxUsage.GetSerializeeFromNativeType( parameters[i].ParameterType );
+							tpi["dt"] = CilboxUtil.GetSerializeeFromNativeType( parameters[i].ParameterType );
 							parameterList[i] = new Serializee( tpi );
 						}
 						MethodProps["parameters"] = new Serializee( parameterList );
@@ -1654,7 +1659,7 @@ namespace Cilbox
 					{
 						Dictionary< String, Serializee > dictField = new Dictionary< String, Serializee >();
 						dictField["name"] = new Serializee( f.Name ); 
-						dictField["type"] = CilboxUsage.GetSerializeeFromNativeType( f.FieldType );
+						dictField["type"] = CilboxUtil.GetSerializeeFromNativeType( f.FieldType );
 						fields.Add( new Serializee( dictField ) );
 
 						// Fill in our metadata with a class-specific field ID, if this field ID was used in code anywhere.
