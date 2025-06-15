@@ -668,14 +668,13 @@ namespace Cilbox
 		//  ASSEMBLY DEBUG LOGGER  ////////////////////////////////////////////////
 		///////////////////////////////////////////////////////////////////////////
 #if UNITY_EDITOR
-		public static void AssemblyLoggerTask( String fileName, String assemblyData )
+		public static void AssemblyLoggerTask( String fileName, String assemblyData, Cilbox b )
 		{
 			StreamWriter CLog = File.CreateText( fileName );
 			CLog.WriteLine( "Cilbox Size: " + assemblyData.Length + " bytes." );
 
 			try
 			{
-				Cilbox b = new Cilbox();
 				b.assemblyData = assemblyData;
 				b.BoxInitialize();
 

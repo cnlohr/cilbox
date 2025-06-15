@@ -1077,7 +1077,7 @@ namespace Cilbox
 		mtArrayInitializer = 13, // Made-up type. 13 is unused in HandleKind.
 	}
 
-	public class Cilbox : MonoBehaviour
+	abstract public class Cilbox : MonoBehaviour
 	{
 		public Dictionary< String, int > classes;
 		public CilboxClass [] classesList;
@@ -1101,6 +1101,9 @@ namespace Cilbox
 			initialized = false;
 			usage = new CilboxUsage( this );
 		}
+
+		abstract public bool CheckMethodAllowed(  out MethodInfo mi, Type declaringType, String name, Serializee [] parametersIn, Serializee [] genericArgumentsIn, String fullSignature );
+		abstract public bool CheckTypeAllowed( String sType );
 
 		public void ForceReinit()
 		{
@@ -1703,15 +1706,23 @@ namespace Cilbox
 			}
 			else
 			{
-				GameObject cilboxDataObject = new GameObject("CilboxData " + new System.Random().Next(0,10000000));
-				tac = cilboxDataObject.AddComponent( typeof(Cilbox) ) as Cilbox;
-				EditorUtility.SetDirty( tac );
+				throw new Exception( "You must have an object with Cilbox (Scene or Avatar)" );
+				//GameObject cilboxDataObject = new GameObject("CilboxData " + new System.Random().Next(0,10000000));
+				//tac = cilboxDataObject.AddComponent( typeof(Cilbox) ) as Cilbox;
+				//EditorUtility.SetDirty( tac );
 			}
 
 			perf.End(); perf = new ProfilerMarker( "Applying Assembly" ); perf.Begin();
 
 			if( tac.exportDebuggingData )
-				new Task( () => { CilboxUtil.AssemblyLoggerTask( Application.dataPath + "/CilboxLog.txt", sAllAssemblyData ); } ).Start();
+			{
+				GameObject gameObjectAsm = new GameObject("CilboxAsm " + new System.Random().Next(0,10000000));
+				Cilbox b = gameObjectAsm.AddComponent( tac.GetType() ) as Cilbox;
+				new Task( () => {
+					CilboxUtil.AssemblyLoggerTask( Application.dataPath + "/CilboxLog.txt", sAllAssemblyData, b );
+					Application.onBeforeRender += () => { GameObject.Destroy( gameObjectAsm ); };
+				} ).Start();
+			}
 
 			if( bytecodeLength == 0 )
 			{

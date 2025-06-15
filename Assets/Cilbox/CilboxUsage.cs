@@ -12,6 +12,9 @@
 //     4. InternalGetNativeMethodFromTypeAndNameNoSecurity
 //     5. Parameters and Arguments are checked with CheckTypeSecurityRecursive
 //     6. CheckTypeSecurityRecursive calls CheckTypeSecurity
+//     7. CheckTypeSecurity checks with the specific Cilbox if a method is
+//        allowed via CheckMethodAllowed.
+//     8. If disallowed, abort.  If allowed, and overridden, bypass any further checks.
 //
 //
 //   GetNativeTypeFromSerializee (can only be used on non-templated types)
@@ -19,10 +22,12 @@
 //     2. CheckReplaceTypeNotRecursive ON BASE TYPE ONLY
 //     3. Recursively check all template types through GetNativeTypeFromSerializee
 //     4. Type.GetType
-//     5. MakeGenericType 
+//     5. MakeGenericType
 //
 //   GetNativeTypeNameFromSerializee mimics GetNativeTypeFromSerializee
 //
+//   CheckTypeSecurity calls CheckTypeAllowed on the specific cilbox.
+//    If it is allowed, continue normal checks.  If it is disallowed, abort.
 //
 // TODO: Check UnityAction / UnityEvent
 //
@@ -42,60 +47,10 @@ namespace Cilbox
 		private Cilbox box;
 		public CilboxUsage( Cilbox b ) { box = b; }
 
-		static HashSet<String> whiteListType = new HashSet<String>(){
-			"Cilbox.CilboxPublicUtils",
-			"System.Array",
-			"System.Boolean",
-			"System.Byte",
-			"System.Char",
-			"System.Collections.Generic.Dictionary",
-			"System.DateTime",
-			"System.DayOfWeek",
-			"System.Diagnostics.Stopwatch",
-			"System.Int32",
-			"System.MathF",
-			"System.Object",
-			"System.Single",
-			"System.String",
-			"System.TimeSpan",
-			"System.UInt16",
-			"System.UInt32",
-			"System.ValueTuple",
-			"System.Void",
-			"UnityEngine.Component",
-			"UnityEngine.Debug",
-			"UnityEngine.Events.UnityAction",
-			"UnityEngine.Events.UnityEvent",
-			"UnityEngine.GameObject",
-			"UnityEngine.Material",
-			"UnityEngine.MaterialPropertyBlock",
-			"UnityEngine.Mathf",
-			"UnityEngine.MeshRenderer",
-			"UnityEngine.MonoBehaviour",
-			"UnityEngine.Object",
-			"UnityEngine.Random",
-			"UnityEngine.Renderer",
-			"UnityEngine.Time",
-			"UnityEngine.Texture",
-			"UnityEngine.UI.Button+ButtonClickedEvent",
-			"UnityEngine.UI.Button",
-			"UnityEngine.UI.InputField",
-			"UnityEngine.UI.InputField+OnChangeEvent",
-			"UnityEngine.UI.Scrollbar",
-			"UnityEngine.UI.Selectable",
-			"UnityEngine.UI.Slider",
-			"UnityEngine.UI.Text",
-			"UnityEngine.TextAsset",
-			"UnityEngine.Texture2D",
-			"UnityEngine.Transform",
-			"UnityEngine.Vector4",
-			"UnityEngine.Vector3",
-		};
-
 		// This is after the type has been fully de-arrayed and de-templated.
-		String CheckTypeSecurity( String sType, bool unchangable = false )
+		String CheckTypeSecurity( String sType )
 		{
-			if( whiteListType.Contains( sType ) ) return sType;
+			if( box.CheckTypeAllowed( sType ) == true ) return sType;
 
 			Debug.LogError( $"TYPE FAILED CHECK: {sType}" );
 			return null;
@@ -103,19 +58,17 @@ namespace Cilbox
 
 		public MethodBase GetNativeMethodFromTypeAndName( Type declaringType, String name, Serializee [] parametersIn, Serializee [] genericArgumentsIn, String fullSignature )
 		{
-			// Perform any needed security here.
-
-			// You're allowed to get access to the constructor, nothing else.
-			if( declaringType == typeof(UnityEngine.MonoBehaviour) && name != ".ctor" ) goto disallowed;
-			if( declaringType == typeof(UnityEngine.Events.UnityAction) && name != ".ctor" ) goto disallowed;
-			if( name.Contains( "Invoke" ) ) goto disallowed;
+			MethodInfo mi = null;
+			bool bDisallowed = box.CheckMethodAllowed( out mi, declaringType, name, parametersIn, genericArgumentsIn, fullSignature );
+			if( !bDisallowed ) goto disallowed;
+			if( mi != null ) return mi;
 
 			// Replace any delegate creations with their proxies.
 			if( typeof(Delegate).IsAssignableFrom(declaringType) )
 			{
 				int argct = declaringType.GenericTypeArguments.Length;
 				Type specific = typeof(CilboxPlatform);
-				MethodInfo mi = specific.GetMethod( "ProxyForGeneratingActions" );
+				mi = specific.GetMethod( "ProxyForGeneratingActions" );
 				mi = mi.MakeGenericMethod( declaringType );
 				return mi;
 			}
@@ -190,7 +143,7 @@ namespace Cilbox
 			String [] vTypeNameNoGenerics = typeName.Split( "`" );
 			typeName = ( vTypeNameNoGenerics.Length > 0 ) ? vTypeNameNoGenerics[0] : typeName;
 
-			if( CheckTypeSecurity( typeName, false ) == null ) return null;
+			if( CheckTypeSecurity( typeName ) == null ) return null;
 			foreach( Type tt in typeInfo.GenericTypeArguments )
 			{
 				if( CheckTypeSecurityRecursive( tt ) == null ) return null;
