@@ -18,6 +18,7 @@ using System.Threading.Tasks;
 
 // To add [Cilboxable] to your classes that you want exported.
 public class CilboxableAttribute : Attribute { }
+public class CilboxTarget : Attribute { }
 
 namespace Cilbox
 {
@@ -1724,9 +1725,69 @@ namespace Cilbox
 				} ).Start();
 			}
 
+			{
+				MonoScript ms = MonoScript.FromMonoBehaviour(tac); 
+				String scriptPath = AssetDatabase.GetAssetPath( ms );
+				if( scriptPath == null ) Debug.LogError( "Can't find path to cilbox for writing XML." );
+				else
+				{
+					FileInfo fi = new FileInfo( scriptPath );
+					String thisPath = fi.Directory.ToString();
+					new Task( () => {
+						// Tricky bits...
+						//abstract public HashSet<String> GetWhiteListTypes();
+
+						HashSet<String> allWhiteList = new HashSet<String>();
+						foreach (Type type in proxyAssembly.GetTypes())
+						{
+							if( type.GetCustomAttributes(typeof(CilboxTarget), true).Length <= 0 )
+								continue;
+							//HashSet<String> toAdd = (HashSet<String>)type.InvokeMember( "GetWhiteListTypes", BindingFlags.Static | BindingFlags.Public, null, null, null );
+							MethodInfo mi = type.GetMethod( "GetWhiteListTypes" );
+							HashSet<String> toAdd = (HashSet<String>)mi.Invoke( null, null );
+							allWhiteList.UnionWith( toAdd );
+						}
+
+						Dictionary< String, HashSet<String> > fullWhiteList = new Dictionary< String, HashSet<String> >();
+
+						foreach( String s in allWhiteList )
+						{
+							System.Reflection.Assembly [] assys = AppDomain.CurrentDomain.GetAssemblies();
+							foreach( System.Reflection.Assembly a in assys )
+							{
+								Type typ = a.GetType( s );
+								if( typ == null ) continue;
+								AssemblyName assemName = a.GetName();
+								HashSet<String> hs;
+								if( !fullWhiteList.TryGetValue( assemName.Name, out hs ) )
+									hs = fullWhiteList[assemName.Name] = new HashSet<String>();
+
+								fullWhiteList[assemName.Name].Add( typ.ToString() );
+								break;
+							}
+						}
+
+						StreamWriter CLog = File.CreateText( thisPath + "/link.xml" );
+						CLog.WriteLine( "<linker>" );
+						foreach( var v in fullWhiteList )
+						{
+							CLog.WriteLine( $"\t<assembly fullname=\"{v.Key}\">" );
+							foreach( String s in v.Value )
+							{
+								CLog.WriteLine( $"\t\t<type fullname=\"{s}\" preserve=\"all\"/>" );
+							}
+							CLog.WriteLine( "\t</assembly>" );
+						}
+						CLog.WriteLine( "</linker>" );
+						CLog.Close();
+
+					} ).Start();
+				}
+			}
+
 			if( bytecodeLength == 0 )
 			{
-				Debug.Log( "No bytecode available in this build. Falling back to last build." );
+				// This happens the second time around.
 			}
 			else
 			{

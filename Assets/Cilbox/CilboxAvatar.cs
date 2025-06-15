@@ -8,6 +8,7 @@ using System.Reflection;
 
 namespace Cilbox
 {
+	[CilboxTarget]
 	public class CilboxAvatar : Cilbox
 	{
 		static HashSet<String> whiteListType = new HashSet<String>(){
@@ -34,12 +35,12 @@ namespace Cilbox
 			"UnityEngine.Debug",
 			"UnityEngine.Events.UnityAction",
 			"UnityEngine.Events.UnityEvent",
-			"UnityEngine.GameObject",
+			"UnityEngine.GameObject",  ///////////// HMMMMMMMMMMMM
 			"UnityEngine.Material",
 			"UnityEngine.MaterialPropertyBlock",
 			"UnityEngine.Mathf",
 			"UnityEngine.MeshRenderer",
-			"UnityEngine.MonoBehaviour",
+			"UnityEngine.MonoBehaviour",   ///////////// HMMMMMMMMMMMM (Note this is needed for the 'ctor, long story)
 			"UnityEngine.Object",
 			"UnityEngine.Random",
 			"UnityEngine.Renderer",
@@ -51,6 +52,9 @@ namespace Cilbox
 			"UnityEngine.Vector4",
 			"UnityEngine.Vector3",
 		};
+
+		static public HashSet<String> GetWhiteListTypes() { return whiteListType; }
+
 		override public bool CheckTypeAllowed( String sType )
 		{
 			return whiteListType.Contains( sType );

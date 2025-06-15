@@ -2,7 +2,6 @@ using UnityEngine;
 using System;
 using Cilbox;
 
-
 [Cilboxable]
 public class TestScript : MonoBehaviour
 {
@@ -26,7 +25,7 @@ public class TestScript : MonoBehaviour
 	void Start(){
 		framenoPublic++;
 		framenoPrivate+=2;
-		Debug.Log( $"XXX TestScript Start() {framenoPublic} {framenoPrivate} {framenoPrivateStatic}" );
+		Debug.Log( $"ZZZ TestScript Start() {framenoPublic} {framenoPrivate} {framenoPrivateStatic}" );
 		Debug.Log( testScript2 );
 		System.Diagnostics.Stopwatch stopWatch = new System.Diagnostics.Stopwatch();
 		stopWatch.Start();
