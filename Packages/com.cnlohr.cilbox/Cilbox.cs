@@ -1434,7 +1434,7 @@ namespace Cilbox
 											oc = CilboxUtil.OpCodes.ReadOpCode( byteCode, ref i );
 										} catch( Exception e )
 										{
-											Debug.LogError( e );
+											Debug.LogError( e.ToString() );
 											sOpcodeStr += " XXXX ";
 											for( ; iOpcodeStrI < byteCode.Length; iOpcodeStrI++ )
 											{
@@ -1591,7 +1591,7 @@ namespace Cilbox
 								}
 								catch( Exception e )
 								{
-									Debug.LogError( e );
+									Debug.LogError( e.ToString() );
 									continue;
 								}
 							}

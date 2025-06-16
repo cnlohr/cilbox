@@ -1,27 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<!--<OutputType>Exe</OutputType>-->
+		<OutputType>Exe</OutputType>
 		<TargetFramework>net9.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<IsTestProject>true</IsTestProject>
-		<!--<StartupObject>TestCilbox.Program</StartupObject>-->
+		<StartupObject>TestCilbox.Program</StartupObject>
+		<NoWarn>8600,8601,8602,8603,8604,8618,8765,8625</NoWarn>
+		<DefineConstants>UNITY_EDITOR</DefineConstants>
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="xunit" Version="2.5.3"/>
-		<PackageReference Include="xunit.runner.visualstudio" Version="2.5.3"/>
-		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0"/>
-		<PackageReference Include="Newtonsoft.Json" Version="13.0.3"/>
-	</ItemGroup>
-
-	<ItemGroup>
-		<Using Include="Xunit"/>
-	</ItemGroup>
-
-	<ItemGroup>
-		<Compile Include="../Assets/Cilbox/Cilbox.cs" />
-		<Compile Include="../Assets/Cilbox/CilboxProxy.cs" />
-		<Compile Include="../Assets/Cilbox/CilboxUtil.cs" />
+		<Compile Include="../Packages/com.cnlohr.cilbox/Cilbox.cs" />
+		<Compile Include="../Packages/com.cnlohr.cilbox/CilboxProxy.cs" />
+		<Compile Include="../Packages/com.cnlohr.cilbox/CilboxUtil.cs" />
+		<Compile Include="../Packages/com.cnlohr.cilbox/CilboxUsage.cs" />
 	</ItemGroup>
 </Project>
