@@ -830,6 +830,12 @@ namespace Cilbox
 									case StackType.Ulong:	stackBuffer[sp].LoadInt( sa.l == sb.l ? 1 : 0 ); break;
 									case StackType.Float:	stackBuffer[sp].LoadInt( sa.f == sb.f ? 1 : 0 ); break;
 									case StackType.Double:	stackBuffer[sp].LoadInt( sa.d == sb.d ? 1 : 0 ); break;
+									case StackType.Object:
+										if( sa.type == StackType.Object && sb.type == StackType.Object )
+											stackBuffer[sp].LoadInt( sa.o == sb.o ? 1 : 0 );
+										else
+											throw new Exception( $"CEQ Unimplemented type promotion unequal {sa.type} != {sb.type}" );
+										break;
 									default: throw new Exception( $"CEQ Unimplemented type promotion ({promoted})" );
 								} break;
 							case 0x02: // CGT
@@ -1687,6 +1693,7 @@ namespace Cilbox
 					perfType.End();
 				}
 			}
+
 			perf.End(); perf = new ProfilerMarker( "Assembling" ); perf.Begin();
 
 			Dictionary< String, Serializee > assemblyRoot = new Dictionary< String, Serializee >();

@@ -123,6 +123,8 @@ namespace TestCilbox
 
 			GameObject cbobj = new GameObject("BasicCilbox");
 			Cilbox.Cilbox cb = cbobj.AddComponent<CilboxTester>();
+			cb.exportDebuggingData = true;
+
 			Cilbox.CilboxScenePostprocessor.OnPostprocessScene();
 			Application.CallBeforeRender();
 
@@ -130,7 +132,10 @@ namespace TestCilbox
 			proxy.GetType().GetMethod("Start",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
 			Validator.Validate( "Start Test", "OK" );
 			Validator.Validate( "Start Marks", "I" );
-			Validator.Validate( "Arithmatic Test", "53" );
+			Validator.Validate( "Arithmatic Test", "15" );
+
+			// In case assembly is still being generated.
+			Thread.Sleep(50);
 			if( Validator.DidFail() ) return -5;
 			return 0;
 		}

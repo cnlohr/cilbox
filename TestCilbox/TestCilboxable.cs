@@ -17,9 +17,11 @@ namespace TestCilbox
 
 		public void Start()
 		{
+			Debug.Log( "🔵TestCilboxBehaviour.Start()" );
+
 			Validator.Set( "Start Test", "OK" );
 
-			int i = ((int)(5+2/3)+50)*2;
+			int i = (int)(((int)(5+2/3)+50)*2/7.3);
 			Validator.Set( "Arithmatic Test", i.ToString() );
 
 			String startMarks = Validator.Get("Start Marks");
@@ -27,7 +29,6 @@ namespace TestCilbox
 			Validator.Set( "Start Marks", startMarks + "I" );
 
 
-			Debug.Log( "CILBOX DID START!" );
 		}
 	}
 }
