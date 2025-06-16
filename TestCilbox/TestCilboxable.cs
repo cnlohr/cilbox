@@ -27,8 +27,6 @@ namespace TestCilbox
 			String startMarks = Validator.Get("Start Marks");
 			if( startMarks == null ) startMarks = "";
 			Validator.Set( "Start Marks", startMarks + "I" );
-
-
 		}
 	}
 }

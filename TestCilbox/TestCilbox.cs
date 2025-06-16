@@ -134,6 +134,8 @@ namespace TestCilbox
 			Validator.Validate( "Start Marks", "I" );
 			Validator.Validate( "Arithmatic Test", "15" );
 
+			Validator.Validate( "Test Fail Check", "This will fail" );
+
 			// In case assembly is still being generated.
 			Thread.Sleep(50);
 			if( Validator.DidFail() ) return -5;
