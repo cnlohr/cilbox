@@ -820,7 +820,6 @@ namespace Cilbox
 							CLog.WriteLine( e.ToString() );
 							Debug.LogError( e.ToString() );
 						}
-						CLog.Close();
 					}
 				}
 
