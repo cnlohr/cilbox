@@ -1723,7 +1723,9 @@ namespace Cilbox
 				Cilbox b = gameObjectAsm.AddComponent( tac.GetType() ) as Cilbox;
 				new Task( () => {
 					CilboxUtil.AssemblyLoggerTask( Application.dataPath + "/CilboxLog.txt", sAllAssemblyData, b );
-					Application.onBeforeRender += () => { GameObject.Destroy( gameObjectAsm ); };
+					UnityEngine.Events.UnityAction deleter = null;
+					deleter = () => { GameObject.Destroy( gameObjectAsm ); Application.onBeforeRender -= deleter; };
+					Application.onBeforeRender += deleter;
 				} ).Start();
 			}
 
