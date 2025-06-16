@@ -102,11 +102,11 @@ namespace TestCilbox
 					Console.WriteLine( $"✅ {key} = {val} " );
 					return true;
 				}
-				Console.WriteLine( $"❌ {key} = {val}" );
+				Console.WriteLine( $"❌ {key} = {val} != {comp}" );
 			}
 			else
 			{
-				Console.WriteLine( $"❌ {key} is unset" );
+				Console.WriteLine( $"❌ {key} is unset (Expected {comp})" );
 			}
 			bDidFail = true;
 			return false;
@@ -134,7 +134,8 @@ namespace TestCilbox
 			Validator.Validate( "Start Marks", "I" );
 			Validator.Validate( "Arithmatic Test", "15" );
 
-			Validator.Validate( "Test Fail Check", "This will fail" );
+			// Make sure CI can fail.
+			//Validator.Validate( "Test Fail Check", "This will fail" );
 
 			// In case assembly is still being generated.
 			Thread.Sleep(50);
