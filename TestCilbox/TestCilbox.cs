@@ -16,6 +16,7 @@ namespace TestCilbox
 	{
 		static HashSet<String> whiteListType = new HashSet<String>(){
 			"Cilbox.CilboxPublicUtils",
+			"TestCilbox.Validator",
 			"System.Array",
 			"System.Boolean",
 			"System.Byte",
@@ -84,22 +85,54 @@ namespace TestCilbox
 	}
 
 
+	public static class Validator
+	{
+		private static bool bDidFail = false;
+		public static bool DidFail() { return bDidFail; }
+		public static Dictionary< String, String > TestOutput = new Dictionary< String, String >();
+		public static void Set( String key, String val ) { TestOutput[key] = val; }
+		public static String Get( String key ) { String ret = null; TestOutput.TryGetValue( key, out ret ); return ret; }
+		public static bool Validate( String key, String comp )
+		{
+			String val;
+			if( TestOutput.TryGetValue( key, out val ) )
+			{
+				if( val == comp )
+				{
+					Console.WriteLine( $"✅ {key} = {val} " );
+					return true;
+				}
+				Console.WriteLine( $"❌ {key} = {val}" );
+			}
+			else
+			{
+				Console.WriteLine( $"❌ {key} is unset" );
+			}
+			bDidFail = true;
+			return false;
+		}
+	}
+
+
 	public class Program
 	{
-		public static void Main()
+		public static int Main()
 		{
 			GameObject go = new GameObject("MyObjectToProxy");
 			TestCilboxBehaviour b = go.CreateComponent<TestCilboxBehaviour>();
 
 			GameObject cbobj = new GameObject("BasicCilbox");
 			Cilbox.Cilbox cb = cbobj.AddComponent<CilboxTester>();
-
-			Debug.Log(  typeof(Cilbox.CilboxProxy).GetConstructor(new Type[]{}).ToString() );
-			Console.WriteLine( "Start" );
 			Cilbox.CilboxScenePostprocessor.OnPostprocessScene();
-			Console.WriteLine( "Converting" );
 			Application.CallBeforeRender();
-			Console.WriteLine( "Done" );
+
+			Cilbox.CilboxProxy proxy = go.GetComponents<Cilbox.CilboxProxy>()[0];
+			proxy.GetType().GetMethod("Start",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
+			Validator.Validate( "Start Test", "OK" );
+			Validator.Validate( "Start Marks", "I" );
+			Validator.Validate( "Arithmatic Test", "53" );
+			if( Validator.DidFail() ) return -5;
+			return 0;
 		}
 	}
 }

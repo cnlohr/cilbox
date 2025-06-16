@@ -25,7 +25,7 @@ namespace Cilbox
 
 		private bool proxyWasSetup = false;
 
-		CilboxProxy() { }
+		public CilboxProxy() { }
 
 #if UNITY_EDITOR
 		public void SetupProxy( Cilbox box, MonoBehaviour mToSteal, Dictionary< MonoBehaviour, CilboxProxy > refToProxyMap )
