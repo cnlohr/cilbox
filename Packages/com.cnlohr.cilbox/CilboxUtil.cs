@@ -607,7 +607,6 @@ namespace Cilbox
 	{
 		static public object DeserializeDataForProxyField( Type t, String sInitialize )
 		{
-Debug.Log( $"CONV FROM: {t} {sInitialize}" );
 			if( sInitialize != null && sInitialize.Length > 0 )
 				return TypeDescriptor.GetConverter(t).ConvertFrom(sInitialize);
 			else
