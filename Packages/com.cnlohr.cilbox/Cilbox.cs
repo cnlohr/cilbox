@@ -30,9 +30,9 @@ namespace Cilbox
 		public String methodName;
 		public String fullSignature;
 		public String[] methodLocals;
+		public bool isStatic;
 		public Type[] typeLocals;
 		public byte[] byteCode;
-		public bool isStatic;
 		public bool isVoid;
 		public String[] signatureParameters;
 		public Type[]   typeParameters;
@@ -661,10 +661,19 @@ namespace Cilbox
 						stackBuffer[++sp].Load( parentClass.staticFields[box.metadatas[bc].fieldIndex] );
 						break; //ldsfld
 					}
+					case 0x7f: 
+					{
+						uint bc = BytecodeAsU32( ref pc );
+						//StackElement se = stackBuffer[sp--];
+						Debug.Log( "Getting field: " + bc );
+						stackBuffer[++sp] = StackElement.CreateReference( (Array)(parentClass.staticFields), (uint)box.metadatas[bc].fieldIndex );
+						break;// ldsflda 
+					}
 					case 0x80:
 					{
 						uint bc = BytecodeAsU32( ref pc );
-						parentClass.staticFields[box.metadatas[bc].fieldIndex] = stackBuffer[++sp].AsObject();
+						object obj = stackBuffer[sp--].AsObject();
+						parentClass.staticFields[box.metadatas[bc].fieldIndex] = obj;
 						break; //stsfld
 					}
 					case 0x8C: // box (This pulls off a type)
@@ -1041,6 +1050,7 @@ namespace Cilbox
 					importFunctionToId[i] = idx;
 				}
 			}
+
 			return true;
 		}
 	}
@@ -1117,7 +1127,7 @@ namespace Cilbox
 			initialized = false;
 		}
 
-		public void BoxInitialize( )
+		public void BoxInitialize( bool bSimulate = false )
 		{
 #if UNITY_EDITOR
 			var pfm = new ProfilerMarker( "Initialize Cilbox" );
@@ -1205,6 +1215,7 @@ namespace Cilbox
 				{
 					String name = st["name"].AsString();
 					String fullSignature = st["fullSignature"].AsString();
+					bool isStatic = Convert.ToInt32( st["isStatic"].AsString() ) != 0;
 					String useAssembly = st["assembly"].AsString();
 					Serializee [] genericArguments = null;
 					t.Name = "Method: " + name;
@@ -1272,6 +1283,25 @@ namespace Cilbox
 					}
 					break;
 				}
+				}
+			}
+
+
+
+
+			if( !bSimulate )
+			{
+				foreach( var c in classesList )
+				{
+					// This class is loaded as it can be.  Time to call the class ctor, if one exists.
+					uint cctorIndex = 0;
+					if( c.methodFullSignatureToIndex.TryGetValue( "Void .cctor()", out cctorIndex ) )
+					{
+						if( c.methods[cctorIndex].isStatic )
+						{
+							c.methods[cctorIndex].Interpret( null, new object[0] );
+						}
+					}
 				}
 			}
 		}
@@ -1546,6 +1576,7 @@ namespace Cilbox
 													methodProps["parameters"] = new Serializee( parametersSer );
 												}
 												methodProps["fullSignature"] = new Serializee( tmb.ToString() );
+												methodProps["isStatic"] = new Serializee( tmb.IsStatic?"1":"0" );
 												methodProps["assembly"] = new Serializee( tmb.DeclaringType.Assembly.GetName().Name );
 												methodProps["mt"] = new Serializee(((int)MetaTokenType.mtMethod).ToString());
 												originalMetaToFriendlyName[writebackToken] = tmb.DeclaringType.ToString() + "." + tmb.ToString();

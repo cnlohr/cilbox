@@ -165,7 +165,7 @@ namespace UnityEngine
 		public Vector3 position;
 	}
 
-	public class GameObject
+	public class GameObject : UnityEngine.Object
 	{
 		public static List<GameObject> AllObjects = new List<GameObject>();
 		public List<MonoBehaviour> AllComponents = new List<MonoBehaviour>();

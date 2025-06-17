@@ -121,6 +121,12 @@ namespace TestCilbox
 			GameObject go = new GameObject("MyObjectToProxy");
 			TestCilboxBehaviour b = go.CreateComponent<TestCilboxBehaviour>();
 
+			GameObject go2 = new GameObject("MyObjectToProxy2");
+			TestCilboxBehaviour2 b2 = go.CreateComponent<TestCilboxBehaviour2>();
+
+			b.behaviour2 = b2;
+			b2.pubsettee = 12345;
+
 			GameObject cbobj = new GameObject("BasicCilbox");
 			Cilbox.Cilbox cb = cbobj.AddComponent<CilboxTester>();
 			cb.exportDebuggingData = true;
@@ -134,6 +140,13 @@ namespace TestCilbox
 			Validator.Validate( "Start Marks", "I" );
 			Validator.Validate( "Arithmatic Test", "15" );
 
+			Validator.Validate( "private instance filed", "555");
+			Validator.Validate( "public instance field", "556" );
+			Validator.Validate( "private static field", "557" );
+			Validator.Validate( "public static field", "558" );
+
+			Validator.Validate( "Method Called On Peer", "OK" );
+			Validator.Validate( "Public Field Change In Editor", "12345" );
 			// Make sure CI can fail.
 			//Validator.Validate( "Test Fail Check", "This will fail" );
 
