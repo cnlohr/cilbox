@@ -1744,7 +1744,7 @@ MonoBehaviour:
   nestingDepth: 0
   startTime: 21500342146
   showFunctionProfiling: 0
-  exportDebuggingData: 1
+  exportDebuggingData: 0
 --- !u!23 &9202973255374515307
 MeshRenderer:
   m_ObjectHideFlags: 0

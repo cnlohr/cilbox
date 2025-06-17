@@ -366,6 +366,8 @@ namespace Cilbox
 		//     3..5 = Type
 		//
 		// When serializing, buffer does not have header.  When Deserializing, it has header.
+		//
+		// FUTURE: I would like to refactor this to use static functions to serialize/deserialize.
 
 		public enum ElementType
 		{
@@ -378,7 +380,7 @@ namespace Cilbox
 
 		public Serializee( Memory<byte> bufferIn, ElementType eIn ) { buffer = bufferIn; e = eIn; }
 
-		public Serializee( String str ) // Tricky, this actually is like create-from-string.
+		public Serializee( String str ) // For serialization
 		{
 			int len = System.Text.Encoding.UTF8.GetByteCount( str );
 			byte lenBytes = ComputeLengthBytes( len );
@@ -390,7 +392,7 @@ namespace Cilbox
 			e = ElementType.String;
 		}
 
-		static public Serializee CreateFromBlob( byte [] bytes ) 
+		static public Serializee CreateFromBlob( byte [] bytes ) // For serialization
 		{
 			int len = bytes.Length;
 			byte lenBytes = ComputeLengthBytes( len );
@@ -403,7 +405,7 @@ namespace Cilbox
 			return s;
 		}
 
-		public Serializee( String [] listIn )
+		public Serializee( String [] listIn ) // For serialization
 		{
 			Serializee [] lst = new Serializee[listIn.Length];
 			for( int i = 0; i < lst.Length; i++ )
@@ -411,12 +413,12 @@ namespace Cilbox
 			SetAsList( lst );
 		}
 
-		public Serializee( Serializee[] list )
+		public Serializee( Serializee[] list ) // For serialization
 		{
 			SetAsList( list );
 		}
 
-		public Serializee( Dictionary<String, Serializee> dict )
+		public Serializee( Dictionary<String, Serializee> dict ) // For serialization
 		{
 			Serializee [] serOut = new Serializee[dict.Count*2];
 			int n = 0;
@@ -429,7 +431,7 @@ namespace Cilbox
 			SetAsList( serOut, ElementType.Map );
 		}
 
-		public Serializee( Dictionary<String, String> dict )
+		public Serializee( Dictionary<String, String> dict ) // For serialization
 		{
 			Serializee [] serOut = new Serializee[dict.Count*2];
 			int n = 0;
@@ -443,6 +445,7 @@ namespace Cilbox
 			SetAsList( serOut, ElementType.Map );
 		}
 
+		// Internal function for serialization.  Remember maps are just fancy lists.
 		void SetAsList( Serializee[] list, ElementType intendedType = ElementType.List )
 		{
 			int len = 1;
@@ -469,6 +472,7 @@ namespace Cilbox
 			e = intendedType;
 		}
 
+		// More like dump()
 		public override String ToString()
 		{
 			String s = "";
@@ -477,7 +481,7 @@ namespace Cilbox
 			return s;
 		}
 
-		public String AsString()
+		public String AsString() 	// For deserialization
 		{
 			int l = buffer.Span[0];
 			int lenBytes = l & 0x7;
@@ -486,7 +490,7 @@ namespace Cilbox
 			return System.Text.Encoding.UTF8.GetString( buffer.Span.Slice( lenBytes+1 ) );
 		}
 
-		public byte[] AsBlob()
+		public byte[] AsBlob() 		// For deserialization
 		{
 			int l = buffer.Span[0];
 			int lenBytes = l & 0x7;
@@ -495,7 +499,7 @@ namespace Cilbox
 			return buffer.Span.Slice( lenBytes+1 ).ToArray();
 		}
 
-		public Serializee[] AsArray( ElementType intendedType = ElementType.List )
+		public Serializee[] AsArray( ElementType intendedType = ElementType.List ) // For deserialization
 		{
 			int ofs = 0;
 			(int len, ElementType typ) = PullInfo( buffer.Span, ref ofs );
@@ -503,25 +507,20 @@ namespace Cilbox
 			(int elems, ElementType typ_dump) = PullInfo( buffer.Span, ref ofs );
 			Serializee[] ret = new Serializee[elems];
 			for( int i = 0; i < elems; i++ )
-			{
-				//Debug.Log( $"OFS {ofs} {i}/{elems}" );
 				ret[i] = Pull( buffer, ref ofs );
-			}
 			return ret;
 		}
 
-		public Dictionary<String, Serializee> AsMap()
+		public Dictionary<String, Serializee> AsMap() // For deserialization
 		{
 			Dictionary<String, Serializee> ret = new Dictionary<String, Serializee>();
 			Serializee[] lst = AsArray( ElementType.Map );
 			for( int i = 0; i < lst.Length; i+=2 )
-			{
 				ret[lst[i+0].AsString()] = lst[i+1];
-			}
 			return ret;
 		}
 
-		public String[] AsStringArray()
+		public String[] AsStringArray() // For deserialization
 		{
 			Serializee[] lst = AsArray();
 			String[] ret = new String[lst.Length];
@@ -530,7 +529,7 @@ namespace Cilbox
 			return ret;
 		}
 
-		public Dictionary< String, String > AsStringMap()
+		public Dictionary< String, String > AsStringMap() // For deserialization.
 		{
 			Dictionary<String, String> ret = new Dictionary<String, String>();
 			Serializee[] lst = AsArray( ElementType.Map );
@@ -539,7 +538,7 @@ namespace Cilbox
 			return ret;
 		}
 
-		public Memory<byte> DumpAsMemory() { return buffer; }
+		public Memory<byte> DumpAsMemory() { return buffer; } // For getting a serialized buffer.
 
 		// Serialization Helpers
 		private int SpliceInto( Span<byte> si )
@@ -605,6 +604,7 @@ namespace Cilbox
 
 	public static class CilboxUtil
 	{
+		// Used both in Cilbox + CilboxProxy for getting strings of fields into objects.
 		static public object DeserializeDataForProxyField( Type t, String sInitialize )
 		{
 			if( sInitialize != null && sInitialize.Length > 0 )
@@ -668,6 +668,8 @@ namespace Cilbox
 		//  ASSEMBLY DEBUG LOGGER  ////////////////////////////////////////////////
 		///////////////////////////////////////////////////////////////////////////
 #if UNITY_EDITOR
+
+		// This produces CilboxLog.txt
 		public static void AssemblyLoggerTask( String fileName, String assemblyData, Cilbox b )
 		{
 			StreamWriter CLog = File.CreateText( fileName );

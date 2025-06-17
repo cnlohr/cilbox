@@ -32,7 +32,6 @@ namespace Cilbox
 		{
 			this.box = box;
 			this.className = mToSteal.GetType().ToString();
-			//Debug.Log( $"CilboxProxy.ctor() ClassName:{className} Box:{box}" );
 
 			box.BoxInitialize();
 			cls = box.GetClass( className );
@@ -55,7 +54,6 @@ namespace Cilbox
 				int matchingInstanceNameID = -1;
 				for( int k = 0; k < cls.instanceFieldNames.Length; k++ )
 				{
-					Debug.Log( $"Checking {cls.instanceFieldNames[k]} == {f.Name}" );
 					if( cls.instanceFieldNames[k] == f.Name )
 					{
 						matchingInstanceNameID = k;

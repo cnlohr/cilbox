@@ -35,17 +35,25 @@ namespace Cilbox
 			"UnityEngine.Debug",
 			"UnityEngine.Events.UnityAction",
 			"UnityEngine.Events.UnityEvent",
-			"UnityEngine.GameObject",  ///////////// HMMMMMMMMMMMM
+			"UnityEngine.GameObject",     // Hyper restrictive.
 			"UnityEngine.Material",
 			"UnityEngine.MaterialPropertyBlock",
 			"UnityEngine.Mathf",
 			"UnityEngine.MeshRenderer",
-			"UnityEngine.MonoBehaviour",   ///////////// HMMMMMMMMMMMM (Note this is needed for the 'ctor, long story)
+			"UnityEngine.MonoBehaviour",   // Note this is needed for the 'ctor, but we can be very restrictive.
 			"UnityEngine.Object",
 			"UnityEngine.Random",
 			"UnityEngine.Renderer",
 			"UnityEngine.Time",
 			"UnityEngine.Texture",
+			"UnityEngine.UI.Button+ButtonClickedEvent",
+			"UnityEngine.UI.Button",
+			"UnityEngine.UI.InputField",
+			"UnityEngine.UI.InputField+OnChangeEvent",
+			"UnityEngine.UI.Scrollbar",
+			"UnityEngine.UI.Selectable",
+			"UnityEngine.UI.Slider",
+			"UnityEngine.UI.Text",
 			"UnityEngine.TextAsset",
 			"UnityEngine.Texture2D",
 			"UnityEngine.Transform",
@@ -55,20 +63,28 @@ namespace Cilbox
 
 		static public HashSet<String> GetWhiteListTypes() { return whiteListType; }
 
+		// This is called by CilboxUsage to decide of a type is allowed.
+		// If a type is allowed, by defalt it is all allowed.
 		override public bool CheckTypeAllowed( String sType )
 		{
 			return whiteListType.Contains( sType );
 		}
-		
-		override public bool CheckMethodAllowed(  out MethodInfo mi, Type declaringType, String name, Serializee [] parametersIn, Serializee [] genericArgumentsIn, String fullSignature )
+
+		// After a type is allowed, this is called to see if the specific method is OK.
+		override public bool CheckMethodAllowed( out MethodInfo mi, Type declaringType, String name, Serializee [] parametersIn, Serializee [] genericArgumentsIn, String fullSignature )
 		{
 			mi = null;
 
 			// You're allowed to get access to the constructor, nothing else.
+			// We could selectively open up more methods on MonoBehaviour.
 			if( declaringType == typeof(UnityEngine.MonoBehaviour) && name != ".ctor" ) return false;
+
 			if( declaringType == typeof(UnityEngine.Events.UnityAction) && name != ".ctor" ) return false;
+
+			if( declaringType == typeof(UnityEngine.GameObject) && name != "SetActive" ) return false;
+
 			if( name.Contains( "Invoke" ) ) return false;
 			return true;
-		}	
+		}
 	}
 }
