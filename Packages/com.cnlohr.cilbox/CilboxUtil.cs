@@ -676,7 +676,7 @@ namespace Cilbox
 			try
 			{
 				b.assemblyData = assemblyData;
-				b.BoxInitialize();
+				b.BoxInitialize( true );
 
 				Dictionary< String, int > classes;
 				CilboxClass [] classesList;
@@ -812,6 +812,19 @@ namespace Cilbox
 									CilMetadataTokenInfo md = b.metadatas[operand];
 									stline += " " + ((md!=null)?md.Name:operand.ToString("X4"));
 								}
+								else if( ot == CilboxUtil.OpCodes.OperandType.ShortInlineI )
+								{
+									stline += " " + operand.ToString("X4") + " ";
+								}
+								else if( ot == CilboxUtil.OpCodes.OperandType.InlineI )
+								{
+									stline += " " + operand.ToString("X8") + " ";
+								}
+								else if( ot == CilboxUtil.OpCodes.OperandType.InlineI8 )
+								{
+									stline += " " + operand.ToString("X16") + " ";
+								}
+
 								CLog.WriteLine( stline );
 								if( i >= byteCode.Length ) break;
 							} while( true );

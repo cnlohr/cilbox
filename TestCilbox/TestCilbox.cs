@@ -134,6 +134,10 @@ namespace TestCilbox
 			Validator.Validate( "Start Marks", "I" );
 			Validator.Validate( "Arithmatic Test", "15" );
 
+			Validator.Validate( "private instance filed", "555");
+			Validator.Validate( "public instance field", "556" );
+			Validator.Validate( "private static field", "557" );
+			Validator.Validate( "public static field", "558" );
 			// Make sure CI can fail.
 			//Validator.Validate( "Test Fail Check", "This will fail" );
 
