@@ -17,7 +17,7 @@ namespace TestCilbox
 		public int ipublicinstance = 556;
 		static private int iprivatestatic = 557;
 		static public int ipublicstatic = 558;
-
+		public TestCilboxBehaviour2 behaviour2;
 		public TestCilboxBehaviour() { }
 
 		public void Start()
@@ -37,6 +37,20 @@ namespace TestCilbox
 			Validator.Set( "public instance field", ipublicinstance.ToString() );
 			Validator.Set( "private static field", iprivatestatic.ToString() );
 			Validator.Set( "public static field", ipublicstatic.ToString() );
+
+			behaviour2.Behaviour2Test();
+		}
+	}
+
+
+	[Cilboxable]
+	public class TestCilboxBehaviour2 : MonoBehaviour
+	{
+		public int pubsettee = 35254;
+		public void Behaviour2Test()
+		{
+			Validator.Set( "Method Called On Peer", "OK" );
+			Validator.Set( "Public Field Change In Editor", pubsettee.ToString() ); // Should not be 35254
 		}
 	}
 }

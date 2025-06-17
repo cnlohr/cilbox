@@ -15,7 +15,7 @@ namespace Cilbox
 	public class CilboxProxy : MonoBehaviour
 	{
 		public StackElement [] fields;
-		public UnityEngine.Object [] fieldsObjects;
+		public UnityEngine.Object [] fieldsObjects;  // This is generally only held 
 		public bool [] isFieldsObject;
 
 		public CilboxClass cls;
@@ -40,7 +40,7 @@ namespace Cilbox
 			fieldsObjects = new UnityEngine.Object[cls.instanceFieldNames.Length];
 			isFieldsObject = new bool[cls.instanceFieldNames.Length];
 
-			List<String> instanceFields = new List<String>();
+			Dictionary<String, Serializee> instanceFields = new Dictionary<String, Serializee>();
 			FieldInfo[] fi = mToSteal.GetType().GetFields( BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance );
 			foreach( var f in fi )
 			{
@@ -52,6 +52,18 @@ namespace Cilbox
 
 				bool bHandled = false;
 
+				int matchingInstanceNameID = -1;
+				int k;
+				for( k = 0; k < cls.instanceFieldNames.Length; k++ )
+				{
+					if( cls.instanceFieldNames[k] == f.Name )
+					{
+						matchingInstanceNameID = k;
+					}
+				}
+
+				if( matchingInstanceNameID < 0 ) continue;
+
 				// Skip null objects.
 				if (fv != null)
 				{
@@ -60,31 +72,16 @@ namespace Cilbox
 					if (attribs != null && attribs.Length > 0)
 					{
 						// This is a cilboxable thing.
-						int k;
-						for( k = 0; k < cls.instanceFieldNames.Length; k++ )
-						{
-							if( cls.instanceFieldNames[k] == f.Name )
-							{
-								fieldsObjects[k] = refToProxyMap[(MonoBehaviour)fv];
-								isFieldsObject[k] = true;
-								bHandled = true;
-								break;
-							}
-						}
+						fieldsObjects[matchingInstanceNameID] = refToProxyMap[(MonoBehaviour)fv];
+						isFieldsObject[matchingInstanceNameID] = true;
+						bHandled = true;
 					}
 					else if( fv is UnityEngine.Object )
 					{
-						int k;
-						for( k = 0; k < cls.instanceFieldNames.Length; k++ )
-						{
-							if( cls.instanceFieldNames[k] == f.Name )
-							{
-								fieldsObjects[k] = (UnityEngine.Object)fv;
-								isFieldsObject[k] = true;
-								bHandled = true;
-								break;
-							}
-						}
+						fieldsObjects[matchingInstanceNameID] = (UnityEngine.Object)fv;
+						isFieldsObject[matchingInstanceNameID] = true;
+						bHandled = true;
+
 						if( k == cls.instanceFieldNames.Length )
 						{
 							Debug.LogWarning( "Failed to link field object " + f.Name );
@@ -93,34 +90,13 @@ namespace Cilbox
 
 					if( !bHandled )
 					{
-						if( fv is UnityEngine.Object)
-						{
-							if( (UnityEngine.Object)fv )
-							{
-								Debug.LogError( $"Error: Field {f.Name} in {cls.className} is a UnityObject but could not be added to the fieldsObjects" );
-								//instanceFields[f.Name] = fv.ToString();
-							}
-							else
-							{
-								instanceFields.Add( f.Name );
-								instanceFields.Add( null );
-							}
-						}
-						else
-						{
-							instanceFields.Add( f.Name );
-							instanceFields.Add( fv.ToString());
-						}
+						instanceFields[f.Name] = new Serializee( fv.ToString() );
 					}
 				}
-				//Debug.Log( "Serializing: " + serializedObjectData );
 			}
-
-
-			serializedObjectData = Convert.ToBase64String(new Serializee(instanceFields.ToArray()).DumpAsMemory().ToArray());
+			serializedObjectData = Convert.ToBase64String(new Serializee(instanceFields).DumpAsMemory().ToArray());
 		}
 #endif
-
 		void Awake()
 		{
 			// Tricky: Stuff really isn't even ready here :(  I don't know if we can try to get this going.
@@ -139,7 +115,7 @@ namespace Cilbox
 			// Call interpreted constructor.
 			box.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
 
-			Serializee des = Serializee.CreateFromBlob( Convert.FromBase64String( serializedObjectData ) );
+			Dictionary< String, Serializee > d = new Serializee( Convert.FromBase64String( serializedObjectData ), Serializee.ElementType.Map ).AsMap();
 
 			for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
 			{
@@ -152,33 +128,17 @@ namespace Cilbox
 						if( o is CilboxProxy )
 							((CilboxProxy)o).RuntimeProxyLoad();
 						fields[i].Load( fieldsObjects[i] );
+						fieldsObjects[i] = null;
 					}
 				}
-#if false
-				// What is this even for anyway?????
-
-				else if( ! (fields[i] is object) ) // Has the constructor already filled it out?
+				else
 				{
-					String cfn = cls.instanceFieldNames[i];
-					object v = d[cfn];
-					if( v != null )
+					Serializee tv;
+					if( d.TryGetValue( cls.instanceFieldNames[i], out tv ) )
 					{
-						String fieldValue = (String)v;
-						//Debug.Log( $"Deserializing: {cfn} from {fieldValue} type {cls.instanceFieldTypes[i]}" );
-						fields[i].Load( CilboxUtil.DeserializeDataForProxyField( cls.instanceFieldTypes[i], fieldValue ) );
-					}
-					else
-					{
-						// It's probably a private.
-						//Debug.LogError( "Could not find field " + cfn + " on class " + cls.className );
-						Type t = cls.instanceFieldTypes[i];
-						if( t.IsValueType )
-						{
-							fields[i].Load( Activator.CreateInstance( t ) );
-						}
+						fields[i].Load( CilboxUtil.DeserializeDataForProxyField( cls.instanceFieldTypes[i], tv.AsString() ) );
 					}
 				}
-#endif
 			}
 
 			box.InterpretIID( cls, this, ImportFunctionID.Awake, null ); // Does this go before or after initialized fields.
