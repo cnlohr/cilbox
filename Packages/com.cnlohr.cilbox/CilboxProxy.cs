@@ -53,9 +53,9 @@ namespace Cilbox
 				bool bHandled = false;
 
 				int matchingInstanceNameID = -1;
-				int k;
-				for( k = 0; k < cls.instanceFieldNames.Length; k++ )
+				for( int k = 0; k < cls.instanceFieldNames.Length; k++ )
 				{
+					Debug.Log( $"Checking {cls.instanceFieldNames[k]} == {f.Name}" );
 					if( cls.instanceFieldNames[k] == f.Name )
 					{
 						matchingInstanceNameID = k;
@@ -82,7 +82,7 @@ namespace Cilbox
 						isFieldsObject[matchingInstanceNameID] = true;
 						bHandled = true;
 
-						if( k == cls.instanceFieldNames.Length )
+						if( matchingInstanceNameID == -1 )
 						{
 							Debug.LogWarning( "Failed to link field object " + f.Name );
 						}
@@ -90,7 +90,9 @@ namespace Cilbox
 
 					if( !bHandled )
 					{
-						instanceFields[f.Name] = new Serializee( fv.ToString() );
+						StackType st;
+						if( StackElement.TypeToStackType.TryGetValue( fv.GetType().ToString(), out st ) && st < StackType.Object )
+							instanceFields[f.Name] = new Serializee( fv.ToString() );
 					}
 				}
 			}
