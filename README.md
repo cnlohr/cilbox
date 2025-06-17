@@ -35,28 +35,35 @@ Ideally the scene could have a `CilboxScene` and an avatar could also have a `Ci
 ### Cilbox has
  * `CilboxableAttribute` So you can add `[Cilboxable]` to your class as an attribute that will tell Cilbox to emulate it.
  * `CilboxProxy` - The MonoBehaviour that replaces your script.
- * `Cilbox` - A static thing for managing the whole system.
+ * `Cilbox` - Internal, abstract class that contains a given asset's "Box" that its scripts live in.
+ * `CilboxAvatar` / `CilboxScene` - Concrete classes from `Cilbox` that is added to each Avatar or Scene, respectively.
 
 ### Cilbox internally uses
  * `CilboxMethod` - for holding information about classes that are being overridden.
  * `CilboxClass` - for holding information about classes that are being overridden.
- * `StackElement` - a generic "object" like thing that can be written into/altered/etc, without needing to box/unbox/etc.
- * These Stack Elements can be: `Boolean`, `Sbyte`, `Byte`, `Short`, `Ushort`, `Int`, `Uint`, `Long`, `Ulong`, `Float`, `Double`, `Object`, `Address`
+ * `StackElement` - a generic "object" like thing that can be written into/altered/etc, without needing to box/unbox/etc.  This holds parameters, locals, and the stack.
+ * These Stack Elements can be: `Boolean`, `Sbyte`, `Byte`, `Short`, `Ushort`, `Int`, `Uint`, `Long`, `Ulong`, `Float`, `Double`, `Object`, `Address`, amd `Reference`
  * If the StackElement is an `Obejct`, boxing will need to happen when it gets used.
  * If the StackElement is an `Array`, then it is actually a reference, where .o contains the link to the `Array` and .i contains the reference to the element.
 
 ### Security
- * You must implement the following three functions:
-   * `GetNativeTypeFromName`
-   * `TypeNamesToArrayOfNativeTypes`
-   * `GetNativeMethodFromTypeAndName`
+
+The general idea is that at load, the Cilbox will load all classes, metadata, and methods.  Then any references that script has to the surrounding system are patched in, but only if the specific class/method is allowed.
+
+In general, the process for deciding if a feature is allowed is:
+1. Is the CLASS pertaining to this meta (callee, parameter, field, etc.) associated with this meta/call allowed by seeing if it is on the whitelist by calling `CheckTypeAllowed( String sType )`
+2. If the CLASS is on the whitelist, then it will call `CheckMethodAllowed()`.  If CheckMethodAllowed says it's OK, then the reference can be made.
+
+For additional information:
+ * For all security-related notes surrounding the load decisions, please see [CilboxUsage.cs](Packages/com.cnlohr.cilbox/CilboxUsage.cs). 
+ * For avatar/scene decisions regarding what can or cannot be loaded, please see the specific [CilboxAvatar.cs](Packages/com.cnlohr.cilbox/CilboxAvatar.cs) / [CilboxScene.cs](Packages/com.cnlohr.cilbox/CilboxScene.cs). 
 
 ### Things you can't do (At least not today)
  * You cannot have arrays of properties on your object, for instance an array of GameObjects.  Each property must be a regular property.
- * You cannot arbitrarily add an externally accessable method to your script. For instance, you cannot add your script to Unity UI and select a function that is not available in the `CilboxProxy`
+ * You cannot arbitrarily add an externally accessable method to your script. For instance, you cannot add your script to Unity UI and select a function that is not available in the `CilboxProxy`.  So, only input functions like `Start()` `Awake()` `FixedUpdate()` `Update()` etc...
  * It is unlikely any form of reflection would be possible, because, it would be extremely difficult to secure.
  * It will be tricky to allow compound types for security reasons.
- * You can't currently reference fields of objects outside Cilbox, but you can access properties that have getters/setters.
+ * You can't currently reference fields of objects outside Cilbox, but you can access properties that have getters/setters.  This may be considered in the future.
 
 ## Cleanup
  * Clean up the `GetConstructors` code to use `GetConstructor` but we need access to the modifiers.
