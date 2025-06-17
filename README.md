@@ -17,7 +17,11 @@ I am not a security researcher. I cannot make promises about the security of the
 There is a `Cilbox` object that gets placed in the scene at runtime. This box
 is responsible for loading and manging the various `CilboxProxy` classes that
 are converted.  There can be multiple cilboxes one per scene loaded in a world.
-Ideally the world could have a `Cilbox` and an avatar could also have a `Cilbox`
+Ideally the scene could have a `CilboxScene` and an avatar could also have a `CilboxAvatar`
+
+![Build Process](Docs/buildprocess.svg)
+
+![Run Process](Docs/runprocess.svg)
 
 ### The general approach
 1. You mark your class as `[Cilboxable]`
