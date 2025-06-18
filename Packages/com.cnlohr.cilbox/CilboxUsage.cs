@@ -308,10 +308,10 @@ namespace Cilbox
 		{
 			public CilboxMethod meth;
 			public CilboxProxy o;
-		    public void ActionCallback0( ) { meth.Interpret( o, new object[0] ); }
-		    public void ActionCallback1<T0>( T0 o0 ) { meth.Interpret( o, new object[]{o0} ); }
-		    public void ActionCallback2<T0,T1>( T0 o0, T1 o1 ) { meth.Interpret( o, new object[]{o0,o1} ); }
-		    public void ActionCallback3<T0,T1,T2>( T0 o0, T1 o1, T2 o2 ) { meth.Interpret( o, new object[]{o0,o1,o2} ); }
+		    public void ActionCallback0( )                                         { meth.Interpret( o, new object[0] ); }
+		    public void ActionCallback1<T0>( T0 o0 )                               { meth.Interpret( o, new object[]{o0} ); }
+		    public void ActionCallback2<T0,T1>( T0 o0, T1 o1 )                     { meth.Interpret( o, new object[]{o0,o1} ); }
+		    public void ActionCallback3<T0,T1,T2>( T0 o0, T1 o1, T2 o2 )           { meth.Interpret( o, new object[]{o0,o1,o2} ); }
 		    public void ActionCallback4<T0,T1,T2,T3>( T0 o0, T1 o1, T2 o2, T3 o3 ) { meth.Interpret( o, new object[]{o0,o1,o2,o3} ); }
 		}
 	}

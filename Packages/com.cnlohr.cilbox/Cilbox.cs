@@ -22,6 +22,19 @@ public class CilboxTarget : Attribute { }
 
 namespace Cilbox
 {
+	public ref struct CilboxInterpretatInvocation
+	{
+		public CilboxInterpretatInvocation()
+		{
+			stepsThisInvoke = 0;
+			nestingDepth = 0;
+			startTime = System.Diagnostics.Stopwatch.GetTimestamp();
+		}
+		public int stepsThisInvoke;
+		public int nestingDepth;
+		public long startTime;
+	}
+
 	public class CilboxMethod
 	{
 		public bool disabled;
@@ -89,6 +102,12 @@ namespace Cilbox
 
 		public object Interpret( CilboxProxy ths, object [] parametersIn )
 		{
+			CilboxInterpretatInvocation ep = new CilboxInterpretatInvocation();
+			return Interpret( ths, parametersIn, ref ep );
+		}
+
+		public object Interpret( CilboxProxy ths, object [] parametersIn, ref CilboxInterpretatInvocation ep )
+		{
 			StackElement [] parameters;
 			StackElement [] stackBuffer = new StackElement[Cilbox.defaultStackSize];
 
@@ -113,17 +132,16 @@ namespace Cilbox
 				plen++;
 			}
 
-			return InterpretInner( stackBuffer, parameters ).AsObject();
+			return InterpretInner( stackBuffer, parameters, ref ep ).AsObject();
 		}
 
 
-		public StackElement InterpretInner( ArraySegment<StackElement> stackBufferIn, ArraySegment<StackElement> parametersIn )
+		public StackElement InterpretInner( ArraySegment<StackElement> stackBufferIn, ArraySegment<StackElement> parametersIn, ref CilboxInterpretatInvocation ep )
 		{
 			Span<StackElement> stackBuffer = stackBufferIn.AsSpan();
 			Span<StackElement> parameters = parametersIn.AsSpan();
 
-			if( byteCode == null || byteCode.Length == 0 || disabled )
-				return StackElement.nil;
+			if( disabled ) return StackElement.LoadAsStatic( null );
 
 #if UNITY_EDITOR
 			perfMarkerInterpret.Begin();
@@ -131,12 +149,7 @@ namespace Cilbox
 
 			Cilbox box = parentClass.box;
 	
-			if( box.nestingDepth == 0 )
-			{
-				box.stepsThisInvoke = 0;
-				box.startTime = System.Diagnostics.Stopwatch.GetTimestamp();
-			}
-			box.nestingDepth++;
+			ep.nestingDepth++;
 
 			int localVarsHead = MaxStackSize;
 			int stackContinues = localVarsHead + methodLocals.Length;
@@ -156,7 +169,6 @@ namespace Cilbox
 #endif
 			int sp = -1;
 			bool cont = true;
-			int ctr = 0;
 			int pc = 0;
 			try
 			{
@@ -265,9 +277,9 @@ namespace Cilbox
 								stackBuffer[nextParameterStart] = stackBuffer[sp--];
 
 							if( !isVoid )
-								stackBuffer[++sp] = targetMethod.InterpretInner( stackBufferIn.Slice( nextStackHead ), stackBufferIn.Slice( nextParameterStart, numParams + staticOffset ) );
+								stackBuffer[++sp] = targetMethod.InterpretInner( stackBufferIn.Slice( nextStackHead ), stackBufferIn.Slice( nextParameterStart, numParams + staticOffset ), ref ep );
 							else
-								targetMethod.InterpretInner( stackBufferIn.Slice( nextStackHead ), stackBufferIn.Slice( nextParameterStart, numParams + staticOffset ) );
+								targetMethod.InterpretInner( stackBufferIn.Slice( nextStackHead ), stackBufferIn.Slice( nextParameterStart, numParams + staticOffset ), ref ep );
 
 							if( b == 0x27 )
 							{
@@ -910,13 +922,12 @@ namespace Cilbox
 					default: Breakwarn( $"Opcode 0x{b.ToString("X2")} unimplemented", pc ); disabled = true; cont = false; break;
 					}
 
-					ctr++;
-					box.stepsThisInvoke++;
+					int steps = ep.stepsThisInvoke++;
 
-					if( ( box.stepsThisInvoke & 0x3f ) == 0 )
+					if( ( steps  & 0x3f ) == 0 )
 					{
 						// Only check every 64.
-						long elapsed = (System.Diagnostics.Stopwatch.GetTimestamp() - box.startTime);
+						long elapsed = (System.Diagnostics.Stopwatch.GetTimestamp() - ep.startTime);
 						if( elapsed > Cilbox.timeoutLengthTicks )
 						{
 							throw new Exception( "Infinite Loop @ " + pc + " In " + methodName + " (Timeout ticks: " + elapsed + "/" + Cilbox.timeoutLengthTicks + " )" );
@@ -928,17 +939,17 @@ namespace Cilbox
 			catch( Exception e )
 			{
 				disabled = true;
-				if( box.nestingDepth == 1 )
+				if( ep.nestingDepth == 1 )
 					Breakwarn( e.ToString(), pc );
 				else
 				{
-					box.nestingDepth--;
+					ep.nestingDepth--;
 					Breakwarn( e.ToString(), pc );
 					throw;
 				}
 			}
 			//if( box.nestingDepth == 1 ) Debug.Log( "This invoke took: " + box.stepsThisInvoke );
-			box.nestingDepth--;
+			ep.nestingDepth--;
 #if UNITY_EDITOR
 			perfMarkerInterpret.End();
 #endif
@@ -1102,10 +1113,6 @@ namespace Cilbox
 		public String assemblyData;
 		private bool initialized = false;
 
-		public int stepsThisInvoke;
-		public int nestingDepth;
-
-		public long startTime;
 		public static readonly long timeoutLengthTicks = 50000000; // 5000ms
 		public static readonly int defaultStackSize = 1024;
 
@@ -1320,13 +1327,15 @@ namespace Cilbox
 			uint index = cls.importFunctionToId[(uint)iid];
 			if( index == 0xffffffff ) return null;
 
-			object ret = cls.methods[index].Interpret( ths, parameters );
+			CilboxInterpretatInvocation ep = new CilboxInterpretatInvocation();
+
+			object ret = cls.methods[index].Interpret( ths, parameters, ref ep );
 
 			// For profiling
 			if( showFunctionProfiling )
 			{
-				long elapsed = (System.Diagnostics.Stopwatch.GetTimestamp() - startTime);
-				Debug.Log( $"{stepsThisInvoke} in {elapsed/10}us or {stepsThisInvoke*10.0/(double)elapsed}MHz" );
+				long elapsed = (System.Diagnostics.Stopwatch.GetTimestamp() - ep.startTime);
+				Debug.Log( $"{ep.stepsThisInvoke} in {elapsed/10}us or {ep.stepsThisInvoke*10.0/(double)elapsed}MHz" );
 			}
 			return ret;
 		}
