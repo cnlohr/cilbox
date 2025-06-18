@@ -1,8 +1,9 @@
-name: Build
+name: Test and make .unitypackage
 on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
     - name: Setup .NET 8.x
       uses: actions/setup-dotnet@v4
@@ -15,26 +16,15 @@ jobs:
       run: dotnet build --configuration Release
     - name: Test
       run: TestCilbox/bin/Release/net8.0/TestCilbox
-
-  compile-unitypackages:
-    name: Build .unitypackage files
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: "Checkout repository"
-        timeout-minutes: 5
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: "Produce cilbox unitypackage."
-        timeout-minutes: 5
-        run:
-          .github/scripts/unitypackagegen.sh
-      - uses: actions/upload-artifact@v4
-        timeout-minutes: 5
-        with:
-          name: unitypackage_upload
-          path: |
-            com.cnlohr.cilbox.unitypackage
+    - name: "Produce cilbox unitypackage."
+      timeout-minutes: 5
+      run:
+        .github/scripts/unitypackagegen.sh
+    - uses: actions/upload-artifact@v4
+      timeout-minutes: 5
+      with:
+        name: unitypackage_upload
+        path: |
+          com.cnlohr.cilbox.unitypackage
 
 
