@@ -17,8 +17,17 @@ namespace TestCilbox
 		public int ipublicinstance = 556;
 		static private int iprivatestatic = 557;
 		static public int ipublicstatic = 558;
+		static public int recursive_test_counter = 0;
 		public TestCilboxBehaviour2 behaviour2;
 		public TestCilboxBehaviour() { }
+
+		public void RecursiveTest(int i)
+		{
+			recursive_test_counter++;
+			if( i <= 0 ) return;
+			RecursiveTest( i-1 );
+			RecursiveTest( i-1 );
+		}
 
 		public void Start()
 		{
@@ -37,6 +46,11 @@ namespace TestCilbox
 			Validator.Set( "public instance field", ipublicinstance.ToString() );
 			Validator.Set( "private static field", iprivatestatic.ToString() );
 			Validator.Set( "public static field", ipublicstatic.ToString() );
+
+			RecursiveTest(8);
+			Validator.Set( "recursive function", recursive_test_counter.ToString() );
+			Validator.Set( "string concatenation", "it" + " " + "works" );
+			
 
 			behaviour2.Behaviour2Test();
 		}

@@ -131,6 +131,8 @@ namespace TestCilbox
 			Cilbox.Cilbox cb = cbobj.AddComponent<CilboxTester>();
 			cb.exportDebuggingData = true;
 
+
+			cb.timeoutLengthTicks = 30000000;
 			Cilbox.CilboxScenePostprocessor.OnPostprocessScene();
 			Application.CallBeforeRender();
 
@@ -147,6 +149,9 @@ namespace TestCilbox
 
 			Validator.Validate( "Method Called On Peer", "OK" );
 			Validator.Validate( "Public Field Change In Editor", "12345" );
+
+			Validator.Validate( "recursive function", "511" );
+			Validator.Validate( "string concatenation", "it works" );
 			// Make sure CI can fail.
 			//Validator.Validate( "Test Fail Check", "This will fail" );
 
