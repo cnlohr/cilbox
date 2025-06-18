@@ -42,7 +42,7 @@ Ideally the scene could have a `CilboxScene` and an avatar could also have a `Ci
  * `CilboxMethod` - for holding information about classes that are being overridden.
  * `CilboxClass` - for holding information about classes that are being overridden.
  * `StackElement` - a generic "object" like thing that can be written into/altered/etc, without needing to box/unbox/etc.  This holds parameters, locals, and the stack.
- * These Stack Elements can be: `Boolean`, `Sbyte`, `Byte`, `Short`, `Ushort`, `Int`, `Uint`, `Long`, `Ulong`, `Float`, `Double`, `Object`, `Address`, amd `Reference`
+ * These Stack Elements can be: `Boolean`, `Sbyte`, `Byte`, `Short`, `Ushort`, `Int`, `Uint`, `Long`, `Ulong`, `Float`, `Double`, `Object`, `Address`, and `Reference`
  * If the StackElement is an `Obejct`, boxing will need to happen when it gets used.
  * If the StackElement is an `Array`, then it is actually a reference, where .o contains the link to the `Array` and .i contains the reference to the element.
 
@@ -57,6 +57,16 @@ In general, the process for deciding if a feature is allowed is:
 For additional information:
  * For all security-related notes surrounding the load decisions, please see [CilboxUsage.cs](Packages/com.cnlohr.cilbox/CilboxUsage.cs). 
  * For avatar/scene decisions regarding what can or cannot be loaded, please see the specific [CilboxAvatar.cs](Packages/com.cnlohr.cilbox/CilboxAvatar.cs) / [CilboxScene.cs](Packages/com.cnlohr.cilbox/CilboxScene.cs). 
+
+### Resource accounting
+
+While a cilbox is executing, every 64 cycles it reports back to the owning box that it is using CPU time.  If the amount of time spent executing that cilbox per frame exceeds `timeoutLengthTicks` ticks, then, the script will be killed at the next 64-cycle checkin.
+
+Execution time encompasses all time that is spent while there is a cilbox execution context.  For example, if your cilbox calls a Unity function, while it is within the unity function, it will be accounted against your script.  If your script is executing, and another method is called from a thread concurrently, then that time is only single-accounted.
+
+By default, `timeoutLengthTicks` is 500ms.  For Avatars, 5ms.
+
+If execution within a box is exceeded, the box is disabled.  The box can be re-enabled by setting a flag on the box, to re-enable it, but in general, it should be expected to stay off, unless the asset is unloaded.
 
 ### Things you can't do (At least not today)
  * You cannot have arrays of properties on your object, for instance an array of GameObjects.  Each property must be a regular property.
