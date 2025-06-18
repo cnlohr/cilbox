@@ -101,12 +101,15 @@ namespace Cilbox
 		{
 			Dictionary< String, Serializee > ses = declaringType.AsMap();
 			String typeName = ses["n"].AsString();
+		/*
 			if( typeName == "<PrivateImplementationDetails>" && name == "ComputeStringHash" )
 			{
 				Dictionary< String, Serializee > exportType = new Dictionary< String, Serializee >();
 				exportType["n"] = new Serializee( "Cilbox.CilboxPublicUtils" );
 				return ( "ComputeStringHashProxy", new Serializee( exportType ) );
+				//return ( "ComputeStringHashProxy", declaringType );
 			}
+		*/
 			return ( name, declaringType );
 		}
 
@@ -159,6 +162,7 @@ namespace Cilbox
 		{
 			Dictionary< String, Serializee > ses = s.AsMap();
 			String typeName = ses["n"].AsString();
+			String assemblyName = ses["a"].AsString();
 			if( box.classes.ContainsKey( typeName ) ) return null;
 			typeName = CheckReplaceTypeNotRecursive( typeName );
 			if( typeName == null ) return null;
@@ -174,16 +178,21 @@ namespace Cilbox
 				typeName += "`" + gs.Length;
 			}
 
-			Type ret = Type.GetType( typeName );
-			if( ret == null )
+			Type ret = null;
+
+			// In case we can find an exact match...
+			System.Reflection.Assembly [] assys = AppDomain.CurrentDomain.GetAssemblies();
+			foreach( System.Reflection.Assembly a in assys )
 			{
-				System.Reflection.Assembly [] assys = AppDomain.CurrentDomain.GetAssemblies();
-				foreach( System.Reflection.Assembly a in assys )
+				Type t = a.GetType( typeName );
+				if( t != null && a.GetName().Name == assemblyName )
 				{
-					ret = a.GetType( typeName );
-					if( ret != null ) break;
+					ret = t;
+					break;
 				}
 			}
+			if( ret == null )
+				ret = Type.GetType( typeName );
 
 			if( ret == null )
 			{
@@ -232,11 +241,12 @@ namespace Cilbox
 		public MethodBase InternalGetNativeMethodFromTypeAndNameNoSecurity( Type declaringType, String name, Type [] parameters, Type [] genericArguments, String fullSignature )
 		{
 			MethodBase m;
+
 			// Can we combine Constructor + Method?
 			m = declaringType.GetMethod(
 				name,
 				genericArguments.Length,
-				BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static,
+				/*BindingFlags.NonPublic | */ BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static,
 				null,
 				CallingConventions.Any,
 				parameters,
@@ -246,7 +256,7 @@ namespace Cilbox
 			{
 				// Can't use GetConstructor, because somethings have .ctor or .cctor
 				ConstructorInfo[] cts = declaringType.GetConstructors(
-					BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
+					/*BindingFlags.NonPublic | */ BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
 				int ck;
 				for( ck = 0; ck < cts.Length; ck++ )
 				{
@@ -259,11 +269,40 @@ namespace Cilbox
 				}
 			}
 
+			// If we really can't find the method, search through all types of matching assembly names.
+			// This is needed for sometimes when we have AsmDef.<PirvateImplementationDetails>.ComputeStringHash()
+			if( m == null )
+			{
+				System.Reflection.Assembly [] assys = AppDomain.CurrentDomain.GetAssemblies();
+				foreach( System.Reflection.Assembly proxyAssembly in assys )
+				{
+					foreach (Type type in proxyAssembly.GetTypes())
+					{
+						if( type.Name == declaringType.Name )
+						{
+							m = type.GetMethod(
+								name,
+								genericArguments.Length,
+								BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static,
+								null,
+								CallingConventions.Any,
+								parameters,
+								null );
+							if( m != null ) Debug.Log( type.Name + " == " + declaringType.Name + " == " + proxyAssembly.GetName().Name + " >> " + m.Name );
+
+							if( m != null ) break;
+							// I don't think there is any case where this would be needed for a type with a constructor.
+						}
+					}
+					if( m != null ) break;
+				}
+			}
 
 			if( m != null && m is MethodInfo && genericArguments.Length > 0 )
 			{
 		    	m = ((MethodInfo)m).MakeGenericMethod( genericArguments );
 			}
+
 
 			return m;
 		}
@@ -283,8 +322,6 @@ namespace Cilbox
 				throw new Exception( "InitializeArray requires identical array byte length " + initializer.Length );
 			Buffer.BlockCopy(initializer, 0, arr, 0, initializer.Length);
 		}
-
-		public static UInt32 ComputeStringHashProxy(System.String s) { return (uint)s.GetHashCode(); }
 	}
 
 	// Be warned that this class is totally available to the inner box.
@@ -308,10 +345,10 @@ namespace Cilbox
 		{
 			public CilboxMethod meth;
 			public CilboxProxy o;
-		    public void ActionCallback0( ) { meth.Interpret( o, new object[0] ); }
-		    public void ActionCallback1<T0>( T0 o0 ) { meth.Interpret( o, new object[]{o0} ); }
-		    public void ActionCallback2<T0,T1>( T0 o0, T1 o1 ) { meth.Interpret( o, new object[]{o0,o1} ); }
-		    public void ActionCallback3<T0,T1,T2>( T0 o0, T1 o1, T2 o2 ) { meth.Interpret( o, new object[]{o0,o1,o2} ); }
+		    public void ActionCallback0( )                                         { meth.Interpret( o, new object[0] ); }
+		    public void ActionCallback1<T0>( T0 o0 )                               { meth.Interpret( o, new object[]{o0} ); }
+		    public void ActionCallback2<T0,T1>( T0 o0, T1 o1 )                     { meth.Interpret( o, new object[]{o0,o1} ); }
+		    public void ActionCallback3<T0,T1,T2>( T0 o0, T1 o1, T2 o2 )           { meth.Interpret( o, new object[]{o0,o1,o2} ); }
 		    public void ActionCallback4<T0,T1,T2,T3>( T0 o0, T1 o1, T2 o2, T3 o3 ) { meth.Interpret( o, new object[]{o0,o1,o2,o3} ); }
 		}
 	}

@@ -61,6 +61,11 @@ namespace Cilbox
 			"UnityEngine.Vector3",
 		};
 
+		public CilboxAvatar()
+		{
+			timeoutLengthTicks = 50000; // Limit avatars to 5ms.
+		}
+
 		static public HashSet<String> GetWhiteListTypes() { return whiteListType; }
 
 		// This is called by CilboxUsage to decide of a type is allowed.

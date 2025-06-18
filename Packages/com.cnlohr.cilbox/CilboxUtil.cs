@@ -780,7 +780,7 @@ namespace Cilbox
 									else
 										stline += operand.ToString("X4") + " ";
 								}
-								else if( ot == CilboxUtil.OpCodes.OperandType.InlineSwitch )
+								else if( ot == OpCodes.OperandType.InlineSwitch )
 								{
 									stline += $" Switch {operand} cases";
 									int oin;
@@ -790,12 +790,12 @@ namespace Cilbox
 										stline += " " + sws;
 									}
 								}
-								else if( ot == CilboxUtil.OpCodes.OperandType.InlineString )
+								else if( ot == OpCodes.OperandType.InlineString )
 								{
 									CilMetadataTokenInfo md = b.metadatas[operand];
 									stline += " " + ((md!=null)?md.Name:"UNDEFINED");
 								}
-								else if( ot == CilboxUtil.OpCodes.OperandType.InlineMethod )
+								else if( ot == OpCodes.OperandType.InlineMethod )
 								{
 									CilMetadataTokenInfo md = b.metadatas[operand];
 									stline += " ";
@@ -804,28 +804,33 @@ namespace Cilbox
 									else
 										stline += md.declaringTypeName + " " + md.Name;
 								}
-								else if( ot == CilboxUtil.OpCodes.OperandType.InlineField )
+								else if( ot == OpCodes.OperandType.InlineField )
 								{
 									CilMetadataTokenInfo md = b.metadatas[operand];
 									stline += " " + ((md!=null)?md.Name:operand.ToString("X4"));
 								}
-								else if( ot == CilboxUtil.OpCodes.OperandType.InlineType )
+								else if( ot == OpCodes.OperandType.InlineType )
 								{
 									CilMetadataTokenInfo md = b.metadatas[operand];
 									stline += " " + ((md!=null)?md.Name:operand.ToString("X4"));
 								}
-								else if( ot == CilboxUtil.OpCodes.OperandType.ShortInlineI )
+								else if( ot == OpCodes.OperandType.ShortInlineI )
 								{
-									stline += " " + operand.ToString("X4") + " ";
+									stline += " 0x" + operand.ToString("X4") + " ";
 								}
-								else if( ot == CilboxUtil.OpCodes.OperandType.InlineI )
+								else if( ot == OpCodes.OperandType.InlineI )
 								{
-									stline += " " + operand.ToString("X8") + " ";
+									stline += " 0x" + operand.ToString("X8") + " ";
 								}
-								else if( ot == CilboxUtil.OpCodes.OperandType.InlineI8 )
+								else if( ot == OpCodes.OperandType.InlineI8 )
 								{
-									stline += " " + operand.ToString("X16") + " ";
+									stline += " 0x" + operand.ToString("X16") + " ";
 								}
+								else if( ot == OpCodes.OperandType.ShortInlineBrTarget || ot == OpCodes.OperandType.InlineBrTarget )
+								{
+									stline += " " + operand + " to " + (i + operand);
+								}
+
 
 								CLog.WriteLine( stline );
 								if( i >= byteCode.Length ) break;
@@ -935,7 +940,8 @@ namespace Cilbox
 		public static Serializee GetSerializeeFromNativeType( Type t )
 		{
 			Dictionary< String, Serializee > ret = new Dictionary< String, Serializee >();
-
+			// Originally I did this to try to narrow down the search.  Now it is not as practical.
+			ret["a"] = new Serializee( t.Assembly.GetName().Name );
 			if( t.IsGenericType )
 			{
 				String [] sn = t.FullName.Split( "`" );

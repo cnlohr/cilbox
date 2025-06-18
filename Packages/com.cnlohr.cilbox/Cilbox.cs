@@ -5,6 +5,7 @@ using System.Collections.Specialized;
 using System.Collections;
 using System.Runtime.InteropServices;
 using System.Reflection;
+using System.Threading; // At runtime, only used for a lock (Monitor)
 
 #if UNITY_EDITOR
 using Unity.Profiling;
@@ -12,7 +13,6 @@ using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Callbacks;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 #endif
 
@@ -24,7 +24,6 @@ namespace Cilbox
 {
 	public class CilboxMethod
 	{
-		public bool disabled;
 		public CilboxClass parentClass;
 		public int MaxStackSize;
 		public String methodName;
@@ -113,30 +112,30 @@ namespace Cilbox
 				plen++;
 			}
 
-			return InterpretInner( stackBuffer, parameters ).AsObject();
+			object ret = null;
+			if( !parentClass.box.InterpreterEntry(this) ) return null;
+			try
+			{
+				ret = InterpretInner( stackBuffer, parameters ).AsObject();
+			} catch( Exception e )
+			{
+				parentClass.box.InterpreterExit();
+				throw;
+			}
+			parentClass.box.InterpreterExit();
+			return ret;
 		}
 
-
-		public StackElement InterpretInner( ArraySegment<StackElement> stackBufferIn, ArraySegment<StackElement> parametersIn )
+		private StackElement InterpretInner( ArraySegment<StackElement> stackBufferIn, ArraySegment<StackElement> parametersIn )
 		{
 			Span<StackElement> stackBuffer = stackBufferIn.AsSpan();
 			Span<StackElement> parameters = parametersIn.AsSpan();
-
-			if( byteCode == null || byteCode.Length == 0 || disabled )
-				return StackElement.nil;
 
 #if UNITY_EDITOR
 			perfMarkerInterpret.Begin();
 #endif
 
 			Cilbox box = parentClass.box;
-	
-			if( box.nestingDepth == 0 )
-			{
-				box.stepsThisInvoke = 0;
-				box.startTime = System.Diagnostics.Stopwatch.GetTimestamp();
-			}
-			box.nestingDepth++;
 
 			int localVarsHead = MaxStackSize;
 			int stackContinues = localVarsHead + methodLocals.Length;
@@ -144,7 +143,7 @@ namespace Cilbox
 			// Uncomment for debugging.
 #if false
 			bool bDeepDebug = false;
-			if( true ) // fullSignature.Contains( "Start" ) )
+			if( fullSignature.Contains( "GetRegister" ) )
 			{
 				bDeepDebug = true;
 				String parmSt = ""; for( int sk = 0; sk < parameters.Length; sk++ ) {
@@ -156,12 +155,28 @@ namespace Cilbox
 #endif
 			int sp = -1;
 			bool cont = true;
-			int ctr = 0;
 			int pc = 0;
 			try
 			{
 				do
 				{
+					// While this is not threadsafe, that's OK.  This is more for broad strokes.
+					// We don't have to worry about critical pieces going in/out of a race condition
+					// for instance, interpreterAccountingLastStart can't go wonky on us.
+					//
+					// If you use Interlocked.Add() it slows the whole emulator down by about 40%!
+					long steps = ++box.interpreterInstructionsCount;
+					if( ( steps & 0x3f ) == 0 )
+					{
+						long now = System.Diagnostics.Stopwatch.GetTimestamp();
+						if( now > box.interpreterAccountingDropDead )
+						{
+							box.interpreterAccountingCumulitive = now + box.timeoutLengthTicks - box.interpreterAccountingDropDead;
+							cont = false;
+							throw new Exception( "Script time resources overutilized @ " + pc + " In " + methodName + " (Timeout ticks: " + box.interpreterAccountingCumulitive + "/" + box.timeoutLengthTicks + " )" );
+						}
+					}
+
 					byte b = byteCode[pc];
 
 #if false
@@ -787,7 +802,7 @@ namespace Cilbox
 						else
 						{
 							Breakwarn( "Scary Unbox (that we don't have code for) from " + otyp + " ORIG " + metaType.ToString(), pc );
-							disabled = true; cont = false;
+							box.disabled = true; cont = false;
 						}
 						break; // unbox.any
 					}
@@ -907,41 +922,24 @@ namespace Cilbox
 						}
 						break;
 
-					default: Breakwarn( $"Opcode 0x{b.ToString("X2")} unimplemented", pc ); disabled = true; cont = false; break;
-					}
-
-					ctr++;
-					box.stepsThisInvoke++;
-
-					if( ( box.stepsThisInvoke & 0x3f ) == 0 )
-					{
-						// Only check every 64.
-						long elapsed = (System.Diagnostics.Stopwatch.GetTimestamp() - box.startTime);
-						if( elapsed > Cilbox.timeoutLengthTicks )
-						{
-							throw new Exception( "Infinite Loop @ " + pc + " In " + methodName + " (Timeout ticks: " + elapsed + "/" + Cilbox.timeoutLengthTicks + " )" );
-						}
+					default: Breakwarn( $"Opcode 0x{b.ToString("X2")} unimplemented", pc ); box.disabled = true; cont = false; break;
 					}
 				}
 				while( cont );
 			}
 			catch( Exception e )
 			{
-				disabled = true;
-				if( box.nestingDepth == 1 )
-					Breakwarn( e.ToString(), pc );
-				else
-				{
-					box.nestingDepth--;
-					Breakwarn( e.ToString(), pc );
-					throw;
-				}
+				Breakwarn( e.ToString(), pc );
+				box.disabled = true;
+				//box.InterpreterExit();
+				throw;
 			}
-			//if( box.nestingDepth == 1 ) Debug.Log( "This invoke took: " + box.stepsThisInvoke );
-			box.nestingDepth--;
 #if UNITY_EDITOR
 			perfMarkerInterpret.End();
 #endif
+
+			//box.InterpreterExit();
+
 			return ( sp == -1 ) ? StackElement.nil : stackBuffer[sp--];
 		}
 
@@ -1102,16 +1100,13 @@ namespace Cilbox
 		public String assemblyData;
 		private bool initialized = false;
 
-		public int stepsThisInvoke;
-		public int nestingDepth;
-
-		public long startTime;
-		public static readonly long timeoutLengthTicks = 50000000; // 5000ms
 		public static readonly int defaultStackSize = 1024;
 
 		public bool showFunctionProfiling;
 		public bool exportDebuggingData;
 		public CilboxUsage usage;
+
+		public bool disabled = false;
 
 		public Cilbox()
 		{
@@ -1121,6 +1116,12 @@ namespace Cilbox
 
 		abstract public bool CheckMethodAllowed(  out MethodInfo mi, Type declaringType, String name, Serializee [] parametersIn, Serializee [] genericArgumentsIn, String fullSignature );
 		abstract public bool CheckTypeAllowed( String sType );
+
+		public long timeoutLengthTicks = 5000000; // 500ms Can be changed by specific Cilbox application.
+		public uint interpreterAccountingDepth = 0;
+		public long interpreterAccountingDropDead = 0;
+		public long interpreterAccountingCumulitive = 0;
+		public long interpreterInstructionsCount = 0;
 
 		public void ForceReinit()
 		{
@@ -1322,13 +1323,76 @@ namespace Cilbox
 
 			object ret = cls.methods[index].Interpret( ths, parameters );
 
-			// For profiling
-			if( showFunctionProfiling )
-			{
-				long elapsed = (System.Diagnostics.Stopwatch.GetTimestamp() - startTime);
-				Debug.Log( $"{stepsThisInvoke} in {elapsed/10}us or {stepsThisInvoke*10.0/(double)elapsed}MHz" );
-			}
 			return ret;
+		}
+
+		public bool InterpreterEntry( CilboxMethod m )
+		{
+			// Use of Monitor.Lock's here slows the whole emulator down by about 8%
+			// TODO: Consider some sort of lockless approach.  This is tricky because
+			// you need to make sure you interlock both depth, and, time accounting.
+			long now = System.Diagnostics.Stopwatch.GetTimestamp();
+			Monitor.Enter( this );
+			if( ++interpreterAccountingDepth == 1 )
+			{
+				// First entry, if we've been disabled, quiety abort.
+				// this is normal if 
+				if( disabled )
+				{
+					--interpreterAccountingDepth;
+					Monitor.Exit( this );
+					return false;
+				}
+				interpreterInstructionsCount = 0;
+				interpreterAccountingDropDead = now + timeoutLengthTicks - interpreterAccountingCumulitive;
+				Monitor.Exit( this );
+				return true;
+			}
+			else if( disabled )
+			{
+				// fault from within, abort now.
+				Monitor.Exit( this );
+				throw new Exception( $"Function interpreation happened while box was disabled. This should not be possible. Offender: {m.parentClass.className} {m.fullSignature}" );
+			}
+			else
+			{
+				if( now > interpreterAccountingDropDead )
+				{
+					interpreterAccountingCumulitive = now + timeoutLengthTicks - interpreterAccountingDropDead;
+					--interpreterAccountingDepth;
+					Monitor.Exit( this );
+					throw new Exception( $"Function {m.parentClass.className} {m.fullSignature} timed out." );
+				}
+
+				// Otherwise we are recursively being called. All is well.
+				Monitor.Exit( this );
+				return true;
+			}
+		}
+
+		public void InterpreterExit()
+		{
+			Monitor.Enter( this );
+			if( --interpreterAccountingDepth == 0 )
+			{
+				long now = System.Diagnostics.Stopwatch.GetTimestamp();
+				long elapsed = now + timeoutLengthTicks - interpreterAccountingDropDead - interpreterAccountingCumulitive;
+				interpreterAccountingCumulitive = now + timeoutLengthTicks - interpreterAccountingDropDead;
+
+				// For profiling
+				if( showFunctionProfiling )
+				{
+					Monitor.Exit( this );
+					Debug.Log( $"{interpreterInstructionsCount} in {elapsed/10}us or {interpreterInstructionsCount*10.0/(double)elapsed}MHz" );
+					return;
+				}
+			}
+			Monitor.Exit( this );
+		}
+
+		void Update()
+		{
+			interpreterAccountingCumulitive = 0;
 		}
 	}
 
