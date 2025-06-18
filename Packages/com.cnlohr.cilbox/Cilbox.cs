@@ -680,8 +680,6 @@ namespace Cilbox
 					case 0x7f: 
 					{
 						uint bc = BytecodeAsU32( ref pc );
-						//StackElement se = stackBuffer[sp--];
-						Debug.Log( "Getting field: " + bc );
 						stackBuffer[++sp] = StackElement.CreateReference( (Array)(parentClass.staticFields), (uint)box.metadatas[bc].fieldIndex );
 						break;// ldsflda 
 					}
