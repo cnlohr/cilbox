@@ -31,6 +31,7 @@ namespace Cilbox
 			"System.UInt32",
 			"System.ValueTuple",
 			"System.Void",
+			"<PrivateImplementationDetails>", // Probably remove me?
 			"UnityEngine.Component",
 			"UnityEngine.Debug",
 			"UnityEngine.Events.UnityAction",
@@ -82,6 +83,8 @@ namespace Cilbox
 			if( declaringType == typeof(UnityEngine.Events.UnityAction) && name != ".ctor" ) return false;
 
 			if( declaringType == typeof(UnityEngine.GameObject) && name != "SetActive" ) return false;
+
+			if( declaringType == typeof(System.Type) ) return false;
 
 			if( name.Contains( "Invoke" ) ) return false;
 			return true;
