@@ -120,6 +120,7 @@ namespace Cilbox
 			} catch( Exception e )
 			{
 				parentClass.box.InterpreterExit();
+				Debug.LogError( e.ToString() );
 				throw;
 			}
 			parentClass.box.InterpreterExit();
