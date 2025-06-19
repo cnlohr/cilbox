@@ -89,7 +89,7 @@ namespace Cilbox
 					if( !bHandled )
 					{
 						StackType st;
-						if( StackElement.TypeToStackType.TryGetValue( fv.GetType().ToString(), out st ) && st < StackType.Object )
+						if( StackElement.TypeToStackType.TryGetValue( fv.GetType().ToString(), out st ) && st < StackType.Object || fv is string )
 							instanceFields[f.Name] = new Serializee( fv.ToString() );
 						else if( fv.GetType() == typeof(String) )
 							instanceFields[f.Name] = new Serializee( fv.ToString() );								
