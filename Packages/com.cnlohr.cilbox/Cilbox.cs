@@ -1,4 +1,4 @@
-#define PER_INSTRUCTION_PROFILING
+//#define PER_INSTRUCTION_PROFILING
 
 using UnityEngine;
 using System.Collections.Generic;
