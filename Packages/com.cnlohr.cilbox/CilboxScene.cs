@@ -14,14 +14,21 @@ namespace Cilbox
 		static HashSet<String> whiteListType = new HashSet<String>(){
 			"Cilbox.CilboxPublicUtils",
 			"System.Array",
+			"System.BitConverter", // HMMMMMMMMM SUSSY
 			"System.Boolean",
 			"System.Byte",
 			"System.Char",
+			"System.Convert", // HMMMMMMMMM SUSSY
 			"System.Collections.Generic.Dictionary",
 			"System.DateTime",
 			"System.DayOfWeek",
 			"System.Diagnostics.Stopwatch",
+			"System.Double",
+			"System.Exception",
+			"System.Int16",
 			"System.Int32",
+			"System.Int64",
+			"System.Math",
 			"System.MathF",
 			"System.Object",
 			"System.Single",
@@ -29,9 +36,12 @@ namespace Cilbox
 			"System.TimeSpan",
 			"System.UInt16",
 			"System.UInt32",
+			"System.UInt64",
 			"System.ValueTuple",
 			"System.Void",
-			"<PrivateImplementationDetails>", // Probably remove me?
+			"<PrivateImplementationDetails>", // Probably remove me? But we need a way to handle string hashing.  We can do it with our own function but that's slower.
+			"UnityEngine.AudioSource",
+			"UnityEngine.AudioClip",
 			"UnityEngine.Component",
 			"UnityEngine.Debug",
 			"UnityEngine.Events.UnityAction",

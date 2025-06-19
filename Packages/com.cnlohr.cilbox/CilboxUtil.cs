@@ -78,7 +78,7 @@ namespace Cilbox
 			case long t6: l = (long)o;		type = StackType.Long; break;
 			case ulong t7: e = (ulong)o;	type = StackType.Ulong; break;
 			case float t8: f = (float)o;	type = StackType.Float; break;
-			case double t9: d = (ulong)o;	type = StackType.Double; break;
+			case double t9: d = (double)o;	type = StackType.Double; break;
 			case bool ta0: i = ((bool)o) ? 1 : 0; type = StackType.Boolean; break;
 			default: this.o = o; type = StackType.Object; break;
 			}
@@ -100,7 +100,7 @@ namespace Cilbox
 			case long t6: ret.l = (long)o;		ret.type = StackType.Long; break;
 			case ulong t7: ret.e = (ulong)o;	ret.type = StackType.Ulong; break;
 			case float t8: ret.f = (float)o;	ret.type = StackType.Float; break;
-			case double t9: ret.d = (ulong)o;	ret.type = StackType.Double; break;
+			case double t9: ret.d = (double)o;	ret.type = StackType.Double; break;
 			case bool ta0: ret.i = ((bool)o) ? 1 : 0; ret.type = StackType.Boolean; break;
 			default: ret.o = o; ret.type = StackType.Object; break;
 			}
@@ -194,6 +194,7 @@ namespace Cilbox
 		public object CoerceToObject( Type t )
 		{
 			StackType rt = StackTypeFromType( t );
+
 			if( type < StackType.Float ) 
 			{
 				switch( rt )
@@ -762,7 +763,7 @@ namespace Cilbox
 								int backupi = i;
 								uint operand = (uint)CilboxUtil.BytecodePullLiteral( byteCode, ref i, opLen );
 
-								String stline = $"\t\t {starti,-4} {oc,-10}";
+								String stline = $"\t\t {starti,-4} {byteCode[starti].ToString("X2")} {oc,-10}";
 
 								// Check to see if this is a meta that we care about.  Then rewrite in a new identifier.
 								// ResolveField, ResolveMember, ResolveMethod, ResolveSignature, ResolveString, ResolveType
@@ -814,11 +815,11 @@ namespace Cilbox
 									CilMetadataTokenInfo md = b.metadatas[operand];
 									stline += " " + ((md!=null)?md.Name:operand.ToString("X4"));
 								}
-								else if( ot == OpCodes.OperandType.ShortInlineI )
+								else if( ot == OpCodes.OperandType.ShortInlineI || ot == OpCodes.OperandType.ShortInlineVar )
 								{
 									stline += " 0x" + operand.ToString("X4") + " ";
 								}
-								else if( ot == OpCodes.OperandType.InlineI )
+								else if( ot == OpCodes.OperandType.InlineI || ot == OpCodes.OperandType.InlineVar )
 								{
 									stline += " 0x" + operand.ToString("X8") + " ";
 								}
@@ -830,7 +831,10 @@ namespace Cilbox
 								{
 									stline += " " + operand + " to " + (i + operand);
 								}
-
+								else if( ot == OpCodes.OperandType.ShortInlineR )
+								{
+									stline += " 0x" + operand.ToString("X8") + " " + IntFloatConverter.ConvertItoF( (int)operand );
+								}
 
 								CLog.WriteLine( stline );
 								if( i >= byteCode.Length ) break;

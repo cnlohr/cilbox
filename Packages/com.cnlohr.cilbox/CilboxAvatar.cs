@@ -21,14 +21,18 @@ namespace Cilbox
 			"System.DateTime",
 			"System.DayOfWeek",
 			"System.Diagnostics.Stopwatch",
+			"System.Double",
 			"System.Int32",
+			"System.Int64",
 			"System.MathF",
+			"System.Math",
 			"System.Object",
 			"System.Single",
 			"System.String",
 			"System.TimeSpan",
 			"System.UInt16",
 			"System.UInt32",
+			"System.UInt64",
 			"System.ValueTuple",
 			"System.Void",
 			"UnityEngine.Component",
@@ -63,7 +67,7 @@ namespace Cilbox
 
 		public CilboxAvatar()
 		{
-			timeoutLengthTicks = 50000; // Limit avatars to 5ms.
+			timeoutLengthUs = 5000; // Limit avatars to 5ms.
 		}
 
 		static public HashSet<String> GetWhiteListTypes() { return whiteListType; }

@@ -43,7 +43,7 @@ Ideally the scene could have a `CilboxScene` and an avatar could also have a `Ci
  * `CilboxClass` - for holding information about classes that are being overridden.
  * `StackElement` - a generic "object" like thing that can be written into/altered/etc, without needing to box/unbox/etc.  This holds parameters, locals, and the stack.
  * These Stack Elements can be: `Boolean`, `Sbyte`, `Byte`, `Short`, `Ushort`, `Int`, `Uint`, `Long`, `Ulong`, `Float`, `Double`, `Object`, `Address`, and `Reference`
- * If the StackElement is an `Obejct`, boxing will need to happen when it gets used.
+ * If the StackElement is an `Object`, boxing will need to happen when it gets used.
  * If the StackElement is an `Array`, then it is actually a reference, where .o contains the link to the `Array` and .i contains the reference to the element.
 
 ### Security
