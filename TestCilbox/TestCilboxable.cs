@@ -50,9 +50,27 @@ namespace TestCilbox
 			RecursiveTest(8);
 			Validator.Set( "recursive function", recursive_test_counter.ToString() );
 			Validator.Set( "string concatenation", "it" + " " + "works" );
-			
+			Validator.Set( "MathF.Sin", MathF.Sin(3.2f).ToString() );
 
 			behaviour2.Behaviour2Test();
+		}
+
+		public void Update()
+		{
+			Validator.Set( "Update", "called" );
+			Validator.Set( "Overtime", "timed out" );
+			double result = 1.3;
+			for( int i = 0; i < 1000000; i++ ) result = System.Math.Sin( result ) * 10.0;
+			Validator.Set( "Throwaway", result.ToString() );
+			Validator.Set( "Overtime", "did not timed out" );
+		}
+
+
+		public void FixedUpdate()
+		{
+			Validator.Set( "Execution after timeout", "enabled" );
+			Validator.Set( "Manual Recover After Timeout", "recovered" );
+			Validator.Set( "FixedUpdate", "called" );
 		}
 	}
 

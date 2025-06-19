@@ -17,14 +17,17 @@ namespace TestCilbox
 		static HashSet<String> whiteListType = new HashSet<String>(){
 			"Cilbox.CilboxPublicUtils",
 			"TestCilbox.Validator",
+			"System.Math",
 			"System.Array",
 			"System.Boolean",
 			"System.Byte",
 			"System.Char",
 			"System.Collections.Generic.Dictionary",
+			"System.Double",
 			"System.DateTime",
 			"System.DayOfWeek",
 			"System.Diagnostics.Stopwatch",
+			"System.Exception",
 			"System.Int32",
 			"System.MathF",
 			"System.Object",
@@ -118,6 +121,7 @@ namespace TestCilbox
 	{
 		public static int Main()
 		{
+
 			GameObject go = new GameObject("MyObjectToProxy");
 			TestCilboxBehaviour b = go.CreateComponent<TestCilboxBehaviour>();
 
@@ -131,33 +135,66 @@ namespace TestCilbox
 			Cilbox.Cilbox cb = cbobj.AddComponent<CilboxTester>();
 			cb.exportDebuggingData = true;
 
-
-			cb.timeoutLengthTicks = 30000000;
+			cb.timeoutLengthUs = 25000; // 25ms
 			Cilbox.CilboxScenePostprocessor.OnPostprocessScene();
 			Application.CallBeforeRender();
 
+			Thread.Sleep(50); // Give assembly time to write out.
+
 			Cilbox.CilboxProxy proxy = go.GetComponents<Cilbox.CilboxProxy>()[0];
-			proxy.GetType().GetMethod("Start",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
-			Validator.Validate( "Start Test", "OK" );
-			Validator.Validate( "Start Marks", "I" );
-			Validator.Validate( "Arithmatic Test", "15" );
 
-			Validator.Validate( "private instance filed", "555");
-			Validator.Validate( "public instance field", "556" );
-			Validator.Validate( "private static field", "557" );
-			Validator.Validate( "public static field", "558" );
+			try
+			{
+				proxy.GetType().GetMethod("Start",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
+				Validator.Validate( "Start Test", "OK" );
+				Validator.Validate( "Start Marks", "I" );
+				Validator.Validate( "Arithmatic Test", "15" );
 
-			Validator.Validate( "Method Called On Peer", "OK" );
-			Validator.Validate( "Public Field Change In Editor", "12345" );
+				Validator.Validate( "private instance filed", "555");
+				Validator.Validate( "public instance field", "556" );
+				Validator.Validate( "private static field", "557" );
+				Validator.Validate( "public static field", "558" );
 
-			Validator.Validate( "recursive function", "511" );
-			Validator.Validate( "string concatenation", "it works" );
-			// Make sure CI can fail.
-			//Validator.Validate( "Test Fail Check", "This will fail" );
+				Validator.Validate( "Method Called On Peer", "OK" );
+				Validator.Validate( "Public Field Change In Editor", "12345" );
 
-			// In case assembly is still being generated.
-			Thread.Sleep(50);
+				Validator.Validate( "recursive function", "511" );
+				Validator.Validate( "string concatenation", "it works" );
+				Validator.Validate( "MathF.Sin", "-0.058374193" );
+
+				// Make sure CI can fail.
+				//Validator.Validate( "Test Fail Check", "This will fail" );
+			}
+			catch( Exception e )
+			{
+				Validator.Validate( e.ToString(), "Should be no error." );
+			}
+
+			try
+			{
+				// In case assembly is still being generated.
+				proxy.GetType().GetMethod("Update",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
+			} catch( Exception e )
+			{
+				Debug.Log( e.ToString().Length.ToString() );
+				Validator.Set( "Overtime Exception", "Thrown" );
+			}
+			Validator.Validate( "Overtime Exception", "Thrown" );
+			Validator.Validate( "Overtime", "timed out" );
+			Validator.Validate( "Update", "called" );
+
+			Validator.Set( "Execution after timeout", "disabled" );
+			proxy.GetType().GetMethod("FixedUpdate",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
+			Validator.Validate( "Execution after timeout", "disabled" );
+
+			cb.disabled = false;
+			proxy.GetType().GetMethod("FixedUpdate",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
+
+			Validator.Validate( "Manual Recover After Timeout", "recovered" );
+			Validator.Validate( "FixedUpdate", "called" );
+
 			if( Validator.DidFail() ) return -5;
+
 			return 0;
 		}
 	}

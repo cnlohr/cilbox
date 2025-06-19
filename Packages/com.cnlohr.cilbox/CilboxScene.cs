@@ -21,6 +21,8 @@ namespace Cilbox
 			"System.DateTime",
 			"System.DayOfWeek",
 			"System.Diagnostics.Stopwatch",
+			"System.Double",
+			"System.Exception",
 			"System.Int32",
 			"System.MathF",
 			"System.Object",

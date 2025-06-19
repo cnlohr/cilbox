@@ -1,6 +1,8 @@
 using System;
 using System.Reflection;
 
+[AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
+public class HideInInspectorAttribute : Attribute { }
 
 namespace Unity
 {

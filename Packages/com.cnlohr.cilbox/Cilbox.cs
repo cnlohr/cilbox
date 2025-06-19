@@ -81,11 +81,6 @@ namespace Cilbox
 
 		}
 
-		public void Breakwarn( String message, int bytecodeplace )
-		{
-			Debug.LogError( $"Breakwarn: {message} Class: {parentClass.className}, Function: {methodName}, Bytecode: {bytecodeplace}" );
-		}
-
 		public object Interpret( CilboxProxy ths, object [] parametersIn )
 		{
 			StackElement [] parameters;
@@ -172,9 +167,9 @@ namespace Cilbox
 						long now = System.Diagnostics.Stopwatch.GetTimestamp();
 						if( now > box.interpreterAccountingDropDead )
 						{
-							box.interpreterAccountingCumulitive = now + box.timeoutLengthTicks - box.interpreterAccountingDropDead;
+							box.interpreterAccountingCumulitiveTicks = now + box.timeoutLengthUs * box.interpreterTicksInUs - box.interpreterAccountingDropDead;
 							cont = false;
-							throw new Exception( "Script time resources overutilized @ " + pc + " In " + methodName + " (Timeout ticks: " + box.interpreterAccountingCumulitive + "/" + box.timeoutLengthTicks + " )" );
+							throw new Exception( "Script time resources overutilized @ " + pc + " In " + methodName + " (Timeout Us: " + box.interpreterAccountingCumulitiveTicks / box.interpreterTicksInUs + "/" + box.timeoutLengthUs + " )" );
 						}
 					}
 
@@ -197,7 +192,7 @@ namespace Cilbox
 					switch( b )
 					{
 					case 0x00: break; // nop
-					case 0x01: cont = false; Breakwarn( "Debug Break", pc ); break; // break
+					case 0x01: throw new Exception( $"Debug Break @ {pc}" ); // break
 					case 0x02: stackBuffer[++sp] = parameters[0]; break; //ldarg.0
 					case 0x03: stackBuffer[++sp] = parameters[1]; break; //ldarg.1
 					case 0x04: stackBuffer[++sp] = parameters[2]; break; //ldarg.2
@@ -582,7 +577,7 @@ namespace Cilbox
 									case StackType.Uint:	stackBuffer[sp].LoadUint( sa.u / sb.u ); break;
 									case StackType.Long:	stackBuffer[sp].LoadUlong( sa.e / sb.e ); break;
 									case StackType.Ulong:	stackBuffer[sp].LoadUlong( sa.e / sb.e ); break;
-									default: Breakwarn( "Unexpected div.un instruction behavior", pc); break;
+									default: throw new Exception( $"Unexpected div.un instruction behavior @ {pc}" );
 								} break;
 							case 5: // rem
 								switch( promoted )
@@ -591,7 +586,7 @@ namespace Cilbox
 									case StackType.Uint:	stackBuffer[sp].LoadUint( sa.u % sb.u ); break;
 									case StackType.Long:	stackBuffer[sp].LoadLong( sa.l % sb.l ); break;
 									case StackType.Ulong:	stackBuffer[sp].LoadUlong( sa.e % sb.e ); break;
-									default: Breakwarn( "Unexpected rem instruction behavior", pc); break;
+									default: throw new Exception( $"Unexpected rem instruction behavior @ {pc}" );
 								} break;
 							case 6: // rem.un
 								switch( promoted )
@@ -600,7 +595,7 @@ namespace Cilbox
 									case StackType.Uint:	stackBuffer[sp].LoadUint( sa.u % sb.u ); break;
 									case StackType.Long:	stackBuffer[sp].LoadUlong( sa.e % sb.e ); break;
 									case StackType.Ulong:	stackBuffer[sp].LoadUlong( sa.e % sb.e ); break;
-									default: Breakwarn( "Unexpected rem.un instruction behavior", pc); break;
+									default: throw new Exception( $"Unexpected rem.un instruction behavior @ {pc}");
 								} break;
 							case 7: stackBuffer[sp].LoadUlongType( sa.e & sb.e, promoted ); break; // and
 							case 8: stackBuffer[sp].LoadUlongType( sa.e | sb.e, promoted ); break; // or
@@ -633,6 +628,7 @@ namespace Cilbox
 						break; //ldstr
 					}
 
+					case 0x7a: throw (System.Exception)stackBuffer[sp--].AsObject(); //throw
 					case 0x7b: 
 					{
 						uint bc = BytecodeAsU32( ref pc );
@@ -800,8 +796,7 @@ namespace Cilbox
 						}
 						else
 						{
-							Breakwarn( "Scary Unbox (that we don't have code for) from " + otyp + " ORIG " + metaType.ToString(), pc );
-							box.disabled = true; cont = false;
+							throw new Exception( $"Scary Unbox (that we don't have code for) from {otyp} ORIG {metaType.ToString()} @ {pc}" );
 						}
 						break; // unbox.any
 					}
@@ -921,14 +916,16 @@ namespace Cilbox
 						}
 						break;
 
-					default: Breakwarn( $"Opcode 0x{b.ToString("X2")} unimplemented", pc ); box.disabled = true; cont = false; break;
+					default: throw new Exception( $"Opcode 0x{b.ToString("X2")} unimplemented @ {pc}" );
 					}
 				}
 				while( cont );
 			}
 			catch( Exception e )
 			{
-				Breakwarn( e.ToString(), pc );
+				string fullError = $"Breakwarn: {e.ToString()} Class: {parentClass.className}, Function: {methodName}, Bytecode: {pc}";
+				Debug.LogError( fullError );
+				box.disabledReason = fullError;
 				box.disabled = true;
 				//box.InterpreterExit();
 				throw;
@@ -1105,7 +1102,17 @@ namespace Cilbox
 		public bool exportDebuggingData;
 		public CilboxUsage usage;
 
+		public String disabledReason = "";
 		public bool disabled = false;
+
+		public long timeoutLengthUs = 500000; // 500ms Can be changed by specific Cilbox application.
+		[HideInInspector] public uint interpreterAccountingDepth = 0;
+		[HideInInspector] public long interpreterAccountingDropDead = 0;
+		[HideInInspector] public long interpreterAccountingCumulitiveTicks = 0;
+		[HideInInspector] public long interpreterInstructionsCount = 0;
+		[HideInInspector] public long interpreterTicksInUs = System.Diagnostics.Stopwatch.Frequency / 1000000;
+
+		public long usSpentLastFrame = 0;
 
 		public Cilbox()
 		{
@@ -1115,12 +1122,6 @@ namespace Cilbox
 
 		abstract public bool CheckMethodAllowed(  out MethodInfo mi, Type declaringType, String name, Serializee [] parametersIn, Serializee [] genericArgumentsIn, String fullSignature );
 		abstract public bool CheckTypeAllowed( String sType );
-
-		public long timeoutLengthTicks = 5000000; // 500ms Can be changed by specific Cilbox application.
-		public uint interpreterAccountingDepth = 0;
-		public long interpreterAccountingDropDead = 0;
-		public long interpreterAccountingCumulitive = 0;
-		public long interpreterInstructionsCount = 0;
 
 		public void ForceReinit()
 		{
@@ -1286,9 +1287,6 @@ namespace Cilbox
 				}
 			}
 
-
-
-
 			if( !bSimulate )
 			{
 				foreach( var c in classesList )
@@ -1343,7 +1341,7 @@ namespace Cilbox
 					return false;
 				}
 				interpreterInstructionsCount = 0;
-				interpreterAccountingDropDead = now + timeoutLengthTicks - interpreterAccountingCumulitive;
+				interpreterAccountingDropDead = now + timeoutLengthUs * interpreterTicksInUs - interpreterAccountingCumulitiveTicks;
 				Monitor.Exit( this );
 				return true;
 			}
@@ -1357,7 +1355,7 @@ namespace Cilbox
 			{
 				if( now > interpreterAccountingDropDead )
 				{
-					interpreterAccountingCumulitive = now + timeoutLengthTicks - interpreterAccountingDropDead;
+					interpreterAccountingCumulitiveTicks = now + timeoutLengthUs * interpreterTicksInUs - interpreterAccountingDropDead;
 					--interpreterAccountingDepth;
 					Monitor.Exit( this );
 					throw new Exception( $"Function {m.parentClass.className} {m.fullSignature} timed out." );
@@ -1375,8 +1373,8 @@ namespace Cilbox
 			if( --interpreterAccountingDepth == 0 )
 			{
 				long now = System.Diagnostics.Stopwatch.GetTimestamp();
-				long elapsed = now + timeoutLengthTicks - interpreterAccountingDropDead - interpreterAccountingCumulitive;
-				interpreterAccountingCumulitive = now + timeoutLengthTicks - interpreterAccountingDropDead;
+				long elapsed = now + timeoutLengthUs * interpreterTicksInUs - interpreterAccountingDropDead - interpreterAccountingCumulitiveTicks;
+				interpreterAccountingCumulitiveTicks = now + timeoutLengthUs * interpreterTicksInUs - interpreterAccountingDropDead;
 
 				// For profiling
 				if( showFunctionProfiling )
@@ -1391,7 +1389,7 @@ namespace Cilbox
 
 		void Update()
 		{
-			interpreterAccountingCumulitive = 0;
+			usSpentLastFrame = Interlocked.Exchange( ref interpreterAccountingCumulitiveTicks, 0 ) / interpreterTicksInUs;
 		}
 	}
 
