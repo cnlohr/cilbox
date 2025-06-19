@@ -1,3 +1,5 @@
+#define PER_INSTRUCTION_PROFILING
+
 using UnityEngine;
 using System.Collections.Generic;
 using System;
@@ -15,6 +17,7 @@ using UnityEditor.Callbacks;
 using System.IO;
 using System.Threading.Tasks;
 #endif
+
 
 // To add [Cilboxable] to your classes that you want exported.
 public class CilboxableAttribute : Attribute { }
@@ -139,7 +142,7 @@ namespace Cilbox
 			// Uncomment for debugging.
 #if false
 			bool bDeepDebug = false;
-			if( fullSignature.Contains( "GetRegister" ) )
+			if( parentClass.className.Contains("TestScript2") )//fullSignature.Contains( "TestScript2" ) )
 			{
 				bDeepDebug = true;
 				String parmSt = ""; for( int sk = 0; sk < parameters.Length; sk++ ) {
@@ -185,8 +188,12 @@ namespace Cilbox
 					}
 #endif
 // For itty bitty profiling.
-//int xicopy = pc; CilboxUtil.OpCodes.OpCode opcx = CilboxUtil.OpCodes.ReadOpCode ( byteCode, ref xicopy );
-//new ProfilerMarker(opcx.ToString()).Auto();
+
+#if PER_INSTRUCTION_PROFILING // Opcode profiling
+int xicopy = pc; CilboxUtil.OpCodes.OpCode opcx = CilboxUtil.OpCodes.ReadOpCode ( byteCode, ref xicopy );
+var spiperf = new ProfilerMarker(opcx.ToString());
+spiperf.Begin();
+#endif
 
 					pc++;
 					switch( b )
@@ -306,7 +313,7 @@ namespace Cilbox
 								StackElement se = stackBuffer[sp--];
 								callpar_se[numFields-ik-1] = se;
 								object o = se.AsObject();
-								Type t = pa[ik].ParameterType;
+								Type t = pa[numFields-ik-1].ParameterType;
 
 								// XXX TODO: Copy mechanism below from ResolveToStackElement and Coerce
 								if( se.type < StackType.Object )
@@ -601,7 +608,19 @@ namespace Cilbox
 							case 8: stackBuffer[sp].LoadUlongType( sa.e | sb.e, promoted ); break; // or
 							case 9: stackBuffer[sp].LoadUlongType( sa.e ^ sb.e, promoted ); break; // xor
 							case 10: stackBuffer[sp].LoadUlongType( sa.e << sb.i, promoted ); break; // shl
-							case 11: stackBuffer[sp].LoadLongType( sa.l >> sb.i, promoted ); break; // shr
+							case 11: // shr
+								switch( sa.type )
+								{
+								case StackType.Sbyte: // TODO: Is this right? Do we consider all unsigned types signed?
+								case StackType.Byte:
+								case StackType.Short:
+								case StackType.Ushort:
+								case StackType.Int:
+								case StackType.Uint: stackBuffer[sp].LoadLongType( sa.i >> sb.i, promoted ); break;
+								case StackType.Long:
+								case StackType.Ulong: stackBuffer[sp].LoadLongType( sa.l >> sb.i, promoted ); break;
+								}
+								break;
 							case 12: stackBuffer[sp].LoadUlongType( sa.e >> sb.i, promoted ); break; // shr.un
 						}
 						break;
@@ -615,9 +634,11 @@ namespace Cilbox
 					case 0x67: { StackElement se = stackBuffer[sp]; stackBuffer[sp].LoadSByte( ((se.type < StackType.Float) ? (sbyte)se.u  : (sbyte)se.CoerceToObject(typeof(sbyte)))  ); break; } // conv.i1
 					case 0x68: { StackElement se = stackBuffer[sp]; stackBuffer[sp].LoadShort( ((se.type < StackType.Float) ? (short)se.i  : (short)se.CoerceToObject(typeof(short)))  ); break; } // conv.i2
 					case 0x69: { StackElement se = stackBuffer[sp]; stackBuffer[sp].LoadInt(   ((se.type < StackType.Float) ? (int)se.i    : (int)se.CoerceToObject(typeof(int)))      ); break; } // conv.i4
-					case 0x6A: { StackElement se = stackBuffer[sp]; stackBuffer[sp].LoadLong(  ((se.type < StackType.Float) ? (long)se.l   : (long)se.CoerceToObject(typeof(long)))    ); break; } // conv.i8
-					case 0x6B: { StackElement se = stackBuffer[sp]; stackBuffer[sp].LoadFloat( ((se.type < StackType.Float) ? (float)se.l  : (float)se.CoerceToObject(typeof(float)))  ); break; } // conv.r4
-					case 0x6C: { StackElement se = stackBuffer[sp]; stackBuffer[sp].LoadDouble(((se.type < StackType.Float) ? (double)se.l : (double)se.CoerceToObject(typeof(double)))); break; } // conv.r8
+					case 0x6A: { StackElement se = stackBuffer[sp]; stackBuffer[sp].LoadLong(  ( se.type <= StackType.Int ? (long)se.i   : se.type == StackType.Uint ? (long) se.u   : se.type == StackType.Long ? (long)se.l   : se.type == StackType.Ulong ? (long)se.e   : (long)se.CoerceToObject(typeof(long)))    ); break; } // conv.i8
+					case 0x6B: { StackElement se = stackBuffer[sp]; stackBuffer[sp].LoadFloat( ( se.type <= StackType.Int ? (float)se.i  : se.type == StackType.Uint ? (float) se.u  : se.type == StackType.Long ? (float)se.l  : se.type == StackType.Ulong ? (float)se.e  : se.type == StackType.Double ? (float)se.d : (float)se.CoerceToObject(typeof(float)))  ); break; } // conv.r4
+					case 0x6C: { StackElement se = stackBuffer[sp]; stackBuffer[sp].LoadDouble(( se.type <= StackType.Int ? (double)se.i : se.type == StackType.Uint ? (double) se.u : se.type == StackType.Long ? (double)se.l : se.type == StackType.Ulong ? (double)se.e : se.type == StackType.Float ? (double)se.f : (double)se.CoerceToObject(typeof(double)))); break; } // conv.r8
+					case 0x6D: { StackElement se = stackBuffer[sp]; stackBuffer[sp].LoadUint(  ((se.type < StackType.Float) ?(uint)se.u    : (uint)se.CoerceToObject(typeof(uint)))      ); break; } // conv.u4
+					case 0x6E: { StackElement se = stackBuffer[sp]; stackBuffer[sp].LoadUlong( ( se.type <= StackType.Int ? (ulong)se.i   : se.type == StackType.Uint ? (ulong)se.u  : se.type == StackType.Long ? (ulong)se.l  : se.type == StackType.Ulong ? (ulong)se.e  : (ulong)se.CoerceToObject(typeof(ulong)))); break; } // conv.u8
 					case 0xD1: { StackElement se = stackBuffer[sp]; stackBuffer[sp].LoadUshort(((se.type < StackType.Float) ? (ushort)se.u : (ushort)se.CoerceToObject(typeof(ushort)))); break; } // conv.u2
 					case 0xD2: { StackElement se = stackBuffer[sp]; stackBuffer[sp].LoadByte(  ((se.type < StackType.Float) ? (byte)se.u   : (byte)se.CoerceToObject(typeof(byte)))    ); break; } // conv.u1
 
@@ -918,6 +939,9 @@ namespace Cilbox
 
 					default: throw new Exception( $"Opcode 0x{b.ToString("X2")} unimplemented @ {pc}" );
 					}
+#if PER_INSTRUCTION_PROFILING
+spiperf.End();
+#endif
 				}
 				while( cont );
 			}

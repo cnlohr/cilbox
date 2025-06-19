@@ -91,6 +91,8 @@ namespace Cilbox
 						StackType st;
 						if( StackElement.TypeToStackType.TryGetValue( fv.GetType().ToString(), out st ) && st < StackType.Object )
 							instanceFields[f.Name] = new Serializee( fv.ToString() );
+						else if( fv.GetType() == typeof(String) )
+							instanceFields[f.Name] = new Serializee( fv.ToString() );								
 					}
 				}
 			}
@@ -112,10 +114,29 @@ namespace Cilbox
 
 			fields = new StackElement[cls.instanceFieldNames.Length];
 
+			Dictionary< String, Serializee > d = new Serializee( Convert.FromBase64String( serializedObjectData ), Serializee.ElementType.Map ).AsMap();
+			Serializee tv;
+
+			// Preinitialize any default values needed.
+			for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
+			{
+				if( !isFieldsObject[i] && !d.TryGetValue( cls.instanceFieldNames[i], out tv ) )
+				{
+					// The value is not in the serialized data.  Need to make a guess, and give it a default initialization.
+					StackType st;
+					if( StackElement.TypeToStackType.TryGetValue(cls.instanceFieldTypes[i].ToString(), out st ) )
+					{
+						fields[i].type = st;
+					}
+					else
+					{
+						fields[i].LoadObject( null );
+					}
+				}
+			}
+
 			// Call interpreted constructor.
 			box.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
-
-			Dictionary< String, Serializee > d = new Serializee( Convert.FromBase64String( serializedObjectData ), Serializee.ElementType.Map ).AsMap();
 
 			for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
 			{
@@ -133,12 +154,12 @@ namespace Cilbox
 				}
 				else
 				{
-					Serializee tv;
 					if( d.TryGetValue( cls.instanceFieldNames[i], out tv ) )
 					{
 						fields[i].Load( CilboxUtil.DeserializeDataForProxyField( cls.instanceFieldTypes[i], tv.AsString() ) );
 					}
 				}
+				//Debug.Log( $"{i} Output Type:{fields[i].type} Name:{cls.instanceFieldNames[i]} C# field Name:{cls.instanceFieldTypes[i]} Type:{fields[i].type} Value:{((fields[i].type<StackType.Object)?(fields[i].i):(fields[i].o))}" );
 			}
 
 			box.InterpretIID( cls, this, ImportFunctionID.Awake, null ); // Does this go before or after initialized fields.

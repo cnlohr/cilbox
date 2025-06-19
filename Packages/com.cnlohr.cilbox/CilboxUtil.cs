@@ -194,6 +194,7 @@ namespace Cilbox
 		public object CoerceToObject( Type t )
 		{
 			StackType rt = StackTypeFromType( t );
+
 			if( type < StackType.Float ) 
 			{
 				switch( rt )
@@ -814,11 +815,11 @@ namespace Cilbox
 									CilMetadataTokenInfo md = b.metadatas[operand];
 									stline += " " + ((md!=null)?md.Name:operand.ToString("X4"));
 								}
-								else if( ot == OpCodes.OperandType.ShortInlineI )
+								else if( ot == OpCodes.OperandType.ShortInlineI || ot == OpCodes.OperandType.ShortInlineVar )
 								{
 									stline += " 0x" + operand.ToString("X4") + " ";
 								}
-								else if( ot == OpCodes.OperandType.InlineI )
+								else if( ot == OpCodes.OperandType.InlineI || ot == OpCodes.OperandType.InlineVar )
 								{
 									stline += " 0x" + operand.ToString("X8") + " ";
 								}
@@ -830,7 +831,10 @@ namespace Cilbox
 								{
 									stline += " " + operand + " to " + (i + operand);
 								}
-
+								else if( ot == OpCodes.OperandType.ShortInlineR )
+								{
+									stline += " 0x" + operand.ToString("X8") + " " + IntFloatConverter.ConvertItoF( (int)operand );
+								}
 
 								CLog.WriteLine( stline );
 								if( i >= byteCode.Length ) break;
