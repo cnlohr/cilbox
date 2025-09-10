@@ -1984,6 +1984,8 @@ spiperf.End();
 		Update,
 		Start,
 		Awake,
+		OnTriggerEnter,
+		OnTriggerExit,
 	}
 }
 

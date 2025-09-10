@@ -185,6 +185,8 @@ namespace Cilbox
 		}
 		void Update() { if( box != null ) box.InterpretIID( cls, this, ImportFunctionID.Update, null ); }
 		void FixedUpdate() { if( box != null ) box.InterpretIID( cls, this, ImportFunctionID.FixedUpdate, null ); }
+		void OnTriggerEnter(Collider c) { if (box != null) box.InterpretIID(cls, this, ImportFunctionID.OnTriggerEnter, new object[] { c }); }
+		void OnTriggerExit(Collider b) { if (box != null) box.InterpretIID(cls, this, ImportFunctionID.OnTriggerExit, new object[] { b }); }
 	}
 }
 
