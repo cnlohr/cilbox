@@ -73,6 +73,12 @@ namespace UnityEngine
 		//public static explicit operator System.Action(UnityAction obj) { return new System.Action(()=>{obj();}); }
 	}
 
+	// Shim for the moment (Yes, it abstracts from component, but for now...)
+	public class Collider
+	{
+		// Nothing.
+	}
+
 	public static class Application
 	{
 		public static String dataPath = ".";
