@@ -98,6 +98,14 @@ public class TestScript2 : MonoBehaviour
 			Debug.Log( $"Reverse check {ts.framenoPublic }" );
 */
 
+/*
+		// TODO: Make this method work.
+		TestScript ts;
+		if( objs[1].TryGetComponent<TestScript>( out ts ) )
+		{
+			Debug.Log( $"Reverse check {ts.framenoPublic }" );
+		}
+*/
 	}
 
 }
