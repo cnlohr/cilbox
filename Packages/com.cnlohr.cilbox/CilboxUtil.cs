@@ -886,10 +886,24 @@ namespace Cilbox
 						}
 						else
 						{
-							metaLine += $"{nt.ToString()}";
 							if( nt == null )
 							{
-								throw new Exception( $"Type {typ.AsString()} not available." );
+								bool bFound = false;
+								foreach( CilboxClass c in b.classesList )
+								{
+									if( c.className == typ.AsMap()["n"].AsString() )
+									{
+										metaLine += $"PROXY: {c.className}";
+										bFound = true;
+									}
+								}
+
+								if( !bFound )
+									throw new Exception( $"Type {typ.AsMap()["n"].AsString()} not available." );
+							}
+							else
+							{
+								metaLine += $"{nt.ToString()}";
 							}
 						}
 						break;

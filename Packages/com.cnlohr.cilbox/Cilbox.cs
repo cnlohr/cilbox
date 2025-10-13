@@ -647,6 +647,38 @@ spiperf.Begin();
 						stackBuffer[++sp].Load( box.metadatas[bc].Name );
 						break; //ldstr
 					}
+					case 0x74: //castclass
+					case 0x75: //isinst
+					{
+						uint bc = BytecodeAsU32( ref pc );
+						StackElement se = stackBuffer[sp--];
+						CilMetadataTokenInfo ti = box.metadatas[bc];
+						object oRet = null;
+						if( ti.nativeTypeIsCilboxProxy )
+						{
+							if( se.o is CilboxProxy )
+							{
+								// Both are proxies. Check name.
+								if( ((CilboxProxy)(se.o)).className == ti.Name )
+									oRet = se.o;
+							}
+						}
+						else if( ti.nativeTypeIsStackType )
+						{
+							if( ti.nativeTypeStackType == StackElement.TypeToStackType[ti.Name] )
+								stackBuffer[++sp] = se;
+						}
+						else if( se.o.GetType() == ti.nativeType )
+							stackBuffer[++sp].LoadObject( se.o );
+
+						stackBuffer[++sp].LoadObject( oRet );
+
+						if( b == 0x74 && oRet == null )
+						{
+							throw new Exception( $"Error: casting class invalid to {ti.Name}" );
+						}
+						break;
+					}
 
 					case 0x7a: throw (System.Exception)stackBuffer[sp--].AsObject(); //throw
 					case 0x7b: 
@@ -1081,6 +1113,7 @@ spiperf.End();
 
 		public Type nativeType; // Used for types.
 		public bool nativeTypeIsStackType;
+		public bool nativeTypeIsCilboxProxy;
 		public StackType nativeTypeStackType;
 
 		public byte[] arrayInitializerData;
@@ -1223,14 +1256,27 @@ spiperf.End();
 						t.nativeTypeStackType = seType;
 						t.Name = t.nativeType.ToString();
 					}
+					else if( t.nativeType != null )
+					{
+						t.isValid = true;
+						t.Name = "Type: " + typ.AsMap()["n"].AsString();
+					}
 					else
 					{
-						t.isValid = t.nativeType != null;
+						// Maybe it's a type inside our cilbox?
+						t.isValid = false;
+						foreach( CilboxClass c in classesList )
+						{
+							if( c.className == typ.AsMap()["n"].AsString() )
+							{
+								t.Name = c.className;
+								t.nativeTypeIsCilboxProxy = true;
+								t.isValid = true;
+							}
+						}
 
 						if( !t.isValid )
-							Debug.LogError( $"Error: Could not find type: {typ.AsMap()["name"].AsString()}" );
-						else
-							t.Name = "Type: " + typ.AsMap()["n"].AsString();
+							Debug.LogError( $"Error: Could not find type: {typ.AsMap()["n"].AsString()}" );
 					}
 					break;
 				}
@@ -1600,6 +1646,21 @@ spiperf.End();
 													assemblyMetadata[(mdcount++).ToString()] = new Serializee( thisMeta );
 												}
 												break;
+										/*
+											case 0x02: // Inline Token for Type (typically used with typeof())
+												if( !assemblyMetadataReverseOriginal.TryGetValue( (int)operand, out writebackToken ) )
+												{
+													// TODO: Actually investigate this.  See if we really need it.
+													writebackToken = mdcount;
+													Type ty = proxyAssembly.ManifestModule.ResolveType( (int)operand );
+													Dictionary<String, Serializee> fieldProps = new Dictionary<String, Serializee>();
+													fieldProps["mt"] = new Serializee( ((int)MetaTokenType.mtType).ToString() );
+													fieldProps["dt"] = CilboxUtil.GetSerializeeFromNativeType( ty );
+													assemblyMetadata[(mdcount++).ToString()] = new Serializee( fieldProps );
+													originalMetaToFriendlyName[writebackToken] = ty.FullName;
+												}
+												break;
+										*/
 											default:
 												throw new Exception( "Exception decoding opcode at address (confusing meta " + operand.ToString("X8") + ") " + i + " in " + m.Name );
 											}

@@ -7,6 +7,8 @@ public class TestScript2 : MonoBehaviour
 {
 	public int testPublic;
 
+	public int reverseFrameNo;
+
 	public Dictionary<String,int> test;
 
 	public float[] datafloat = { 0.125f, 0.25f, 0.5f, 1.0f };
@@ -30,6 +32,25 @@ public class TestScript2 : MonoBehaviour
 			{
 				if( objs[0] != null )
 					Debug.LogError($"OBJECT CHECK BAD {objs[0]}");
+				if( objs[1] == null )
+					Debug.LogError($"Did you unset objs[2]?");
+
+				Component [] comps = objs[1].GetComponents<Component>();
+				int i;
+				bool bFound = false;
+				for( i = 0; i < comps.Length; i++ )
+				{
+					if( comps[i] is TestScript )
+						bFound = true;
+				}
+				if( !bFound )
+				{
+					Debug.LogError("Expected at least one component in objs to be a TestScript");
+				}
+				//TestScript ts = (TestScript)objs[2].GetComponent(typeof(TestScript));
+
+				//if( ts == null )
+				//	Debug.LogError( "ts should not be null" );
 			}
 			else
 				Debug.LogError( "Objs too small" );
@@ -44,7 +65,7 @@ public class TestScript2 : MonoBehaviour
 		testPublic++;
 	}
 
-    void Update() {	
+    void Update() {
 		MaterialPropertyBlock block = new MaterialPropertyBlock();
 		MeshRenderer mr = GetComponent<MeshRenderer>();
 		block.SetVector( "_Color",
@@ -52,7 +73,31 @@ public class TestScript2 : MonoBehaviour
 				Mathf.Sin( (float)Time.time * 5.0f )*0.5f+0.5f,
 				0.5f, Mathf.Sin( (float)testPublic*0.01f ), 1 ) );
 		mr.SetPropertyBlock(block);
-		//Debug.Log( testPublic );
+
+
+		// This does work...
+		//  ... but at what cost?
+		Component [] comps = objs[1].GetComponents<Component>();
+		foreach( Component c in comps )
+		{
+			if( c is TestScript )
+				reverseFrameNo = ((TestScript)c).framenoPublic;
+		}
+
+/*
+		// TODO: Make this method work.
+		TestScript ts = (TestScript)objs[1].GetComponent(typeof(TestScript));
+		if( ts )
+			Debug.Log( $"Reverse check {ts.framenoPublic }" );
+*/
+
+/*
+		// TODO: Make this method work.
+		TestScript ts = objs[1].GetComponent<TestScript>();
+		if( ts )
+			Debug.Log( $"Reverse check {ts.framenoPublic }" );
+*/
+
 	}
 
 }

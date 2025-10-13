@@ -26,7 +26,7 @@ public class TestScript : MonoBehaviour
 		framenoPublic++;
 		framenoPrivate+=2;
 		if( framenoPublic != 1 || framenoPrivate != 12 || framenoPrivateStatic != 32 ) Debug.LogError( $"ZZZ TestScript Start() {framenoPublic} {framenoPrivate} {framenoPrivateStatic}" );
-		Debug.Log( testScript2 );
+		if( testScript2 == null ) Debug.LogError( "Expected nonnnull testScript2" );
 		System.Diagnostics.Stopwatch stopWatch = new System.Diagnostics.Stopwatch();
 		stopWatch.Start();
 		testScript2.testPublic = 88;
@@ -53,7 +53,7 @@ public class TestScript : MonoBehaviour
 	void Update() {
 		testScript2.AnotherThing();
 		framenoPublic++;
-		textControl.text = framenoPublic + "\n" + delegateCount + " - " + lastButton;
+		textControl.text = framenoPublic + " " + testScript2.reverseFrameNo + "\n" + delegateCount + " - " + lastButton;
 
 		float f = Time.time / .4f;//framenoPrivate / 100.0f;
 		float x = MathF.Sin( f );

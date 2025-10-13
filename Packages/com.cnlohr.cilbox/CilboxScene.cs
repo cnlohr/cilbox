@@ -92,7 +92,8 @@ namespace Cilbox
 
 			if( declaringType == typeof(UnityEngine.Events.UnityAction) && name != ".ctor" ) return false;
 
-			if( declaringType == typeof(UnityEngine.GameObject) && name != "SetActive" ) return false;
+			if( declaringType == typeof(UnityEngine.GameObject) &&
+				( name != "SetActive" && name != "GetComponents" ) ) return false;
 
 			if( declaringType == typeof(System.Type) ) return false;
 
