@@ -25,7 +25,7 @@ public class TestScript : MonoBehaviour
 	void Start(){
 		framenoPublic++;
 		framenoPrivate+=2;
-		Debug.Log( $"ZZZ TestScript Start() {framenoPublic} {framenoPrivate} {framenoPrivateStatic}" );
+		if( framenoPublic != 1 || framenoPrivate != 12 || framenoPrivateStatic != 32 ) Debug.LogError( $"ZZZ TestScript Start() {framenoPublic} {framenoPrivate} {framenoPrivateStatic}" );
 		Debug.Log( testScript2 );
 		System.Diagnostics.Stopwatch stopWatch = new System.Diagnostics.Stopwatch();
 		stopWatch.Start();
@@ -39,7 +39,8 @@ public class TestScript : MonoBehaviour
 		buttonControl2.onClick.AddListener( () => ClickDelegate("Button 2") );
 		inputField.onValueChanged.AddListener( (String s) => ClickDelegate(s) );
 		float[] testStaticInitializer = new float[]{ 0.5f, 1.5f, 2.5f };
-		Debug.Log( $"This should be 0.5, 1.5, 2.5: {testStaticInitializer[0]} {testStaticInitializer[1]} {testStaticInitializer[2]}" );
+		if( testStaticInitializer[0] != 0.5f || testStaticInitializer[1] != 1.5f || testStaticInitializer[2] != 2.5f )
+			Debug.LogError( $"This should be 0.5, 1.5, 2.5: {testStaticInitializer[0]} {testStaticInitializer[1]} {testStaticInitializer[2]}" );
 	}
 
 	public void ClickDelegate(String s) { Debug.Log( $"Delegate {s}" ); lastButton = s; delegateCount++; }

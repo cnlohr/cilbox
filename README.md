@@ -69,7 +69,6 @@ By default, `timeoutLengthTicks` is 500ms.  For Avatars, 5ms.
 If execution within a box is exceeded, the box is disabled.  The box can be re-enabled by setting a flag on the box, to re-enable it, but in general, it should be expected to stay off, unless the asset is unloaded.
 
 ### Things you can't do (At least not today)
- * You cannot have arrays of properties on your object, for instance an array of GameObjects.  Each property must be a regular property.
  * You cannot arbitrarily add an externally accessable method to your script. For instance, you cannot add your script to Unity UI and select a function that is not available in the `CilboxProxy`.  So, only input functions like `Start()` `Awake()` `FixedUpdate()` `Update()` etc...
  * It is unlikely any form of reflection would be possible, because, it would be extremely difficult to secure.
  * It will be tricky to allow compound types for security reasons.

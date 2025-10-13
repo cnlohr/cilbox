@@ -402,11 +402,10 @@ spiperf.Begin();
 						int iop = b - 0x2c;
 						if( b >= 0x38 ) iop -= 0xd;
 						int offset = (b >= 0x38) ? (int)BytecodeAsU32( ref pc ) : (sbyte)byteCode[pc++];
-
 						switch( iop )
 						{
-							case 0: if( ( s.type == StackType.Object && s.o == null ) || s.i == 0 ) pc += offset; break;
-							case 1: if( ( s.type == StackType.Object && s.o != null ) || s.i != 0 ) pc += offset; break;
+							case 0: if( ( s.type == StackType.Object && s.o == null ) || ( s.type != StackType.Object && s.i == 0 ) ) pc += offset; break;
+							case 1: if( ( s.type == StackType.Object && s.o != null ) || ( s.type != StackType.Object && s.i != 0 ) ) pc += offset; break;
 						}
 						break;
 					}
@@ -655,7 +654,6 @@ spiperf.Begin();
 						uint bc = BytecodeAsU32( ref pc );
 
 						StackElement se = stackBuffer[sp--];
-
 						if( se.o is CilboxProxy )
 							stackBuffer[++sp] = ((CilboxProxy)se.o).fields[box.metadatas[bc].fieldIndex];
 						else

@@ -15,8 +15,7 @@ namespace Cilbox
 	public class CilboxProxy : MonoBehaviour
 	{
 		public StackElement [] fields;
-		public UnityEngine.Object [] fieldsObjects;  // This is generally only held 
-		public bool [] isFieldsObject;
+		public List< UnityEngine.Object > fieldsObjects;  // This is generally only held during saving and loading, not in use.
 
 		public CilboxClass cls;
 		public Cilbox box;
@@ -36,11 +35,11 @@ namespace Cilbox
 			box.BoxInitialize();
 			cls = box.GetClass( className );
 
-			fieldsObjects = new UnityEngine.Object[cls.instanceFieldNames.Length];
-			isFieldsObject = new bool[cls.instanceFieldNames.Length];
-
-			Dictionary<String, Serializee> instanceFields = new Dictionary<String, Serializee>();
+			fieldsObjects = new List< UnityEngine.Object >();
 			FieldInfo[] fi = mToSteal.GetType().GetFields( BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance );
+
+			List< Serializee > lstObjects = new List< Serializee >();
+
 			foreach( var f in fi )
 			{
 				// TODO: Consider if we should try serializing _everything_.  No because arrays really need their constructors.
@@ -48,8 +47,6 @@ namespace Cilbox
 					continue;
 
 				object fv = f.GetValue( mToSteal );
-
-				bool bHandled = false;
 
 				int matchingInstanceNameID = -1;
 				for( int k = 0; k < cls.instanceFieldNames.Length; k++ )
@@ -60,44 +57,108 @@ namespace Cilbox
 					}
 				}
 
-				if( matchingInstanceNameID < 0 ) continue;
 
-				// Skip null objects.
-				if (fv != null)
+				if( matchingInstanceNameID < 0 )
 				{
-					object[] attribs = fv.GetType().GetCustomAttributes(typeof(CilboxableAttribute), true);
-					// Not a proxiable script.
-					if (attribs != null && attribs.Length > 0)
-					{
-						// This is a cilboxable thing.
-						fieldsObjects[matchingInstanceNameID] = refToProxyMap[(MonoBehaviour)fv];
-						isFieldsObject[matchingInstanceNameID] = true;
-						bHandled = true;
-					}
-					else if( fv is UnityEngine.Object )
-					{
-						fieldsObjects[matchingInstanceNameID] = (UnityEngine.Object)fv;
-						isFieldsObject[matchingInstanceNameID] = true;
-						bHandled = true;
-
-						if( matchingInstanceNameID == -1 )
-						{
-							Debug.LogWarning( "Failed to link field object " + f.Name );
-						}
-					}
-
-					if( !bHandled )
-					{
-						StackType st;
-						if( StackElement.TypeToStackType.TryGetValue( fv.GetType().ToString(), out st ) && st < StackType.Object || fv is string )
-							instanceFields[f.Name] = new Serializee( fv.ToString() );
-						else if( fv.GetType() == typeof(String) )
-							instanceFields[f.Name] = new Serializee( fv.ToString() );								
-					}
+					Debug.Log( $"Warning: Could not find macthing instance name for {f.Name}" );
+					continue;
 				}
+
+				Serializee e = SerializeThing( fv, f.Name, matchingInstanceNameID, ref refToProxyMap );
+
+				// Serialize no matter what.
+				lstObjects.Add( e );
 			}
-			serializedObjectData = Convert.ToBase64String(new Serializee(instanceFields).DumpAsMemory().ToArray());
+
+			serializedObjectData = 
+				Convert.ToBase64String(new Serializee(lstObjects.ToArray()).DumpAsMemory().ToArray());
+
+			//Debug.Log( $"SERIALIZE --> {serializedObjectData}" );
 		}
+
+
+		private Serializee SerializeThing( object fv, String fName, int matchingInstanceNameID, ref Dictionary< MonoBehaviour, CilboxProxy > refToProxyMap )
+		{
+			Dictionary<String, Serializee> instanceFields = new Dictionary<String, Serializee>();
+
+			// "n" is the "name" of the variable, only useful for object-root objects.
+			// "miid" = Field ID.
+			// "t" = Type
+			// "d" = Data (If applicable) (For strings and StackElements)
+
+			// Skip null objects.
+			if( fv == null )
+			{
+				instanceFields["empty"] = new Serializee( "true" );
+				return new Serializee(instanceFields);
+			}
+
+			object[] attribs = fv.GetType().GetCustomAttributes(typeof(CilboxableAttribute), true);
+
+
+			if( fName != null )
+			{
+				instanceFields["n"] = new Serializee(fName);
+			}
+
+			if( matchingInstanceNameID >= 0 )
+			{
+				instanceFields["miid"] = new Serializee(matchingInstanceNameID.ToString());
+			}
+
+			StackType st;
+
+			// Not a proxiable script.
+			if (attribs != null && attribs.Length > 0)
+			{
+				// This is a cilboxable thing.
+				instanceFields["fo"] = new Serializee(fieldsObjects.Count.ToString());
+				fieldsObjects.Add( refToProxyMap[(MonoBehaviour)fv] );
+				instanceFields["t"] = new Serializee("cba");
+			}
+			else if( fv is UnityEngine.Object )
+			{
+				instanceFields["fo"] = new Serializee(fieldsObjects.Count.ToString());
+				fieldsObjects.Add( (UnityEngine.Object)fv );
+				instanceFields["t"] = new Serializee("obj");
+			}
+			else if( fv is string )
+			{
+				instanceFields["d"] = new Serializee(fv.ToString());
+				instanceFields["t"] = new Serializee("s");
+			}
+			else if( StackElement.TypeToStackType.TryGetValue( fv.GetType().ToString(), out st ) && st < StackType.Object )
+			{
+				instanceFields["d"] = new Serializee(fv.ToString());
+				instanceFields["t"] = new Serializee("e" + st);
+			}
+			else if( fv.GetType().IsArray )
+			{
+				instanceFields["t"] = new Serializee( "a" );
+				Type type = fv.GetType().GetElementType();
+				instanceFields["at"] = CilboxUtil.GetSerializeeFromNativeType( type );
+				Array arr = (Array)fv;
+				int len = arr.Length;
+				instanceFields["al"] = new Serializee( len.ToString() );
+
+				Serializee [] sel = new Serializee[len];
+				int i;
+				for( i = 0; i < len; i++ )
+				{
+					object o = arr.GetValue(i);
+					sel[i] = SerializeThing( o, null, -1, ref refToProxyMap );
+				}
+				instanceFields["ad"] = new Serializee( sel );
+			}
+			else
+			{
+				Debug.Log( $"Unknown type requesting serialization {fv.GetType()}" );
+			}
+
+
+			return new Serializee(instanceFields);
+		}
+
 #endif
 		void Awake()
 		{
@@ -110,19 +171,58 @@ namespace Cilbox
 			if( proxyWasSetup ) return;
 
 			cls = box.GetClass( className );
-			// Populate fields[]
 
+			// First thing: Go through any references that are prohibited.
+			for( int i = 0; i < fieldsObjects.Count; i++ )
+			{
+				UnityEngine.Object o = fieldsObjects[i];
+				Type t = o.GetType();
+				if( t == typeof( CilboxProxy ) )
+				{
+					// If it's another cilbox proxy, it's OK.
+				}
+				else if( !box.CheckTypeAllowed( o.GetType().ToString() ) )
+				{
+					Debug.LogWarning( "Contraband found in script {className} field ID {i} { (cls && cls.instanceFieldNames && cls.instanceFieldNames.Length > i ) ? cls.instanceFieldNames[i] : 'Unknown'}" );
+					fieldsObjects[i] = null;
+				}
+			}
+
+			// Populate fields[]
 			fields = new StackElement[cls.instanceFieldNames.Length];
 
-			Dictionary< String, Serializee > d = new Serializee( Convert.FromBase64String( serializedObjectData ), Serializee.ElementType.Map ).AsMap();
-			Serializee tv;
+			Serializee [] d = new Serializee( Convert.FromBase64String( serializedObjectData ), Serializee.ElementType.Map ).AsArray();
+
+			bool [] fieldNeedsDefault = new bool[cls.instanceFieldNames.Length];
+			Serializee [] matchingSerializeeInstanceField = new Serializee[cls.instanceFieldNames.Length];
+			foreach( Serializee s in d )
+			{
+				// Go over the root objects, to see which ones slot in and how.
+				Dictionary< String, Serializee > dict = s.AsMap();
+				Serializee val;
+				Serializee miid;
+				if( dict.TryGetValue( "t", out val ) && dict.TryGetValue( "miid", out miid ) )
+				{
+					String sT = val.AsString();
+					int nMIID = -1;
+					if( Int32.TryParse( miid.AsString(), out nMIID ) &&
+						nMIID < fieldNeedsDefault.Length )
+					{
+						matchingSerializeeInstanceField[nMIID] = s;
+
+						if( sT[0] == 's' || sT[0] == 'e' )
+						{
+							fieldNeedsDefault[nMIID] = true;
+						}
+					}
+				}
+			}
 
 			// Preinitialize any default values needed.
 			for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
 			{
-				if( !isFieldsObject[i] && !d.TryGetValue( cls.instanceFieldNames[i], out tv ) )
+				if( fieldNeedsDefault[i] )
 				{
-					// The value is not in the serialized data.  Need to make a guess, and give it a default initialization.
 					StackType st;
 					if( StackElement.TypeToStackType.TryGetValue(cls.instanceFieldTypes[i].ToString(), out st ) )
 					{
@@ -133,40 +233,120 @@ namespace Cilbox
 						fields[i].LoadObject( null );
 					}
 				}
+
 			}
 
 			// Call interpreted constructor.
 			box.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
+			box.InterpretIID( cls, this, ImportFunctionID.Awake, null ); // Does this go before or after initialized fields.
 
 			for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
 			{
-				//Debug.Log( $"isObject: {isFieldsObject[i]} name {cls.instanceFieldNames[i]} Is Object: {fields[i] is object}  typ {cls.instanceFieldTypes[i]}" );
-				if( isFieldsObject[i] )
-				{
-					UnityEngine.Object o = fieldsObjects[i];
-					if( o )
-					{
-						if( o is CilboxProxy )
-							((CilboxProxy)o).RuntimeProxyLoad();
-						fields[i].Load( fieldsObjects[i] );
-						fieldsObjects[i] = null;
-					}
-				}
+				Serializee s = matchingSerializeeInstanceField[i];
+
+				if( s == null ) { /* Debug.Log( $"Skipping {i} {cls.instanceFieldNames[i]}" ); */ continue; }
+
+				object o;
+				bool bIsObject = LoadObjectFromSerializee( s, out o, cls.instanceFieldNames[i], cls.instanceFieldTypes[i], true );
+				if( bIsObject )
+					fields[i].LoadObject( o );
 				else
-				{
-					if( d.TryGetValue( cls.instanceFieldNames[i], out tv ) )
-					{
-						fields[i].Load( CilboxUtil.DeserializeDataForProxyField( cls.instanceFieldTypes[i], tv.AsString() ) );
-					}
-				}
-				//Debug.Log( $"{i} Output Type:{fields[i].type} Name:{cls.instanceFieldNames[i]} C# field Name:{cls.instanceFieldTypes[i]} Type:{fields[i].type} Value:{((fields[i].type<StackType.Object)?(fields[i].i):(fields[i].o))}" );
+					fields[i].Load( o );
 			}
 
-			box.InterpretIID( cls, this, ImportFunctionID.Awake, null ); // Does this go before or after initialized fields.
 			box.InterpretIID( cls, this, ImportFunctionID.Start, null );
 
 			proxyWasSetup = true;
 		}
+
+
+		private bool LoadObjectFromSerializee( Serializee s, out object oOut, String rootFieldName, Type inType, bool root )
+		{
+			Dictionary< String, Serializee > dict = s.AsMap();
+
+			Serializee setype;
+			if( dict.TryGetValue( "t", out setype ) )
+			{
+				String sT = setype.AsString();
+				if( sT == "cba" || sT == "obj" )
+				{
+					Serializee seFO;
+					int iFO;
+					if( dict.TryGetValue( "fo", out seFO ) &&
+						Int32.TryParse( seFO.AsString(), out iFO ) && 
+						iFO < fieldsObjects.Count )
+					{
+						UnityEngine.Object o = fieldsObjects[iFO];
+						//Debug.Log( $"LOADING FIELD: {i} with {o}" );
+						if( o )
+						{
+							if( o is CilboxProxy )
+								((CilboxProxy)o).RuntimeProxyLoad();
+
+							oOut = o;
+
+							// Remove reference out of the fieldsObjects array.
+							fieldsObjects[iFO] = null;
+
+							return true;
+						}
+					}
+					else
+					{
+						Debug.LogWarning( $"Failure to load object in field id:{rootFieldName} of {className}");
+					}
+				}
+				else if( sT[0] == 'a' )
+				{
+					Serializee seT, seAT, seAL, seAD;
+					int aLen;
+					if( dict.TryGetValue( "t", out seT ) &&
+						dict.TryGetValue( "at", out seAT ) && 
+						dict.TryGetValue( "al", out seAL ) && 
+						dict.TryGetValue( "ad", out seAD ) &&
+						Int32.TryParse( seAL.AsString(), out aLen ) )
+					{
+						Type t = box.usage.GetNativeTypeFromSerializee( seAT );
+
+						if( !box.CheckTypeAllowed( t.ToString() ) )
+						{
+							proxyWasSetup = false;
+							throw new Exception( "Contraband ARRAY found in script {className} { cls.instanceFieldNames[i] }" );
+						}
+
+						Array arr = Array.CreateInstance( t, aLen );
+
+						int j;
+						for( j = 0; j < aLen; j++ )
+						{
+							object o;
+							LoadObjectFromSerializee( seAD.AsArray()[j], out o, rootFieldName, t, false );
+							arr.SetValue( o, j );
+						}
+
+						oOut = arr;
+						return true;
+					}
+				}
+				else if( sT[0] == 's' || sT[0] == 'e' )
+				{
+					Serializee dsee;
+					if( dict.TryGetValue( "d", out dsee ) )
+					{
+						oOut = CilboxUtil.DeserializeDataForProxyField( inType, dsee.AsString() );
+						return false;
+					}
+				}
+				else
+				{
+					Debug.LogWarning( $"Unknown field type {sT} on field {rootFieldName}" );
+				}
+			}
+			//Debug.Log( $"{i} Output Type:{fields[i].type} Name:{cls.instanceFieldNames[i]} C# field Name:{cls.instanceFieldTypes[i]} Type:{fields[i].type} Value:{((fields[i].type<StackType.Object)?(fields[i].i):(fields[i].o))}" );
+			oOut = null;
+			return false;
+		}
+
 
 		void Start()  {
 			box.BoxInitialize(); // In case it is not yet initialized.

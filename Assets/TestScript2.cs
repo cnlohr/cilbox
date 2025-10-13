@@ -12,14 +12,30 @@ public class TestScript2 : MonoBehaviour
 	public float[] datafloat = { 0.125f, 0.25f, 0.5f, 1.0f };
 	public int[] dataint = {0x3e000000, 0x3e800000, 0x3f000000, 0x3f800000};
 
+	public GameObject [] objs;
+
 	void Start()
 	{
+		if( testPublic != 4 ) Debug.LogError($"testPublic {testPublic}");
 		test = new Dictionary<String,int>();
 		test["hello"] = 5;
 		test["world"] = 6;
-		Debug.Log( $"{test["hello"]} {test["world"]}" );
-		Debug.Log($"Should be 0.5 {datafloat[2]}"); // 0.5
-		Debug.Log($"Should be 1056964608 {dataint[2]}"); // 1056964608
+		if( test["hello"] != 5 || test["world"] != 6 ) Debug.LogError($"{test["hello"]} {test["world"]}" );
+		if( datafloat[2]!= 0.75 ) Debug.LogError($"Should be 0.75 {datafloat[2]} (Changed by parameters)"); // 0.5 originally
+		if( datafloat[1]!= 0.25 ) Debug.LogError($"Should be 0.25 {datafloat[1]} (Changed by constructor)");
+		if( dataint[2] != 1056964608 ) Debug.LogError($"Should be 1056964608 {dataint[2]}"); // 1056964608
+		if( objs != null )
+		{
+			if( objs.Length > 1 )
+			{
+				if( objs[0] != null )
+					Debug.LogError($"OBJECT CHECK BAD {objs[0]}");
+			}
+			else
+				Debug.LogError( "Objs too small" );
+		}
+		else
+			Debug.LogError( "objs is null!" );
 	}
 
 	public void AnotherThing()
