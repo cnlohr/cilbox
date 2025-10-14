@@ -91,26 +91,113 @@ namespace Cilbox
 			return null;
 		}
 
+		////////////////////////////////////////////////////////////////////////////////////
+		// DELEGATE OVERRIDES //////////////////////////////////////////////////////////////
+		////////////////////////////////////////////////////////////////////////////////////
+		public static StackElement OverrideGetComponentT( CilMetadataTokenInfo ths, ArraySegment<StackElement> stackBufferIn, ArraySegment<StackElement> parametersIn )
+		{
+			Span<StackElement> parameters = parametersIn.AsSpan();
+
+			StackElement ret = new StackElement();
+
+			ret.LoadObject( null );
+
+			Type t = (Type)ths.opaque;
+			if( parameters[0].type == StackType.Object )
+			{
+				object o = parameters[0].AsObject();
+				if( o is GameObject )
+				{
+					ret.Load( ((GameObject)o).GetComponent(t) );
+				}
+			}
+			return ret;
+		}
+
+		public static StackElement OverrideGetComponentC( CilMetadataTokenInfo ths, ArraySegment<StackElement> stackBufferIn, ArraySegment<StackElement> parametersIn )
+		{
+			Span<StackElement> parameters = parametersIn.AsSpan();
+
+			StackElement ret = new StackElement();
+			ret.LoadObject( null );
+
+			CilboxClass cls = (CilboxClass)ths.opaque;
+			String compName = cls.className;
+			if( parameters[0].type == StackType.Object )
+			{
+				object o = parameters[0].AsObject();
+				if( o is GameObject )
+				{
+					CilboxProxy [] comps = ((GameObject)o).GetComponents<CilboxProxy>();
+					foreach( CilboxProxy p in comps )
+					{
+						if( p.className == compName )
+						{
+							ret.Load( p );
+							break;
+						}
+					}
+				}
+			}
+			return ret;
+		}
 
 
 		////////////////////////////////////////////////////////////////////////////////////
 		// REWRITERS ///////////////////////////////////////////////////////////////////////
 		////////////////////////////////////////////////////////////////////////////////////
 
-		public (String, Serializee) HandleEarlyMethodRewrite( String name, Serializee declaringType )
+		public (String, Serializee) HandleEarlyMethodRewrite( String name, Serializee declaringType, Serializee [] genericArguments )
 		{
 			Dictionary< String, Serializee > ses = declaringType.AsMap();
 			String typeName = ses["n"].AsString();
-		/*
-			if( typeName == "<PrivateImplementationDetails>" && name == "ComputeStringHash" )
-			{
-				Dictionary< String, Serializee > exportType = new Dictionary< String, Serializee >();
-				exportType["n"] = new Serializee( "Cilbox.CilboxPublicUtils" );
-				return ( "ComputeStringHashProxy", new Serializee( exportType ) );
-				//return ( "ComputeStringHashProxy", declaringType );
-			}
-		*/
+
+// This is no longer done here, but stands as an example of how you could use this function.
+//			if( typeName == "<PrivateImplementationDetails>" && name == "ComputeStringHash" )
+//			{
+//				Dictionary< String, Serializee > exportType = new Dictionary< String, Serializee >();
+//				exportType["n"] = new Serializee( "Cilbox.CilboxPublicUtils" );
+//				return ( "ComputeStringHashProxy", new Serializee( exportType ) );
+//				//return ( "ComputeStringHashProxy", declaringType );
+//			}
+
 			return ( name, declaringType );
+		}
+
+		public bool OptionallyOverride( String name, Serializee declaringType, String fullSignature, bool isStatic, Serializee [] genericArguments, ref CilMetadataTokenInfo t )
+		{
+			Dictionary< String, Serializee > ses = declaringType.AsMap();
+			String typeName = ses["n"].AsString();
+
+			// We want to allow GetComponent and TryGetComponent.
+
+			if( typeName == "UnityEngine.GameObject" && name == "GetComponent" && genericArguments.Length == 1 )
+			{
+				Type tTemplate = GetNativeTypeFromSerializee( genericArguments[0] );
+				Dictionary< String, Serializee > gatype = genericArguments[0].AsMap();
+				String genericTypeName = gatype["n"].AsString();
+				int cilboxClassId = -1;
+				if( tTemplate != null || box.classes.TryGetValue( genericTypeName, out cilboxClassId ) )
+				{
+					t.isValid = true;
+					t.isNative = false;
+					t.Name = "OverrideGetComponentT";
+					t.declaringTypeName = typeName;
+					t.opaque = (object) (tTemplate != null ? tTemplate : box.classesList[cilboxClassId] );
+					t.shim = ( tTemplate != null ) ? OverrideGetComponentT : OverrideGetComponentC;
+					t.shimIsStatic = false;
+					t.shimParameterCount = 0;
+
+					Debug.Log( $"HandleEarlyMethodRewrite: {name} {typeName}" );
+					// Do something wacky.
+					return true;
+				}
+				else
+				{
+					Debug.LogWarning( "GetComponent Type Illegal" );
+				}
+			}
+			return false;
 		}
 
 		// WARNING: This DOES NOT appropriately handle templated types.

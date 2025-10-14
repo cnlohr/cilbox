@@ -38,6 +38,7 @@ namespace Cilbox
 		public bool isVoid;
 		public String[] signatureParameters;
 		public Type[]   typeParameters;
+
 #if UNITY_EDITOR
 		ProfilerMarker perfMarkerInterpret;
 #endif
@@ -262,38 +263,59 @@ spiperf.Begin();
 
 						if( !dt.isNative )
 						{
-							// Sentinel.  interpretiveMethod will contain what method to interpret.
-							// interpretiveMethodClass
-							CilboxClass targetClass = box.classesList[dt.interpretiveMethodClass];
-							CilboxMethod targetMethod = targetClass.methods[dt.interpretiveMethod];
-							isVoid = targetMethod.isVoid;
-							if( targetMethod == null )
-								throw( new Exception( $"Function {dt.Name} not found" ) );
-
-							int staticOffset = (targetMethod.isStatic?0:1);
-							int numParams = targetMethod.signatureParameters.Length;
-
-							int nextParameterStart = stackContinues;
-							int nextStackHead = nextParameterStart + numParams + staticOffset;
-
-							for( int i = numParams - 1; i >= 0; i-- )
-								stackBuffer[nextParameterStart+i+staticOffset] = stackBuffer[sp--];
-
-							if( !targetMethod.isStatic )
-								stackBuffer[nextParameterStart] = stackBuffer[sp--];
-
-							if( !isVoid )
-								stackBuffer[++sp] = targetMethod.InterpretInner( stackBufferIn.Slice( nextStackHead ), stackBufferIn.Slice( nextParameterStart, numParams + staticOffset ) );
-							else
-								targetMethod.InterpretInner( stackBufferIn.Slice( nextStackHead ), stackBufferIn.Slice( nextParameterStart, numParams + staticOffset ) );
-
-							if( b == 0x27 )
+							if( dt.shim != null )
 							{
-								// This is returning from a jump, so immediately abort.
-								if( isVoid ) stackBuffer[++sp] = StackElement.nil; /// ?? Please check me! If wrong, fix above, too.
-								cont = false;
-							}
+								isVoid = dt.shimIsVoid;
+								int staticOffset = dt.shimIsStatic?0:1;
+								int numParams = dt.shimParameterCount;
+								int nextParameterStart = stackContinues;
+								int nextStackHead = nextParameterStart + numParams + staticOffset;
 
+								for( int i = numParams - 1; i >= 0; i-- )
+									stackBuffer[nextParameterStart+i+staticOffset] = stackBuffer[sp--];
+								if( !dt.shimIsStatic )
+									stackBuffer[nextParameterStart] = stackBuffer[sp--];
+
+								if( !isVoid )
+									stackBuffer[++sp] = dt.shim( dt, stackBufferIn.Slice( nextStackHead ), stackBufferIn.Slice( nextParameterStart, numParams + staticOffset ) );
+								else
+									dt.shim( dt, stackBufferIn.Slice( nextStackHead ), stackBufferIn.Slice( nextParameterStart, numParams + staticOffset ) );
+
+							}
+							else
+							{
+								// Sentinel.  interpretiveMethod will contain what method to interpret.
+								// interpretiveMethodClass
+								CilboxClass targetClass = box.classesList[dt.interpretiveMethodClass];
+								CilboxMethod targetMethod = targetClass.methods[dt.interpretiveMethod];
+								isVoid = targetMethod.isVoid;
+								if( targetMethod == null )
+									throw( new Exception( $"Function {dt.Name} not found" ) );
+
+								int staticOffset = (targetMethod.isStatic?0:1);
+								int numParams = targetMethod.signatureParameters.Length;
+
+								int nextParameterStart = stackContinues;
+								int nextStackHead = nextParameterStart + numParams + staticOffset;
+
+								for( int i = numParams - 1; i >= 0; i-- )
+									stackBuffer[nextParameterStart+i+staticOffset] = stackBuffer[sp--];
+
+								if( !targetMethod.isStatic )
+									stackBuffer[nextParameterStart] = stackBuffer[sp--];
+
+								if( !isVoid )
+									stackBuffer[++sp] = targetMethod.InterpretInner( stackBufferIn.Slice( nextStackHead ), stackBufferIn.Slice( nextParameterStart, numParams + staticOffset ) );
+								else
+									targetMethod.InterpretInner( stackBufferIn.Slice( nextStackHead ), stackBufferIn.Slice( nextParameterStart, numParams + staticOffset ) );
+
+								if( b == 0x27 )
+								{
+									// This is returning from a jump, so immediately abort.
+									if( isVoid ) stackBuffer[++sp] = StackElement.nil; /// ?? Please check me! If wrong, fix above, too.
+									cont = false;
+								}
+							}
 						}
 						else
 						{
@@ -1132,6 +1154,13 @@ spiperf.End();
 		public String Name;
 		public String declaringTypeName;
 		//public String ToString() { return Name; }
+
+		public delegate StackElement DelegateOverride( CilMetadataTokenInfo ths, ArraySegment<StackElement> stackBufferIn, ArraySegment<StackElement> parametersIn );
+		public object opaque;
+		public DelegateOverride shim = null;
+		public bool shimIsVoid;
+		public bool shimIsStatic;
+		public int  shimParameterCount;
 	}
 
 	public enum MetaTokenType
@@ -1289,17 +1318,23 @@ spiperf.End();
 					Serializee [] genericArguments = null;
 					t.Name = "Method: " + name;
 
-					Serializee stDt;
-					(name, stDt) = usage.HandleEarlyMethodRewrite( name, st["dt"] );
-
-					string declaringTypeName = t.declaringTypeName = usage.GetNativeTypeNameFromSerializee( stDt );
-
 					//Possibly get genericArguments
 					Serializee temp;
 					if( st.TryGetValue( "ga", out temp ) )
 						genericArguments = temp.AsArray();
 					else
 						genericArguments = new Serializee[0];
+
+					if( usage.OptionallyOverride( name, st["dt"], fullSignature, isStatic, genericArguments, ref t ) )
+					{
+						break;
+					}
+
+					Serializee stDt;
+					(name, stDt) = usage.HandleEarlyMethodRewrite( name, st["dt"], genericArguments );
+
+					string declaringTypeName = t.declaringTypeName = usage.GetNativeTypeNameFromSerializee( stDt );
+
 
 					Serializee [] parametersSer = null;
 					if( st.TryGetValue( "parameters", out temp ) )
