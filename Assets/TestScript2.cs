@@ -85,10 +85,15 @@ public class TestScript2 : MonoBehaviour
 		}
 #endif
 
-		TestScript ts = objs[1].GetComponent<TestScript>();
-		if( ts )
-			reverseFrameNo = ((TestScript)ts).framenoPublic;
+// OK
+//		TestScript ts = objs[1].GetComponent<TestScript>();
+//		if( ts )
+//			reverseFrameNo = ((TestScript)ts).framenoPublic;
 
+// OK
+//		Transform tr = objs[1].GetComponent<Transform>();
+//		if( tr )
+//			Debug.Log( tr );
 
 /*
 		// TODO: Make this method work.
@@ -98,14 +103,21 @@ public class TestScript2 : MonoBehaviour
 */
 
 
-/*
 		// TODO: Make this method work.
 		TestScript ts;
 		if( objs[1].TryGetComponent<TestScript>( out ts ) )
 		{
-			Debug.Log( $"Reverse check {ts.framenoPublic }" );
+			reverseFrameNo = ((TestScript)ts).framenoPublic;
 		}
-*/
+
+// OK
+//		Transform tr;
+//		if( objs[1].TryGetComponent<Transform>( out tr ) )
+//		{
+//			Debug.Log( tr );
+//		}
+		
+
 	}
 
 }

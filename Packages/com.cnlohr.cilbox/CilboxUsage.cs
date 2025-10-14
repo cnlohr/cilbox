@@ -103,13 +103,10 @@ namespace Cilbox
 			ret.LoadObject( null );
 
 			Type t = (Type)ths.opaque;
-			if( parameters[0].type == StackType.Object )
+			object o = parameters[0].AsObject();
+			if( o is GameObject )
 			{
-				object o = parameters[0].AsObject();
-				if( o is GameObject )
-				{
-					ret.Load( ((GameObject)o).GetComponent(t) );
-				}
+				ret.Load( ((GameObject)o).GetComponent(t) );
 			}
 			return ret;
 		}
@@ -123,19 +120,65 @@ namespace Cilbox
 
 			CilboxClass cls = (CilboxClass)ths.opaque;
 			String compName = cls.className;
-			if( parameters[0].type == StackType.Object )
+
+			object o = parameters[0].AsObject();
+			if( o is GameObject )
 			{
-				object o = parameters[0].AsObject();
-				if( o is GameObject )
+				CilboxProxy [] comps = ((GameObject)o).GetComponents<CilboxProxy>();
+				foreach( CilboxProxy p in comps )
 				{
-					CilboxProxy [] comps = ((GameObject)o).GetComponents<CilboxProxy>();
-					foreach( CilboxProxy p in comps )
+					if( p.className == compName )
 					{
-						if( p.className == compName )
-						{
-							ret.Load( p );
-							break;
-						}
+						ret.Load( p );
+						break;
+					}
+				}
+			}
+			return ret;
+		}
+
+
+		public static StackElement OverrideTryGetComponentT( CilMetadataTokenInfo ths, ArraySegment<StackElement> stackBufferIn, ArraySegment<StackElement> parametersIn )
+		{
+			Span<StackElement> parameters = parametersIn.AsSpan();
+
+			StackElement ret = new StackElement();
+
+			ret.LoadBool( false );
+
+			Type t = (Type)ths.opaque;
+			object o = parameters[0].AsObject();
+			if( o is GameObject && parameters[1].type == StackType.Address )
+			{
+				Component c;
+				ret.Load( ((GameObject)o).TryGetComponent(t, out c) );
+				parameters[1].DereferenceLoad( c );
+			}
+			return ret;
+		}
+
+		public static StackElement OverrideTryGetComponentC( CilMetadataTokenInfo ths, ArraySegment<StackElement> stackBufferIn, ArraySegment<StackElement> parametersIn )
+		{
+			Span<StackElement> parameters = parametersIn.AsSpan();
+
+			StackElement ret = new StackElement();
+
+			ret.LoadBool( false );
+
+			CilboxClass cls = (CilboxClass)ths.opaque;
+			String compName = cls.className;
+
+			object o = parameters[0].AsObject();
+			if( o is GameObject )
+			{
+				CilboxProxy [] comps = ((GameObject)o).GetComponents<CilboxProxy>();
+				foreach( CilboxProxy p in comps )
+				{
+					if( p.className == compName && parameters[1].type == StackType.Address )
+					{
+						ret.Load( true );
+						parameters[1].DereferenceLoad( p );
+						break;
 					}
 				}
 			}
@@ -187,6 +230,32 @@ namespace Cilbox
 					t.shim = ( tTemplate != null ) ? OverrideGetComponentT : OverrideGetComponentC;
 					t.shimIsStatic = false;
 					t.shimParameterCount = 0;
+
+					Debug.Log( $"HandleEarlyMethodRewrite: {name} {typeName}" );
+					// Do something wacky.
+					return true;
+				}
+				else
+				{
+					Debug.LogWarning( "GetComponent Type Illegal" );
+				}
+			}
+			if( typeName == "UnityEngine.GameObject" && name == "TryGetComponent" && genericArguments.Length == 1 )
+			{
+				Type tTemplate = GetNativeTypeFromSerializee( genericArguments[0] );
+				Dictionary< String, Serializee > gatype = genericArguments[0].AsMap();
+				String genericTypeName = gatype["n"].AsString();
+				int cilboxClassId = -1;
+				if( tTemplate != null || box.classes.TryGetValue( genericTypeName, out cilboxClassId ) )
+				{
+					t.isValid = true;
+					t.isNative = false;
+					t.Name = "OverrideTryGetComponentT";
+					t.declaringTypeName = typeName;
+					t.opaque = (object) (tTemplate != null ? tTemplate : box.classesList[cilboxClassId] );
+					t.shim = ( tTemplate != null ) ? OverrideTryGetComponentT : OverrideTryGetComponentC;
+					t.shimIsStatic = false;
+					t.shimParameterCount = 1;
 
 					Debug.Log( $"HandleEarlyMethodRewrite: {name} {typeName}" );
 					// Do something wacky.
