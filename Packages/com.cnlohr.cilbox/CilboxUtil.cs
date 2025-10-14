@@ -107,6 +107,7 @@ namespace Cilbox
 			return ret;
 		}
 
+		public StackElement LoadBool( bool b ) { this.b = b; type = StackType.Boolean; return this; }
 		public StackElement LoadObject( object o ) { this.o = o; type = StackType.Object; return this; }
 		public StackElement LoadSByte( sbyte s ) { this.i = (int)s; type = StackType.Sbyte; return this; }
 		public StackElement LoadByte( uint u ) { this.u = u; type = StackType.Byte; return this; }

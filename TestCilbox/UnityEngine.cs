@@ -173,6 +173,10 @@ namespace UnityEngine
 		public Vector3 position;
 	}
 
+	public class Component
+	{
+	}
+
 	public class GameObject : UnityEngine.Object
 	{
 		public static List<GameObject> AllObjects = new List<GameObject>();
@@ -192,6 +196,11 @@ namespace UnityEngine
 			}
 			return null;
 		}
+
+		public bool TryGetComponent<T>( out T ret ) { ret = default(T); return false; }
+		public bool TryGetComponent( Type typ, out Component ret ) { ret = null; return false; }
+		public T GetComponent<T>() { return default(T); }
+		public Component GetComponent(Type typ) { return null; }
 
 		public static implicit operator bool(GameObject obj) { return obj != null; }
 

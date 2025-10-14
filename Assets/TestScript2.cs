@@ -74,7 +74,7 @@ public class TestScript2 : MonoBehaviour
 				0.5f, Mathf.Sin( (float)testPublic*0.01f ), 1 ) );
 		mr.SetPropertyBlock(block);
 
-
+#if false
 		// This does work...
 		//  ... but at what cost?
 		Component [] comps = objs[1].GetComponents<Component>();
@@ -83,6 +83,17 @@ public class TestScript2 : MonoBehaviour
 			if( c is TestScript )
 				reverseFrameNo = ((TestScript)c).framenoPublic;
 		}
+#endif
+
+// OK
+//		TestScript ts = objs[1].GetComponent<TestScript>();
+//		if( ts )
+//			reverseFrameNo = ((TestScript)ts).framenoPublic;
+
+// OK
+//		Transform tr = objs[1].GetComponent<Transform>();
+//		if( tr )
+//			Debug.Log( tr );
 
 /*
 		// TODO: Make this method work.
@@ -91,21 +102,22 @@ public class TestScript2 : MonoBehaviour
 			Debug.Log( $"Reverse check {ts.framenoPublic }" );
 */
 
-/*
-		// TODO: Make this method work.
-		TestScript ts = objs[1].GetComponent<TestScript>();
-		if( ts )
-			Debug.Log( $"Reverse check {ts.framenoPublic }" );
-*/
 
-/*
 		// TODO: Make this method work.
 		TestScript ts;
 		if( objs[1].TryGetComponent<TestScript>( out ts ) )
 		{
-			Debug.Log( $"Reverse check {ts.framenoPublic }" );
+			reverseFrameNo = ((TestScript)ts).framenoPublic;
 		}
-*/
+
+// OK
+//		Transform tr;
+//		if( objs[1].TryGetComponent<Transform>( out tr ) )
+//		{
+//			Debug.Log( tr );
+//		}
+		
+
 	}
 
 }
