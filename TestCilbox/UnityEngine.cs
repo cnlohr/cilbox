@@ -266,8 +266,8 @@ namespace UnityEngine
 
 	static public class JsonUtility
 	{
-		static string ToJson( object o ) { return ""; }
-		static object FromJson( string s, Type t ) { return null; }
+		public static string ToJson( object o ) { return ""; }
+		public static object FromJson( string s, Type t ) { return null; }
 	}
 
 	// We don't _really_ do serialization.
