@@ -355,7 +355,6 @@ namespace Cilbox
 				{
 
 					Serializee seT, seAT, seD;
-					int aLen;
 					if( dict.TryGetValue( "t", out seT ) &&
 						dict.TryGetValue( "at", out seAT ) &&
 						dict.TryGetValue( "d", out seD ) )

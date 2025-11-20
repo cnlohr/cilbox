@@ -262,6 +262,13 @@ namespace UnityEngine
 	{
 		public static implicit operator bool(Object obj) { return obj != null; }
 		public static void DestroyImmediate( MonoBehaviour m ) { GameObject.Destroy(m.gameObject); }
-
 	}
+
+	static public class JsonUtility
+	{
+		static string ToJson( object o ) { return ""; }
+		static object FromJson( string s, Type t ) { return null; }
+	}
+
+	// We don't _really_ do serialization.
 }
