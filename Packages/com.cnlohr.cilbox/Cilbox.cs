@@ -1267,10 +1267,18 @@ spiperf.End();
 				case MetaTokenType.mtField:
 					// The type has been "sealed" so-to-speak. In that we have an index for it.
 
-					t.fieldIndex = Convert.ToInt32(st["index"].AsString());
-					t.fieldIsStatic = Convert.ToInt32(st["isStatic"].AsString()) != 0;
 					t.Name = st["name"].AsString();
 					t.declaringTypeName = usage.GetNativeTypeNameFromSerializee( st["dt"] );
+					t.fieldIsStatic = Convert.ToInt32(st["isStatic"].AsString()) != 0;
+
+					if( st.ContainsKey("index") )
+					{
+						t.fieldIndex = Convert.ToInt32(st["index"].AsString());
+					}
+					else
+					{
+						throw new Exception( $"Currently cannot reference fields outside of the cilbox. {t.declaringTypeName} in {v.Key}.  Use properties." );
+					}
 
 					t.isValid = true;
 					break;

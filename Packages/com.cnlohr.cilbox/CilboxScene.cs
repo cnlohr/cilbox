@@ -43,6 +43,7 @@ namespace Cilbox
 			"UnityEngine.AudioSource",
 			"UnityEngine.AudioClip",
 			"UnityEngine.Component",
+			"UnityEngine.Color",
 			"UnityEngine.Debug",
 			"UnityEngine.Events.UnityAction",
 			"UnityEngine.Events.UnityEvent",

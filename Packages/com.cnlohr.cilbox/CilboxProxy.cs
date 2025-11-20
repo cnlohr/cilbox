@@ -152,7 +152,11 @@ namespace Cilbox
 			}
 			else
 			{
-				Debug.Log( $"Unknown type requesting serialization {fv.GetType()}" );
+				string json = JsonUtility.ToJson(fv);
+				instanceFields["t"] = new Serializee( "j" );
+				instanceFields["d"] = new Serializee(json);
+				Type type = fv.GetType();
+				instanceFields["at"] = CilboxUtil.GetSerializeeFromNativeType( type );
 			}
 
 
@@ -183,7 +187,16 @@ namespace Cilbox
 				}
 				else if( !box.CheckTypeAllowed( o.GetType().ToString() ) )
 				{
-					Debug.LogWarning( "Contraband found in script {className} field ID {i} { (cls && cls.instanceFieldNames && cls.instanceFieldNames.Length > i ) ? cls.instanceFieldNames[i] : 'Unknown'}" );
+					String className;
+					if( cls != null && cls.instanceFieldNames != null && cls.instanceFieldNames.Length > i )
+					{
+						className = cls.instanceFieldNames[i];
+					}
+					else
+					{
+						className = "Unknown";
+					}
+					Debug.LogWarning( $"Contraband found in script {className} field ID {i} {className} {o.GetType()}" );
 					fieldsObjects[i] = null;
 				}
 			}
@@ -260,6 +273,7 @@ namespace Cilbox
 		}
 
 
+		// Returns: true if is object, otherwise is primitive.
 		private bool LoadObjectFromSerializee( Serializee s, out object oOut, String rootFieldName, Type inType, bool root )
 		{
 			Dictionary< String, Serializee > dict = s.AsMap();
@@ -335,6 +349,24 @@ namespace Cilbox
 					{
 						oOut = CilboxUtil.DeserializeDataForProxyField( inType, dsee.AsString() );
 						return false;
+					}
+				}
+				else if ( sT[0] == 'j' )
+				{
+
+					Serializee seT, seAT, seD;
+					int aLen;
+					if( dict.TryGetValue( "t", out seT ) &&
+						dict.TryGetValue( "at", out seAT ) &&
+						dict.TryGetValue( "d", out seD ) )
+					{
+						Type t = box.usage.GetNativeTypeFromSerializee( seAT ); // This makes sure we're allowed to have this type.
+						oOut = JsonUtility.FromJson(seD.AsString(), t);
+						return true;
+					}
+					else
+					{
+						Debug.LogWarning( $"Failure to load object in field id:{rootFieldName} of {className}");
 					}
 				}
 				else
