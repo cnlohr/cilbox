@@ -935,11 +935,11 @@ namespace Cilbox
 		{
 			List<MonoBehaviour> ret = new List<MonoBehaviour>();
 
-			object[] objToCheck = GameObject.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+			object[] objToCheck = UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects();
 			foreach (object o in objToCheck)
 			{
 				GameObject g = (GameObject) o;
-				MonoBehaviour [] scripts = g.GetComponents<MonoBehaviour>();
+				MonoBehaviour [] scripts = g.GetComponentsInChildren<MonoBehaviour>();
 				foreach (MonoBehaviour m in scripts )
 				{
 					// Skip null objects.
