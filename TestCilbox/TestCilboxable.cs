@@ -60,7 +60,7 @@ namespace TestCilbox
 			Validator.Set( "Update", "called" );
 			Validator.Set( "Overtime", "timed out" );
 			double result = 1.3;
-			for( int i = 0; i < 1000000; i++ ) result = System.Math.Sin( result ) * 10.0;
+			for( int i = 0; i < 10000000; i++ ) result = System.Math.Sin( result ) * 10.0;
 			Validator.Set( "Throwaway", result.ToString() );
 			Validator.Set( "Overtime", "did not timed out" );
 		}

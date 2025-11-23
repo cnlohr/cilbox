@@ -128,6 +128,7 @@ namespace UnityEngine
 		}
 		public class Scene
 		{
+			public GameObject[] GetRootGameObjects() { return new GameObject[0]; }
 		}
 	}
 
@@ -171,6 +172,7 @@ namespace UnityEngine
 	public class Transform
 	{
 		public Vector3 position;
+		public GameObject parent = null;
 	}
 
 	public class Component
@@ -183,7 +185,11 @@ namespace UnityEngine
 		public List<MonoBehaviour> AllComponents = new List<MonoBehaviour>();
 		public String name;
 		public HideFlags hideFlags;
-		public Transform transform;
+		public Transform transform = new Transform();
+
+		public MonoBehaviour[] GetComponentsInChildren<T>( bool something ) { return new MonoBehaviour[0]; }
+
+		public GameObject gameObject = null;
 
 		public static void Destroy( GameObject o ) { AllObjects.Remove( o ); }
 		public GameObject(String name) { this.name = name; GameObject.AllObjects.Add(this);  }

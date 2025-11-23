@@ -135,7 +135,7 @@ namespace TestCilbox
 			Cilbox.Cilbox cb = cbobj.AddComponent<CilboxTester>();
 			cb.exportDebuggingData = true;
 
-			cb.timeoutLengthUs = 50000; // 25ms
+			cb.timeoutLengthUs = 50000; // 50ms
 			Cilbox.CilboxScenePostprocessor.OnPostprocessScene();
 			Application.CallBeforeRender();
 

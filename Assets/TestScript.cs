@@ -53,7 +53,10 @@ public class TestScript : MonoBehaviour
 	void Update() {
 		testScript2.AnotherThing();
 		framenoPublic++;
-		textControl.text = framenoPublic + " " + testScript2.reverseFrameNo + "\n" + delegateCount + " - " + lastButton;
+		textControl.text = framenoPublic + " " + testScript2.reverseFrameNo + "\n" + delegateCount + " - " +
+			lastButton + "\n" +
+			CilboxPublicUtils.GetProxyInitialPath( this ) + "\n" +
+			CilboxPublicUtils.GetProxyBuildTimeGuid( this );
 
 		float f = Time.time / .4f;//framenoPrivate / 100.0f;
 		float x = MathF.Sin( f );
