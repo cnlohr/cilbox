@@ -1,5 +1,7 @@
 # Cilbox
 
+<IMG SRC=https://github.com/cnlohr/cilbox/actions/workflows/build.yml/badge.svg>
+
 ### This is incomplete, and portions will change. Please do not use this for production systems without significant testing.
 
 `Cilbox` is a CIL emulator, geared for Unity. It allows the execution of arbitrary CIL code in a relatively sandboxed manner. In that whatever access is granted to types/methods, the script running within the sandbox can access.  This is NOT ia JITter.  This does not use fancy language constructs, and works (actually works best) in IL2CPP.
