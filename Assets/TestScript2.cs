@@ -16,6 +16,8 @@ public class TestScript2 : MonoBehaviour
 
 	public GameObject [] objs;
 
+	public Vector3 testVector = new Vector3();
+
 	void Start()
 	{
 		if( testPublic != 4 ) Debug.LogError($"testPublic {testPublic}");
@@ -57,6 +59,13 @@ public class TestScript2 : MonoBehaviour
 		}
 		else
 			Debug.LogError( "objs is null!" );
+
+		testVector.x = 5;
+		testVector.y++;
+		if( testVector.z != 9 )
+		{
+			Debug.LogError( "testVector.z should be 9\n" );
+		}
 	}
 
 	public void AnotherThing()
@@ -71,7 +80,7 @@ public class TestScript2 : MonoBehaviour
 		block.SetVector( "_Color",
 			new Vector4(
 				Mathf.Sin( (float)Time.time * 5.0f )*0.5f+0.5f,
-				0.5f, Mathf.Sin( (float)testPublic*0.01f ), 1 ) );
+				testVector.y++, Mathf.Sin( (float)testPublic*0.01f ), 1 ) );
 		mr.SetPropertyBlock(block);
 
 #if false

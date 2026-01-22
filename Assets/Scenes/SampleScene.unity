@@ -1716,6 +1716,7 @@ MonoBehaviour:
   - {fileID: 574431225399919124}
   - {fileID: 0}
   - {fileID: 0}
+  testVector: {x: 1, y: 0, z: 9}
 --- !u!222 &7361587781675441159
 CanvasRenderer:
   m_ObjectHideFlags: 0

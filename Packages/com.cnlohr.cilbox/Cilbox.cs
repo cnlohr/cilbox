@@ -1130,7 +1130,10 @@ spiperf.End();
 		public CilMetadataTokenInfo( MetaTokenType type ) { this.type = type; }
 		public MetaTokenType type;
 		public bool isValid;
-		public int fieldIndex; // Only used for fields.
+		public int fieldIndex; // Only used for fields of cilbox objects.
+		public Type fieldExpectsToBeOnObjectOfType; // The object type
+		public bool isFieldWhiteListed = false;
+
 		public bool fieldIsStatic;
 
 		public Type nativeType; // Used for types.
@@ -1204,8 +1207,9 @@ spiperf.End();
 			usage = new CilboxUsage( this );
 		}
 
-		abstract public bool CheckMethodAllowed(  out MethodInfo mi, Type declaringType, String name, Serializee [] parametersIn, Serializee [] genericArgumentsIn, String fullSignature );
+		abstract public bool CheckMethodAllowed( out MethodInfo mi, Type declaringType, String name, Serializee [] parametersIn, Serializee [] genericArgumentsIn, String fullSignature );
 		abstract public bool CheckTypeAllowed( String sType );
+		abstract public bool CheckFieldAllowed( String sType, String sFieldName );
 
 		public void ForceReinit()
 		{
@@ -1277,7 +1281,53 @@ spiperf.End();
 					}
 					else
 					{
-						throw new Exception( $"Currently cannot reference fields outside of the cilbox. {t.declaringTypeName} in {v.Key}.  Use properties." );
+						bool bAllowed = CheckFieldAllowed( t.declaringTypeName, t.Name );
+						if( !bAllowed )
+						{
+							throw new Exception( $"Illegal field reference outside of the cilbox. {t.declaringTypeName}.{t.Name} in {v.Key}." );
+						}
+						t.isFieldWhiteListed = true;
+					
+						Serializee typ = st["dt"];
+						Type ty = t.fieldExpectsToBeOnObjectOfType = usage.GetNativeTypeFromSerializee( typ );
+						if( ty == null )
+						{
+							throw new Exception( $"Could not get allowed type for checking field, {t.declaringTypeName} in {v.Key}." );
+						}
+
+						// We have a type for the declaring type, but, we need a field.
+						FieldInfo f = ty.GetField( t.Name, BindingFlags.Static | BindingFlags.Public | BindingFlags.Instance );
+
+						if( f == null )
+						{
+							throw new Exception( $"Could not find field for object type {t.declaringTypeName}.{t.Name} in {v.Key}." );
+						}
+
+						if( !CheckTypeAllowed( f.FieldType.AsString() ) )
+						{
+							throw new Exception( $"Field for {t.declaringTypeName}.{t.Name} in {v.Key} of type {f.FieldType.AsString()} not allowed." );
+						}
+
+						t.isFieldWhiteListed = true;
+						t.fieldIsStatic = f.IsStatic;
+						t.nativeType = f.FieldType;
+						t.isValid = true;
+
+						StackType seType = StackElement.StackTypeFromType( t.nativeType );
+
+						if( seType < StackType.Object )
+						{
+							t.nativeTypeIsStackType = true;
+							t.nativeTypeStackType = seType;
+						}
+						else
+						{
+							t.nativeTypeIsStackType = false;
+						}
+						//foreach(var i in st)
+						//{
+						//	Debug.Log( $"SS: {t.Name} {t.declaringTypeName} {i.Key}" );
+						//}
 					}
 
 					t.isValid = true;
