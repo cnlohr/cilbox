@@ -1587,7 +1587,7 @@ spiperf.End();
 							throw new Exception( $"Illegal field reference outside of the cilbox. {t.declaringTypeName}.{t.Name} in {v.Key}." );
 						}
 						t.isFieldWhiteListed = true;
-					
+
 						Serializee typ = st["dt"];
 						Type ty = t.fieldExpectsToBeOnObjectOfType = usage.GetNativeTypeFromSerializee( typ );
 						if( ty == null )
