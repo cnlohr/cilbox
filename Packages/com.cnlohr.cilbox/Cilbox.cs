@@ -25,6 +25,16 @@ public class CilboxTarget : Attribute { }
 
 namespace Cilbox
 {
+	public class CilboxExceptionHandlingClause
+	{
+		public ExceptionHandlingClauseOptions Flags;
+		public int TryOffset;
+		public int TryLength;
+		public int HandlerOffset;
+		public int HandlerLength;
+		public Type? CatchType;
+	}
+
 	public class CilboxMethod
 	{
 		public CilboxClass parentClass;
@@ -38,6 +48,7 @@ namespace Cilbox
 		public bool isVoid;
 		public String[] signatureParameters;
 		public Type[]   typeParameters;
+		public CilboxExceptionHandlingClause[] exceptionClauses;
 
 #if UNITY_EDITOR
 		ProfilerMarker perfMarkerInterpret;
@@ -79,6 +90,28 @@ namespace Cilbox
 				typeParameters[sn] = parentClass.box.usage.GetNativeTypeFromSerializee( thisp["dt"] );
 				sn++;
 			}
+
+			if (methodProps.TryGetValue("eh", out Serializee ehArray))
+			{
+				Serializee[] ehc = ehArray.AsArray();
+				exceptionClauses = new CilboxExceptionHandlingClause[ehc.Length];
+				for (int e = 0; e < ehc.Length; e++)
+				{
+					Dictionary< String, Serializee > thisehc = ehc[e].AsMap();
+					CilboxExceptionHandlingClause clause = new CilboxExceptionHandlingClause();
+					clause.Flags = (ExceptionHandlingClauseOptions)Convert.ToInt32(thisehc["flags"].AsString());
+					clause.TryOffset = Convert.ToInt32(thisehc["tryOff"].AsString());
+					clause.TryLength = Convert.ToInt32(thisehc["tryLen"].AsString());
+					clause.HandlerOffset = Convert.ToInt32(thisehc["hOff"].AsString());
+					clause.HandlerLength = Convert.ToInt32(thisehc["hLen"].AsString());
+					if (thisehc.ContainsKey("cType"))
+					{
+						clause.CatchType = parentClass.box.usage.GetNativeTypeFromSerializee(thisehc["cType"]);
+					}
+					exceptionClauses[e] = clause;
+				}
+			}
+
 #if UNITY_EDITOR
 			perfMarkerInterpret = new ProfilerMarker(parentClass.className + ":" + fullSignature);
 #endif
@@ -130,6 +163,7 @@ namespace Cilbox
 		{
 			Span<StackElement> stackBuffer = stackBufferIn.AsSpan();
 			Span<StackElement> parameters = parametersIn.AsSpan();
+			Stack<int> handlerClauseStack = new Stack<int>();
 
 #if UNITY_EDITOR
 			perfMarkerInterpret.Begin();
@@ -417,10 +451,70 @@ spiperf.Begin();
 					case 0x2b: pc += (sbyte)byteCode[pc] + 1; break; //br.s
 					case 0x38: { int ofs = (int)BytecodeAsU32( ref pc ); pc += ofs; break; } // br
 
+					case 0xdd: // leave
 					case 0xde: // leave.s
 					{
 						sp = -1;
-						pc += (sbyte)byteCode[pc] + 1;
+
+						int inc = (b == 0xde) ? (sbyte)byteCode[pc] : (int)BytecodeAsU32( ref pc );
+						int leaveTarget = pc + inc + 1;
+
+						if (exceptionClauses is not {Length: > 0})
+						{
+							pc = leaveTarget;
+							break;
+						}
+
+						CilboxExceptionHandlingClause bestClause = null;
+						int iPtr = pc - 1;
+						for( int i = 0; i < exceptionClauses.Length; i++ )
+						{
+							CilboxExceptionHandlingClause c = exceptionClauses[i];
+
+							// only handling Finally for now
+							// todo: add catch handling?
+							if (c.Flags != ExceptionHandlingClauseOptions.Finally)
+							{
+								continue;
+							}
+
+							// Check we are in bounds of the Try block.
+							if (iPtr < c.TryOffset || iPtr >= c.TryOffset + c.TryLength)
+							{
+								continue;
+							}
+
+							// Verify leaveTarget is outside the try block.
+							if (leaveTarget >= c.TryOffset && leaveTarget < c.TryOffset + c.TryLength)
+							{
+								continue;
+							}
+
+							// We already found a more-inner clause.
+							if (bestClause != null && bestClause.TryLength < c.TryLength)
+							{
+								continue;
+							}
+
+							bestClause = c;
+						}
+
+						// Found a matching clause.
+						if (bestClause != null)
+						{
+							pc = bestClause.HandlerOffset;
+							handlerClauseStack.Push(leaveTarget);
+							break;
+						}
+
+						// No matching clauses found, so just continue.
+						pc = leaveTarget;
+						break;
+					}
+
+					case 0xdc: // endfault, endfinally
+					{
+						pc = handlerClauseStack.Pop();
 						break;
 					}
 
@@ -1867,6 +1961,29 @@ spiperf.End();
 
 							bytecodeLength += byteCode.Length;
 							MethodProps["body"] = Serializee.CreateFromBlob(byteCode);
+
+							IList<ExceptionHandlingClause> exceptions = mb.ExceptionHandlingClauses;
+							if( exceptions.Count > 0 )
+							{
+								Serializee [] excArray = new Serializee[exceptions.Count];
+								for( int k = 0; k < exceptions.Count; k++ )
+								{
+									ExceptionHandlingClause c = exceptions[k];
+									Dictionary< String, Serializee > exc = new Dictionary< String, Serializee >();
+									exc["flags"] = new Serializee( ((int)c.Flags).ToString() );
+									exc["tryOff"] = new Serializee( c.TryOffset.ToString() );
+									exc["tryLen"] = new Serializee( c.TryLength.ToString() );
+									exc["hOff"] = new Serializee( c.HandlerOffset.ToString() );
+									exc["hLen"] = new Serializee( c.HandlerLength.ToString() );
+
+									if( c.Flags == ExceptionHandlingClauseOptions.Clause && c.CatchType != null )
+									{
+										exc["cType"] = CilboxUtil.GetSerializeeFromNativeType( c.CatchType );
+									}
+									excArray[k] = new Serializee( exc );
+								}
+								MethodProps["eh"] = new Serializee( excArray );
+							}
 
 							Serializee [] localVars = new Serializee[mb.LocalVariables.Count];
 							for( int i = 0; i < mb.LocalVariables.Count; i++ )

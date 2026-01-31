@@ -16,6 +16,7 @@ namespace TestCilbox
 	{
 		static HashSet<String> whiteListType = new HashSet<String>(){
 			"Cilbox.CilboxPublicUtils",
+			"TestCilbox.DisposeTester",
 			"TestCilbox.Validator",
 			"System.Math",
 			"System.Array",
@@ -28,6 +29,7 @@ namespace TestCilbox
 			"System.DayOfWeek",
 			"System.Diagnostics.Stopwatch",
 			"System.Exception",
+			"System.IDisposable",
 			"System.Int32",
 			"System.MathF",
 			"System.Object",
@@ -74,7 +76,7 @@ namespace TestCilbox
 		{
 			return whiteListType.Contains( sType );
 		}
-		
+
 		override public bool CheckMethodAllowed( out MethodInfo mi, Type declaringType, String name, Serializee [] parametersIn, Serializee [] genericArgumentsIn, String fullSignature )
 		{
 			mi = null;
@@ -113,6 +115,20 @@ namespace TestCilbox
 			}
 			bDidFail = true;
 			return false;
+		}
+	}
+
+
+	public class DisposeTester : IDisposable
+	{
+		public DisposeTester()
+		{
+			Validator.Set( "Dispose", "not disposed" );
+		}
+
+		public void Dispose()
+		{
+			Validator.Set("Dispose", "disposed" );
 		}
 	}
 
@@ -192,6 +208,13 @@ namespace TestCilbox
 
 			Validator.Validate( "Manual Recover After Timeout", "recovered" );
 			Validator.Validate( "FixedUpdate", "called" );
+
+			Validator.Validate("Dispose", "disposed" );
+			Validator.Validate("TryFinally", "finally");
+			Validator.Validate("TryFinally2", "finally");
+			Validator.Validate("Exited Dispose Tester", "yes" );
+			// for now, we can't catch exceptions so make sure the catch block did not run
+			Validator.Validate("TryCatch", "did not catch" );
 
 			if( Validator.DidFail() ) return -5;
 
