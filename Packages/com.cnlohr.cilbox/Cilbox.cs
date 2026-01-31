@@ -352,7 +352,7 @@ spiperf.Begin();
 							{
 								// TRICKY: This generally can only be arrived at when scripts run their own constructors.
 								if( st.DeclaringType == typeof( MonoBehaviour ) )
-									iko = this; 
+									iko = this;
 								else // Otherwise it's normal.
 									iko = ((ConstructorInfo)st).Invoke( callpar );
 							}
@@ -416,6 +416,13 @@ spiperf.Begin();
 
 					case 0x2b: pc += (sbyte)byteCode[pc] + 1; break; //br.s
 					case 0x38: { int ofs = (int)BytecodeAsU32( ref pc ); pc += ofs; break; } // br
+
+					case 0xde: // leave.s
+					{
+						sp = -1;
+						pc += (sbyte)byteCode[pc] + 1;
+						break;
+					}
 
 					case 0x2c: case 0x39: // brfalse.s, brnull.s, brzero.s - is it zero, null or  / brfalse
 					case 0x2d: case 0x3a: // brinst.s, brtrue.s / btrue
@@ -524,7 +531,7 @@ spiperf.Begin();
 							case 5: if( sa.o != sb.o ) pc += joffset; break;
 							default: throw new( "Invalid object comparison" );
 							} break;
-						default: 
+						default:
 							throw new( "Invalid comparison" );
 						}
 						break;
@@ -703,7 +710,7 @@ spiperf.Begin();
 					}
 
 					case 0x7a: throw (System.Exception)stackBuffer[sp--].AsObject(); //throw
-					case 0x7b: 
+					case 0x7b:
 					{
 						uint bc = BytecodeAsU32( ref pc );
 
@@ -711,7 +718,7 @@ spiperf.Begin();
 						if( se.o is CilboxProxy )
 							stackBuffer[++sp] = ((CilboxProxy)se.o).fields[box.metadatas[bc].fieldIndex];
 						else
-							throw new Exception( "Unimplemented.  Attempting to get field on non-cilbox object" ); 
+							throw new Exception( "Unimplemented.  Attempting to get field on non-cilbox object" );
 						// Tricky:  Do not allow host-fields without great care. For instance, getting access to PlatformActual.DelegateRepackage would all the program out.
 						break; //ldfld
 					}
@@ -740,17 +747,17 @@ spiperf.Begin();
 							throw new Exception( "Unimplemented.  Attempting to set field on non-cilbox object" );
 						break; //stfld
 					}
-					case 0x7e: 
+					case 0x7e:
 					{
 						uint bc = BytecodeAsU32( ref pc );
 						stackBuffer[++sp].Load( parentClass.staticFields[box.metadatas[bc].fieldIndex] );
 						break; //ldsfld
 					}
-					case 0x7f: 
+					case 0x7f:
 					{
 						uint bc = BytecodeAsU32( ref pc );
 						stackBuffer[++sp] = StackElement.CreateReference( (Array)(parentClass.staticFields), (uint)box.metadatas[bc].fieldIndex );
-						break;// ldsflda 
+						break;// ldsflda
 					}
 					case 0x80:
 					{
@@ -763,7 +770,7 @@ spiperf.Begin();
 					{
 						uint otyp = BytecodeAsU32( ref pc );
 						stackBuffer[sp].LoadObject( stackBuffer[sp].AsObject() );//(metaType.nativeType)stackBuffer[sp-1].AsObject();
-						break; 
+						break;
 					}
 					case 0x8d:
 					{
@@ -983,6 +990,10 @@ spiperf.Begin();
 							if( dt.isNative )
 								throw new Exception( $"Cannot create references to functions outside this cilbox ({dt.Name})" );
 							stackBuffer[++sp].LoadObject( box.classesList[dt.interpretiveMethodClass].methods[dt.interpretiveMethod] );
+							break;
+						case 0x16: // constrained.
+							// handled by reflection so discard the type token
+							BytecodeAsU32( ref pc );
 							break;
 						default:
 							throw new Exception( $"Opcode 0xfe 0x{b.ToString("X2")} unimplemented" );
@@ -1444,7 +1455,7 @@ spiperf.End();
 			if( ++interpreterAccountingDepth == 1 )
 			{
 				// First entry, if we've been disabled, quiety abort.
-				// this is normal if 
+				// this is normal if
 				if( disabled )
 				{
 					--interpreterAccountingDepth;
@@ -1589,7 +1600,7 @@ spiperf.End();
 				foreach (GameObject root in rootObjects)
 				{
 					MonoBehaviour[] components = root.GetComponentsInChildren<MonoBehaviour>(true);
-					
+
 					foreach (MonoBehaviour component in components)
 					{
 						if( component != null )
@@ -1922,7 +1933,7 @@ spiperf.End();
 						foreach( var f in fi )
 						{
 							Dictionary< String, Serializee > dictField = new Dictionary< String, Serializee >();
-							dictField["name"] = new Serializee( f.Name ); 
+							dictField["name"] = new Serializee( f.Name );
 							dictField["type"] = CilboxUtil.GetSerializeeFromNativeType( f.FieldType );
 							fields.Add( new Serializee( dictField ) );
 
@@ -1989,7 +2000,7 @@ spiperf.End();
 			}
 
 			{
-				MonoScript ms = MonoScript.FromMonoBehaviour(tac); 
+				MonoScript ms = MonoScript.FromMonoBehaviour(tac);
 				String scriptPath = AssetDatabase.GetAssetPath( ms );
 				if( scriptPath == null ) Debug.LogError( "Can't find path to cilbox for writing XML." );
 				else
@@ -2103,7 +2114,7 @@ spiperf.End();
 			}
 
 			perf.End(); perf = new ProfilerMarker( "Destroying Silboxable Scripts" ); perf.Begin();
-			// re-attach the refrences to 
+			// re-attach the refrences to
 			foreach (MonoBehaviour m in allBehavioursThatNeedCilboxing)
 			{
 				UnityEngine.Object.DestroyImmediate( m );
