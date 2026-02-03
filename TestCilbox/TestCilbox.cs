@@ -95,8 +95,22 @@ namespace TestCilbox
 		private static bool bDidFail = false;
 		public static bool DidFail() { return bDidFail; }
 		public static Dictionary< String, String > TestOutput = new Dictionary< String, String >();
+		public static Dictionary<String, int> TestCounters = new Dictionary<String, int>();
 		public static void Set( String key, String val ) { TestOutput[key] = val; }
 		public static String Get( String key ) { String ret = null; TestOutput.TryGetValue( key, out ret ); return ret; }
+		public static void AddCount( String key )
+		{
+			int cur = 0;
+			TestCounters.TryGetValue( key, out cur );
+			cur += 1;
+			TestCounters[key] = cur;
+		}
+		public static int GetCount( String key )
+		{
+			int cur = 0;
+			TestCounters.TryGetValue( key, out cur );
+			return cur;
+		}
 		public static bool Validate( String key, String comp )
 		{
 			String val;
@@ -113,6 +127,18 @@ namespace TestCilbox
 			{
 				Console.WriteLine( $"❌ {key} is unset (Expected {comp})" );
 			}
+			bDidFail = true;
+			return false;
+		}
+		public static bool ValidateCount( String key, int comp )
+		{
+			int val = GetCount( key );
+			if( val == comp )
+			{
+				Console.WriteLine( $"✅ {key} count = {val} " );
+				return true;
+			}
+			Console.WriteLine( $"❌ {key} count = {val} != {comp}" );
 			bDidFail = true;
 			return false;
 		}
@@ -215,6 +241,8 @@ namespace TestCilbox
 			Validator.Validate("Exited Dispose Tester", "yes" );
 			// for now, we can't catch exceptions so make sure the catch block did not run
 			Validator.Validate("TryCatch", "did not catch" );
+			Validator.ValidateCount("TryFinally", 1 );
+			Validator.ValidateCount("TryFinally2", 1 );
 
 			if( Validator.DidFail() ) return -5;
 

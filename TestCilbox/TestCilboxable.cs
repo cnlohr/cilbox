@@ -73,11 +73,13 @@ namespace TestCilbox
 				finally
 				{
 					Validator.Set("TryFinally2", "finally");
+					Validator.AddCount("TryFinally2");
 				}
 			}
 			finally
 			{
 				Validator.Set("TryFinally", "finally");
+				Validator.AddCount("TryFinally");
 			}
 
 			behaviour2.Behaviour2Test();

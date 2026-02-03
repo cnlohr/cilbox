@@ -110,6 +110,8 @@ namespace Cilbox
 					}
 					exceptionClauses[e] = clause;
 				}
+				// sort exceptionClauses by TryLength descending
+				Array.Sort(exceptionClauses, (a, b) => b.TryLength.CompareTo(a.TryLength));
 			}
 
 #if UNITY_EDITOR
@@ -454,19 +456,19 @@ spiperf.Begin();
 					case 0xdd: // leave
 					case 0xde: // leave.s
 					{
-						sp = -1;
+						int currentInstruction = pc;
+						sp = -1; // leave(.s) clears the stack.
+						int offset = (b == 0xde) ? (sbyte)byteCode[pc++] : (int)BytecodeAsU32( ref pc );
+						int leaveTarget = pc + offset;
 
-						int inc = (b == 0xde) ? (sbyte)byteCode[pc] : (int)BytecodeAsU32( ref pc );
-						int leaveTarget = pc + inc + 1;
-
+						// early out if no exception clauses.
 						if (exceptionClauses is not {Length: > 0})
 						{
 							pc = leaveTarget;
 							break;
 						}
 
-						CilboxExceptionHandlingClause bestClause = null;
-						int iPtr = pc - 1;
+						handlerClauseStack.Push(leaveTarget);
 						for( int i = 0; i < exceptionClauses.Length; i++ )
 						{
 							CilboxExceptionHandlingClause c = exceptionClauses[i];
@@ -479,7 +481,7 @@ spiperf.Begin();
 							}
 
 							// Check we are in bounds of the Try block.
-							if (iPtr < c.TryOffset || iPtr >= c.TryOffset + c.TryLength)
+							if (currentInstruction < c.TryOffset || currentInstruction >= c.TryOffset + c.TryLength)
 							{
 								continue;
 							}
@@ -490,25 +492,11 @@ spiperf.Begin();
 								continue;
 							}
 
-							// We already found a more-inner clause.
-							if (bestClause != null && bestClause.TryLength < c.TryLength)
-							{
-								continue;
-							}
-
-							bestClause = c;
+							handlerClauseStack.Push(c.HandlerOffset);
 						}
 
-						// Found a matching clause.
-						if (bestClause != null)
-						{
-							pc = bestClause.HandlerOffset;
-							handlerClauseStack.Push(leaveTarget);
-							break;
-						}
-
-						// No matching clauses found, so just continue.
-						pc = leaveTarget;
+						// Continue to the leave target or innermost handler.
+						pc = handlerClauseStack.Pop();
 						break;
 					}
 
