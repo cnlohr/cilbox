@@ -30,6 +30,7 @@ namespace Cilbox
 		public ExceptionHandlingClauseOptions Flags;
 		public int TryOffset;
 		public int TryLength;
+		public int TryEndOffset;
 		public int HandlerOffset;
 		public int HandlerLength;
 		public Type? CatchType;
@@ -49,6 +50,7 @@ namespace Cilbox
 		public String[] signatureParameters;
 		public Type[]   typeParameters;
 		public CilboxExceptionHandlingClause[] exceptionClauses;
+		public bool hasExceptionClauses = false;
 
 #if UNITY_EDITOR
 		ProfilerMarker perfMarkerInterpret;
@@ -102,6 +104,7 @@ namespace Cilbox
 					clause.Flags = (ExceptionHandlingClauseOptions)Convert.ToInt32(thisehc["flags"].AsString());
 					clause.TryOffset = Convert.ToInt32(thisehc["tryOff"].AsString());
 					clause.TryLength = Convert.ToInt32(thisehc["tryLen"].AsString());
+					clause.TryEndOffset = clause.TryOffset + clause.TryLength;
 					clause.HandlerOffset = Convert.ToInt32(thisehc["hOff"].AsString());
 					clause.HandlerLength = Convert.ToInt32(thisehc["hLen"].AsString());
 					if (thisehc.ContainsKey("cType"))
@@ -110,14 +113,19 @@ namespace Cilbox
 					}
 					exceptionClauses[e] = clause;
 				}
-				// sort exceptionClauses by TryLength descending
-				Array.Sort(exceptionClauses, (a, b) => b.TryLength.CompareTo(a.TryLength));
+				hasExceptionClauses = exceptionClauses.Length > 0;
+
+				Array.Sort(exceptionClauses, CompareExceptionClausesLengthDesc);
 			}
 
 #if UNITY_EDITOR
 			perfMarkerInterpret = new ProfilerMarker(parentClass.className + ":" + fullSignature);
 #endif
 
+			static int CompareExceptionClausesLengthDesc( CilboxExceptionHandlingClause a, CilboxExceptionHandlingClause b )
+			{
+				return b.TryLength.CompareTo( a.TryLength );
+			}
 		}
 
 		public object Interpret( CilboxProxy ths, object [] parametersIn )
@@ -165,7 +173,7 @@ namespace Cilbox
 		{
 			Span<StackElement> stackBuffer = stackBufferIn.AsSpan();
 			Span<StackElement> parameters = parametersIn.AsSpan();
-			Stack<int> handlerClauseStack = new Stack<int>();
+			Stack<int> handlerClauseStack = null; // don't allocate unless necessary
 
 #if UNITY_EDITOR
 			perfMarkerInterpret.Begin();
@@ -462,10 +470,15 @@ spiperf.Begin();
 						int leaveTarget = pc + offset;
 
 						// early out if no exception clauses.
-						if (exceptionClauses is not {Length: > 0})
+						if (!hasExceptionClauses)
 						{
 							pc = leaveTarget;
 							break;
+						}
+
+						if (handlerClauseStack == null)
+						{
+							handlerClauseStack = new Stack<int>();
 						}
 
 						handlerClauseStack.Push(leaveTarget);
@@ -481,13 +494,13 @@ spiperf.Begin();
 							}
 
 							// Check we are in bounds of the Try block.
-							if (currentInstruction < c.TryOffset || currentInstruction >= c.TryOffset + c.TryLength)
+							if (currentInstruction < c.TryOffset || currentInstruction >= c.TryEndOffset)
 							{
 								continue;
 							}
 
 							// Verify leaveTarget is outside the try block.
-							if (leaveTarget >= c.TryOffset && leaveTarget < c.TryOffset + c.TryLength)
+							if (leaveTarget >= c.TryOffset && leaveTarget < c.TryEndOffset)
 							{
 								continue;
 							}
@@ -502,6 +515,10 @@ spiperf.Begin();
 
 					case 0xdc: // endfault, endfinally
 					{
+						if (handlerClauseStack == null || handlerClauseStack.Count == 0)
+						{
+							throw new Exception("endfinally without a matching target.");
+						}
 						pc = handlerClauseStack.Pop();
 						break;
 					}
