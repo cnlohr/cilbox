@@ -2255,6 +2255,8 @@ spiperf.End();
 		Awake,
 		OnTriggerEnter,
 		OnTriggerExit,
+		OnEnable,
+		OnDisable,
 	}
 }
 

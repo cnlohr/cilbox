@@ -73,7 +73,7 @@ namespace Cilbox
 				lstObjects.Add( e );
 			}
 
-			serializedObjectData = 
+			serializedObjectData =
 				Convert.ToBase64String(new Serializee(lstObjects.ToArray()).DumpAsMemory().ToArray());
 
 			buildTimeGuid = Guid.NewGuid().ToString();
@@ -174,6 +174,26 @@ namespace Cilbox
 			// Tricky: Stuff really isn't even ready here :(  I don't know if we can try to get this going.
 		}
 
+		private void OnEnable()
+		{
+			if (!proxyWasSetup)
+			{
+				return;
+			}
+
+			box.InterpretIID(cls, this, ImportFunctionID.OnEnable, null);
+		}
+
+		private void OnDisable()
+		{
+			if (!proxyWasSetup)
+			{
+				return;
+			}
+
+			box.InterpretIID(cls, this, ImportFunctionID.OnDisable, null);
+		}
+
 		public void RuntimeProxyLoad()
 		{
 			//Debug.Log( "Runtime Proxy Load " + proxyWasSetup + " " + transform.name + " " + className );
@@ -256,8 +276,8 @@ namespace Cilbox
 
 			// Call interpreted constructor.
 			box.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
-			box.InterpretIID( cls, this, ImportFunctionID.Awake, null ); // Does this go before or after initialized fields.
 
+			// load serialized fields.
 			for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
 			{
 				Serializee s = matchingSerializeeInstanceField[i];
@@ -272,6 +292,11 @@ namespace Cilbox
 					fields[i].Load( o );
 			}
 
+			// Call Awake regardless of enabled state
+			box.InterpretIID( cls, this, ImportFunctionID.Awake, null );
+
+			// Since RuntimeProxyLoad was called in Start, that means this object is active and enabled, so call OnEnable and Start now.
+			box.InterpretIID( cls, this, ImportFunctionID.OnEnable, null );
 			box.InterpretIID( cls, this, ImportFunctionID.Start, null );
 
 			proxyWasSetup = true;
@@ -292,7 +317,7 @@ namespace Cilbox
 					Serializee seFO;
 					int iFO;
 					if( dict.TryGetValue( "fo", out seFO ) &&
-						Int32.TryParse( seFO.AsString(), out iFO ) && 
+						Int32.TryParse( seFO.AsString(), out iFO ) &&
 						iFO < fieldsObjects.Count )
 					{
 						UnityEngine.Object o = fieldsObjects[iFO];
@@ -320,8 +345,8 @@ namespace Cilbox
 					Serializee seT, seAT, seAL, seAD;
 					int aLen;
 					if( dict.TryGetValue( "t", out seT ) &&
-						dict.TryGetValue( "at", out seAT ) && 
-						dict.TryGetValue( "al", out seAL ) && 
+						dict.TryGetValue( "at", out seAT ) &&
+						dict.TryGetValue( "al", out seAL ) &&
 						dict.TryGetValue( "ad", out seAD ) &&
 						Int32.TryParse( seAL.AsString(), out aLen ) )
 					{
@@ -390,7 +415,7 @@ namespace Cilbox
 #if UNITY_EDITOR
 			new ProfilerMarker( "Initialize " + className ).Auto();
 #endif
-			
+
 			GameObject obj = gameObject;
 			initialLoadPath = "/" + obj.name;
 			while (obj.transform.parent != null)
