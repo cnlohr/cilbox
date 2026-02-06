@@ -187,6 +187,7 @@ namespace TestCilbox
 
 			try
 			{
+				proxy.GetType().GetMethod("Awake",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
 				proxy.GetType().GetMethod("Start",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
 				Validator.Validate( "Start Test", "OK" );
 				Validator.Validate( "Start Marks", "I" );

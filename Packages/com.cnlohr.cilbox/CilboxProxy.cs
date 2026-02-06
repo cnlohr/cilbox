@@ -171,33 +171,36 @@ namespace Cilbox
 #endif
 		void Awake()
 		{
-			// Tricky: Stuff really isn't even ready here :(  I don't know if we can try to get this going.
-		}
+			RuntimeProxyLoad();
 
-		private void OnEnable()
-		{
-			if (!proxyWasSetup)
-			{
-				return;
-			}
-
-			box.InterpretIID(cls, this, ImportFunctionID.OnEnable, null);
-		}
-
-		private void OnDisable()
-		{
-			if (!proxyWasSetup)
-			{
-				return;
-			}
-
-			box.InterpretIID(cls, this, ImportFunctionID.OnDisable, null);
+			// Call Awake after initialization.
+			box.InterpretIID( cls, this, ImportFunctionID.Awake, null );
 		}
 
 		public void RuntimeProxyLoad()
 		{
 			//Debug.Log( "Runtime Proxy Load " + proxyWasSetup + " " + transform.name + " " + className );
 			if( proxyWasSetup ) return;
+			if (box == null) return;
+			box.BoxInitialize(); // In case it is not yet initialized.
+
+#if UNITY_EDITOR
+			new ProfilerMarker( "Initialize " + className ).Auto();
+#endif
+
+			GameObject obj = gameObject;
+			initialLoadPath = "/" + obj.name;
+			while (obj.transform.parent != null)
+			{
+				obj = obj.transform.parent.gameObject;
+				initialLoadPath = "/" + obj.name + initialLoadPath;
+			}
+
+			if( string.IsNullOrEmpty( className ) )
+			{
+				Debug.LogError( "Class name not set" );
+				return;
+			}
 
 			cls = box.GetClass( className );
 
@@ -291,13 +294,6 @@ namespace Cilbox
 				else
 					fields[i].Load( o );
 			}
-
-			// Call Awake regardless of enabled state
-			box.InterpretIID( cls, this, ImportFunctionID.Awake, null );
-
-			// Since RuntimeProxyLoad was called in Start, that means this object is active and enabled, so call OnEnable and Start now.
-			box.InterpretIID( cls, this, ImportFunctionID.OnEnable, null );
-			box.InterpretIID( cls, this, ImportFunctionID.Start, null );
 
 			proxyWasSetup = true;
 		}
@@ -409,33 +405,13 @@ namespace Cilbox
 		}
 
 
-		void Start()  {
-			box.BoxInitialize(); // In case it is not yet initialized.
-
-#if UNITY_EDITOR
-			new ProfilerMarker( "Initialize " + className ).Auto();
-#endif
-
-			GameObject obj = gameObject;
-			initialLoadPath = "/" + obj.name;
-			while (obj.transform.parent != null)
-			{
-				obj = obj.transform.parent.gameObject;
-				initialLoadPath = "/" + obj.name + initialLoadPath;
-			}
-
-			if( string.IsNullOrEmpty( className ) )
-			{
-				Debug.LogError( "Class name not set" );
-				return;
-			}
-
-			RuntimeProxyLoad();
-		}
-		void Update() { if( box != null ) box.InterpretIID( cls, this, ImportFunctionID.Update, null ); }
-		void FixedUpdate() { if( box != null ) box.InterpretIID( cls, this, ImportFunctionID.FixedUpdate, null ); }
-		void OnTriggerEnter(Collider c) { if (box != null) box.InterpretIID(cls, this, ImportFunctionID.OnTriggerEnter, new object[] { c }); }
-		void OnTriggerExit(Collider b) { if (box != null) box.InterpretIID(cls, this, ImportFunctionID.OnTriggerExit, new object[] { b }); }
+		void Start() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.Start, null ); }
+		void OnEnable() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.OnEnable, null ); }
+		void OnDisable() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.OnDisable, null ); }
+		void Update() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.Update, null ); }
+		void FixedUpdate() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.FixedUpdate, null ); }
+		void OnTriggerEnter(Collider c) { if (proxyWasSetup) box.InterpretIID(cls, this, ImportFunctionID.OnTriggerEnter, new object[] { c }); }
+		void OnTriggerExit(Collider b) { if (proxyWasSetup) box.InterpretIID(cls, this, ImportFunctionID.OnTriggerExit, new object[] { b }); }
 	}
 }
 
