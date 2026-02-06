@@ -73,7 +73,7 @@ namespace Cilbox
 				lstObjects.Add( e );
 			}
 
-			serializedObjectData = 
+			serializedObjectData =
 				Convert.ToBase64String(new Serializee(lstObjects.ToArray()).DumpAsMemory().ToArray());
 
 			buildTimeGuid = Guid.NewGuid().ToString();
@@ -171,13 +171,36 @@ namespace Cilbox
 #endif
 		void Awake()
 		{
-			// Tricky: Stuff really isn't even ready here :(  I don't know if we can try to get this going.
+			RuntimeProxyLoad();
+
+			// Call Awake after initialization.
+			box.InterpretIID( cls, this, ImportFunctionID.Awake, null );
 		}
 
 		public void RuntimeProxyLoad()
 		{
 			//Debug.Log( "Runtime Proxy Load " + proxyWasSetup + " " + transform.name + " " + className );
 			if( proxyWasSetup ) return;
+			if (box == null) return;
+			box.BoxInitialize(); // In case it is not yet initialized.
+
+#if UNITY_EDITOR
+			new ProfilerMarker( "Initialize " + className ).Auto();
+#endif
+
+			GameObject obj = gameObject;
+			initialLoadPath = "/" + obj.name;
+			while (obj.transform.parent != null)
+			{
+				obj = obj.transform.parent.gameObject;
+				initialLoadPath = "/" + obj.name + initialLoadPath;
+			}
+
+			if( string.IsNullOrEmpty( className ) )
+			{
+				Debug.LogError( "Class name not set" );
+				return;
+			}
 
 			cls = box.GetClass( className );
 
@@ -256,8 +279,8 @@ namespace Cilbox
 
 			// Call interpreted constructor.
 			box.InterpretIID( cls, this, ImportFunctionID.dotCtor, null );
-			box.InterpretIID( cls, this, ImportFunctionID.Awake, null ); // Does this go before or after initialized fields.
 
+			// load serialized fields.
 			for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
 			{
 				Serializee s = matchingSerializeeInstanceField[i];
@@ -271,8 +294,6 @@ namespace Cilbox
 				else
 					fields[i].Load( o );
 			}
-
-			box.InterpretIID( cls, this, ImportFunctionID.Start, null );
 
 			proxyWasSetup = true;
 		}
@@ -292,7 +313,7 @@ namespace Cilbox
 					Serializee seFO;
 					int iFO;
 					if( dict.TryGetValue( "fo", out seFO ) &&
-						Int32.TryParse( seFO.AsString(), out iFO ) && 
+						Int32.TryParse( seFO.AsString(), out iFO ) &&
 						iFO < fieldsObjects.Count )
 					{
 						UnityEngine.Object o = fieldsObjects[iFO];
@@ -320,8 +341,8 @@ namespace Cilbox
 					Serializee seT, seAT, seAL, seAD;
 					int aLen;
 					if( dict.TryGetValue( "t", out seT ) &&
-						dict.TryGetValue( "at", out seAT ) && 
-						dict.TryGetValue( "al", out seAL ) && 
+						dict.TryGetValue( "at", out seAT ) &&
+						dict.TryGetValue( "al", out seAL ) &&
 						dict.TryGetValue( "ad", out seAD ) &&
 						Int32.TryParse( seAL.AsString(), out aLen ) )
 					{
@@ -384,33 +405,13 @@ namespace Cilbox
 		}
 
 
-		void Start()  {
-			box.BoxInitialize(); // In case it is not yet initialized.
-
-#if UNITY_EDITOR
-			new ProfilerMarker( "Initialize " + className ).Auto();
-#endif
-			
-			GameObject obj = gameObject;
-			initialLoadPath = "/" + obj.name;
-			while (obj.transform.parent != null)
-			{
-				obj = obj.transform.parent.gameObject;
-				initialLoadPath = "/" + obj.name + initialLoadPath;
-			}
-
-			if( string.IsNullOrEmpty( className ) )
-			{
-				Debug.LogError( "Class name not set" );
-				return;
-			}
-
-			RuntimeProxyLoad();
-		}
-		void Update() { if( box != null ) box.InterpretIID( cls, this, ImportFunctionID.Update, null ); }
-		void FixedUpdate() { if( box != null ) box.InterpretIID( cls, this, ImportFunctionID.FixedUpdate, null ); }
-		void OnTriggerEnter(Collider c) { if (box != null) box.InterpretIID(cls, this, ImportFunctionID.OnTriggerEnter, new object[] { c }); }
-		void OnTriggerExit(Collider b) { if (box != null) box.InterpretIID(cls, this, ImportFunctionID.OnTriggerExit, new object[] { b }); }
+		void Start() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.Start, null ); }
+		void OnEnable() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.OnEnable, null ); }
+		void OnDisable() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.OnDisable, null ); }
+		void Update() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.Update, null ); }
+		void FixedUpdate() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.FixedUpdate, null ); }
+		void OnTriggerEnter(Collider c) { if (proxyWasSetup) box.InterpretIID(cls, this, ImportFunctionID.OnTriggerEnter, new object[] { c }); }
+		void OnTriggerExit(Collider b) { if (proxyWasSetup) box.InterpretIID(cls, this, ImportFunctionID.OnTriggerExit, new object[] { b }); }
 	}
 }
 
