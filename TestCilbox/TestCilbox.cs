@@ -28,10 +28,12 @@ namespace TestCilbox
 			"System.DateTime",
 			"System.DayOfWeek",
 			"System.Diagnostics.Stopwatch",
+			"System.DivideByZeroException",
 			"System.Exception",
 			"System.IDisposable",
 			"System.Int32",
 			"System.MathF",
+			"System.NullReferenceException",
 			"System.Object",
 			"System.Single",
 			"System.String",
@@ -208,7 +210,7 @@ namespace TestCilbox
 				// Make sure CI can fail.
 				//Validator.Validate( "Test Fail Check", "This will fail" );
 			}
-			catch( Exception e )
+			catch( CilboxInterpreterTimeoutException e )
 			{
 				Validator.Validate( e.ToString(), "Should be no error." );
 			}
@@ -240,11 +242,16 @@ namespace TestCilbox
 			Validator.Validate("TryFinally", "finally");
 			Validator.Validate("TryFinally2", "finally");
 			Validator.Validate("Exited Dispose Tester", "yes" );
-			// for now, we can't catch exceptions so make sure the catch block did not run
-			Validator.Validate("TryCatch", "did not catch" );
+			Validator.Validate("TryCatch", "caught" );
 			Validator.ValidateCount("TryFinally", 1 );
 			Validator.ValidateCount("TryFinally2", 1 );
-
+			Validator.Validate("TryFinally3", "finally");
+			Validator.ValidateCount("TryFinally3", 1 );
+			Validator.Validate("NullReferenceException", "caught1" );
+			Validator.Validate("NullRefUnreachable", "didn't reach");
+			Validator.Validate("TryFinallyNestedTest1", "finally");
+			Validator.Validate("TryFinallyNestedTest2", "bottom");
+			Validator.ValidateCount("TryFinallyNestedTest1", 1);
 			if( Validator.DidFail() ) return -5;
 
 			return 0;
