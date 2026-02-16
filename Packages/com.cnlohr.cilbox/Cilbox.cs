@@ -35,6 +35,7 @@ namespace Cilbox
 		public int HandlerLength;
 		public int HandlerEndOffset;
 		public Type? CatchType;
+		public string? CatchTypeName;
 	}
 
 	public class CilboxMethod
@@ -114,6 +115,15 @@ namespace Cilbox
 					if (thisehc.ContainsKey("cType"))
 					{
 						clause.CatchType = parentClass.box.usage.GetNativeTypeFromSerializee(thisehc["cType"]);
+						if (clause.CatchType == null)
+						{
+							// Check if it's a Cilboxable type
+							String typeName = thisehc["cType"].AsMap()["n"].AsString();
+							if (parentClass.box.classes.ContainsKey(typeName))
+							{
+								clause.CatchTypeName = typeName;
+							}
+						}
 					}
 					exceptionClauses[e] = clause;
 					handlerOffsetToClauseMap[clause.HandlerOffset] = clause;
@@ -842,7 +852,7 @@ spiperf.Begin();
 						break;
 					}
 
-					case 0x7a:
+					case 0x7a: //throw
 					{
 						object throwable = stackBuffer[sp--].AsObject();
 						// todo: check if cilbox has access to the type?
@@ -1204,9 +1214,24 @@ spiperf.End();
 					}
 
 					// Check exception type matches.
-					// todo: do I need to use the same comparison as isinst? (i.e. support cilbox proxies here?)
 					Type catchType = c.CatchType;
-					if (catchType != null && !catchType.IsInstanceOfType(thrownObj))
+					if (catchType != null)
+					{
+						if (!catchType.IsInstanceOfType(thrownObj))
+						{
+							continue;
+						}
+					}
+					else if (c.CatchTypeName != null)
+					{
+						// Cilboxable type match
+						// todo: it isn't actually possible to throw a Cilboxable type (yet?)
+						if (!(thrownObj is CilboxProxy && ((CilboxProxy)thrownObj).className == c.CatchTypeName))
+						{
+							continue;
+						}
+					}
+					else
 					{
 						continue;
 					}
@@ -1283,7 +1308,6 @@ spiperf.End();
 				{
 					if (ehc.Flags == ExceptionHandlingClauseOptions.Clause && exceptionRegister.HasValue)
 					{
-						// stackBuffer is a ref struct and cannot be captured. Use the captured ArraySegment 'stackBufferIn' instead.
 						stackBufferIn.AsSpan()[++sp] = exceptionRegister.Value;
 						exceptionRegister = null;
 					}

@@ -70,7 +70,6 @@ namespace TestCilbox
 				catch (Exception e)
 				{
 					Validator.Set("TryCatch", "caught");
-					Debug.Log("Caught exception: " + e.Message);
 				}
 				finally
 				{
@@ -86,12 +85,14 @@ namespace TestCilbox
 
 			try
 			{
+				Validator.Set("DivideByZeroException", "try");
 				int zero = 0;
 				int test = 5 / zero;
+				Validator.Set("DivideByZeroException", "didn't throw");
 			}
 			catch (DivideByZeroException e)
 			{
-				Debug.Log("Caught DivideByZeroException as expected: " + e.Message);
+				Validator.Set("DivideByZeroException", "caught");
 			}
 
 			try
@@ -113,7 +114,6 @@ namespace TestCilbox
 				}
 				catch (NullReferenceException e)
 				{
-					Debug.Log(e.Message);
 					Validator.Set("NullReferenceException", "caught1");
 				}
 				catch (Exception e)

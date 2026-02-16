@@ -96,6 +96,8 @@ namespace TestCilbox
 	{
 		private static bool bDidFail = false;
 		public static bool DidFail() { return bDidFail; }
+		private static int numValidationErrors = 0;
+		public static int NumValidationErrors() { return numValidationErrors; }
 		public static Dictionary< String, String > TestOutput = new Dictionary< String, String >();
 		public static Dictionary<String, int> TestCounters = new Dictionary<String, int>();
 		public static void Set( String key, String val ) { TestOutput[key] = val; }
@@ -130,6 +132,7 @@ namespace TestCilbox
 				Console.WriteLine( $"❌ {key} is unset (Expected {comp})" );
 			}
 			bDidFail = true;
+			numValidationErrors++;
 			return false;
 		}
 		public static bool ValidateCount( String key, int comp )
@@ -142,6 +145,7 @@ namespace TestCilbox
 			}
 			Console.WriteLine( $"❌ {key} count = {val} != {comp}" );
 			bDidFail = true;
+			numValidationErrors++;
 			return false;
 		}
 	}
@@ -252,9 +256,9 @@ namespace TestCilbox
 			Validator.Validate("TryFinallyNestedTest1", "finally");
 			Validator.Validate("TryFinallyNestedTest2", "bottom");
 			Validator.ValidateCount("TryFinallyNestedTest1", 1);
-			if( Validator.DidFail() ) return -5;
+			Validator.Set("DivideByZeroException", "caught");
 
-			return 0;
+			return -1 * Validator.NumValidationErrors();
 		}
 	}
 }
