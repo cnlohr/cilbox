@@ -251,7 +251,8 @@ namespace TestCilbox
 			Cilbox.Cilbox cb = cbobj.AddComponent<CilboxTester>();
 			cb.exportDebuggingData = true;
 
-			cb.timeoutLengthUs = 50000; // 50ms
+			// let the CI take its time running Start()
+			cb.timeoutLengthUs = 200000; // 200ms
 			Cilbox.CilboxScenePostprocessor.OnPostprocessScene();
 			Application.CallBeforeRender();
 
@@ -283,17 +284,23 @@ namespace TestCilbox
 				// Make sure CI can fail.
 				//Validator.Validate( "Test Fail Check", "This will fail" );
 			}
-			catch( CilboxInterpreterTimeoutException e )
+			catch( Exception e )
 			{
 				Validator.Validate( e.ToString(), "Should be no error." );
 			}
 
 			try
 			{
+				// Ensure 50ms timeout for the Update test.
+				cb.timeoutLengthUs = 50000; // 50ms
 				// In case assembly is still being generated.
 				proxy.GetType().GetMethod("Update",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
-			} catch( Exception e )
+			} catch( TargetInvocationException e )
 			{
+				if (e.InnerException is not CilboxInterpreterTimeoutException)
+				{
+					throw;
+				}
 				Debug.Log( e.ToString().Length.ToString() );
 				Validator.Set( "Overtime Exception", "Thrown" );
 			}
@@ -466,8 +473,13 @@ namespace TestCilbox
 			Validator.Validate("myBehaviour3Arr 1", "456");
 			Validator.Validate("myBehaviour3Arr 1 changed", "789");
 
+			Validator.Validate("ThrowFromOtherBehaviour1", "caught");
+			Validator.Validate("ThrowFromOtherBehaviour2", "caught");
+			Validator.Validate("ThrowFromOtherBehaviour2Finally", "finally");
+			Validator.Validate("ThrowFromOtherConstructor", "caught");
+
 			return -1 * Validator.NumValidationErrors();
-			}
 		}
+	}
 }
 
