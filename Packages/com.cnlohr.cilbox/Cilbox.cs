@@ -548,6 +548,18 @@ spiperf.Begin();
 						break;
 					}
 
+
+					case 0x4e:
+					{
+						// ldind.r4
+						StackElement sb = stackBuffer[sp--];
+						StackElement sa = stackBuffer[sp];
+						Debug.Log( $"LOAD INDIRECT: {sb.type} {sa.type}" );
+						break;
+					} // ldind.r4
+
+
+
 					case 0x58: case 0x59: case 0x5A: case 0x5B: case 0x5C: case 0x5D:
 					case 0x5E: case 0x5F: case 0x60: case 0x61: case 0x62: case 0x63:
 					case 0x64:
@@ -711,8 +723,18 @@ spiperf.Begin();
 						if( se.o is CilboxProxy )
 							stackBuffer[++sp] = ((CilboxProxy)se.o).fields[box.metadatas[bc].fieldIndex];
 						else
-							throw new Exception( "Unimplemented.  Attempting to get field on non-cilbox object" ); 
-						// Tricky:  Do not allow host-fields without great care. For instance, getting access to PlatformActual.DelegateRepackage would all the program out.
+						{
+							FieldInfo fi = box.metadatas[bc].nonNativeFieldInfo;
+							if( box.metadatas[bc].isFieldWhiteListed && fi != null )
+							{
+								stackBuffer[++sp].Load( fi.GetValue( se.o ) );
+							}
+							else
+							{
+								throw new Exception( "Attmpting to ldfld without proper context" );
+							}
+							Debug.Log( $"ldfld -> {se.o} {box.metadatas[bc].fieldIndex}" );
+						}
 						break; //ldfld
 					}
 					case 0x7c:
@@ -723,7 +745,30 @@ spiperf.Begin();
 						if( se.o is CilboxProxy )
 							stackBuffer[++sp] = StackElement.CreateReference( (Array)(((CilboxProxy)se.o).fields), (uint)box.metadatas[bc].fieldIndex );
 						else
-							throw new Exception( "Unimplemented.  Attempting to get field on non-cilbox object" );
+						{
+/*
+							FieldInfo fi = box.metadatas[bc].nonNativeFieldInfo;
+							if( box.metadatas[bc].isFieldWhiteListed && fi != null )
+							{
+								//XXX SUPER SUSSS
+								//fi.GetValue( se.o )
+								if( se.o is Array )
+								{
+									stackBuffer[++sp] = StackElement.CreateReference( (Array)se.o, (uint)box.metadatas[bc].fieldIndex );
+									Debug.Log( $"ldflda -> {se.o} {box.metadatas[bc].fieldIndex}" );
+								}
+								else
+								{
+									throw new Exception( "Attmpting to ldflda on an object that is not an Array" );
+								}
+							}
+							else
+							{
+								throw new Exception( "ldflda on inappropraite object." );
+							}
+*/
+							throw new Exception( "ldflda not yet implemented." );
+						}
 						break;// ldflda
 					}
 					case 0x7d:
@@ -737,19 +782,49 @@ spiperf.Begin();
 							//Debug.Log( "Type: " + ((CilboxProxy)opths).fields[box.metadatas[bc].fieldIndex].type );
 						}
 						else
-							throw new Exception( "Unimplemented.  Attempting to set field on non-cilbox object" );
+						{
+							FieldInfo fi = box.metadatas[bc].nonNativeFieldInfo;
+							if( box.metadatas[bc].isFieldWhiteListed && fi != null )
+							{
+								fi.SetValue( opths, se.AsObject() );
+							}
+						}
 						break; //stfld
 					}
 					case 0x7e: 
 					{
 						uint bc = BytecodeAsU32( ref pc );
-						stackBuffer[++sp].Load( parentClass.staticFields[box.metadatas[bc].fieldIndex] );
+						if( parentClass is CilboxProxy )
+						{
+							stackBuffer[++sp].Load( parentClass.staticFields[box.metadatas[bc].fieldIndex] );
+						}
+						else
+						{
+							//throw new Exception( "Unimplemented.  Attempting to set field on non-cilbox object" );
+							FieldInfo fi = box.metadatas[bc].nonNativeFieldInfo;
+							if( box.metadatas[bc].isFieldWhiteListed && fi != null )
+							{
+								stackBuffer[++sp].Load( fi.GetValue( parentClass) );
+							}
+						}
 						break; //ldsfld
 					}
 					case 0x7f: 
 					{
 						uint bc = BytecodeAsU32( ref pc );
-						stackBuffer[++sp] = StackElement.CreateReference( (Array)(parentClass.staticFields), (uint)box.metadatas[bc].fieldIndex );
+						if( parentClass is CilboxProxy )
+						{
+							stackBuffer[++sp] = StackElement.CreateReference( (Array)(parentClass.staticFields), (uint)box.metadatas[bc].fieldIndex );
+						}
+						else
+						{
+							//FieldInfo fi = box.metadatas[bc].nonNativeFieldInfo;
+							//if( box.metadatas[bc].isFieldWhiteListed && fi != null )
+							//{
+							//	stackBuffer[++sp] = StackElement.CreateReference( fi.GetValue( parentClass ) );
+							//}
+							throw new Exception( "Not yet done: Not cannot create field reference to non-cilbox static field." );
+						}
 						break;// ldsflda 
 					}
 					case 0x80:
@@ -1133,7 +1208,7 @@ spiperf.End();
 		public int fieldIndex; // Only used for fields of cilbox objects.
 		public Type fieldExpectsToBeOnObjectOfType; // The object type
 		public bool isFieldWhiteListed = false;
-
+		public FieldInfo nonNativeFieldInfo;
 		public bool fieldIsStatic;
 
 		public Type nativeType; // Used for types.
@@ -1278,6 +1353,7 @@ spiperf.End();
 					if( st.ContainsKey("index") )
 					{
 						t.fieldIndex = Convert.ToInt32(st["index"].AsString());
+						t.isValid = true;
 					}
 					else
 					{
@@ -1286,7 +1362,6 @@ spiperf.End();
 						{
 							throw new Exception( $"Illegal field reference outside of the cilbox. {t.declaringTypeName}.{t.Name} in {v.Key}." );
 						}
-						t.isFieldWhiteListed = true;
 					
 						Serializee typ = st["dt"];
 						Type ty = t.fieldExpectsToBeOnObjectOfType = usage.GetNativeTypeFromSerializee( typ );
@@ -1303,13 +1378,14 @@ spiperf.End();
 							throw new Exception( $"Could not find field for object type {t.declaringTypeName}.{t.Name} in {v.Key}." );
 						}
 
-						if( !CheckTypeAllowed( f.FieldType.AsString() ) )
+						if( !CheckTypeAllowed( f.FieldType.ToString() ) )
 						{
-							throw new Exception( $"Field for {t.declaringTypeName}.{t.Name} in {v.Key} of type {f.FieldType.AsString()} not allowed." );
+							throw new Exception( $"Field for {t.declaringTypeName}.{t.Name} in {v.Key} of type {f.FieldType.ToString()} not allowed." );
 						}
 
 						t.isFieldWhiteListed = true;
 						t.fieldIsStatic = f.IsStatic;
+						t.nonNativeFieldInfo = f;
 						t.nativeType = f.FieldType;
 						t.isValid = true;
 
@@ -1330,7 +1406,6 @@ spiperf.End();
 						//}
 					}
 
-					t.isValid = true;
 					break;
 				case MetaTokenType.mtType:
 				{
