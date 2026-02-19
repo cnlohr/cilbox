@@ -67,7 +67,7 @@ namespace TestCilbox
 					Validator.Set("TryFinally2", "try");
 					throw new Exception("Test Exception");
 				}
-				catch (Exception e)
+				catch (Exception)
 				{
 					Validator.Set("TryCatch", "caught");
 				}
@@ -90,7 +90,7 @@ namespace TestCilbox
 				int test = 5 / zero;
 				Validator.Set("DivideByZeroException", "didn't throw");
 			}
-			catch (DivideByZeroException e)
+			catch (DivideByZeroException)
 			{
 				Validator.Set("DivideByZeroException", "caught");
 			}
@@ -108,15 +108,15 @@ namespace TestCilbox
 					int len = test.ToString().Length;
 					Validator.Set("NullRefUnreachable", "reached");
 				}
-				catch (DivideByZeroException e)
+				catch (DivideByZeroException)
 				{
 					Validator.Set("NullReferenceException", "caught0");
 				}
-				catch (NullReferenceException e)
+				catch (NullReferenceException)
 				{
 					Validator.Set("NullReferenceException", "caught1");
 				}
-				catch (Exception e)
+				catch (Exception)
 				{
 					Validator.Set("NullReferenceException", "caught2");
 				}

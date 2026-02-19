@@ -169,6 +169,7 @@ namespace TestCilbox
 	{
 		public static int Main()
 		{
+			Console.OutputEncoding = System.Text.Encoding.UTF8;
 
 			GameObject go = new GameObject("MyObjectToProxy");
 			TestCilboxBehaviour b = go.CreateComponent<TestCilboxBehaviour>();
@@ -256,7 +257,7 @@ namespace TestCilbox
 			Validator.Validate("TryFinallyNestedTest1", "finally");
 			Validator.Validate("TryFinallyNestedTest2", "bottom");
 			Validator.ValidateCount("TryFinallyNestedTest1", 1);
-			Validator.Set("DivideByZeroException", "caught");
+			Validator.Validate("DivideByZeroException", "caught");
 
 			return -1 * Validator.NumValidationErrors();
 		}
