@@ -34,10 +34,12 @@ namespace TestCilbox
 			"System.Exception",
 			"System.IDisposable",
 			"System.Int32",
+			"System.Int32&", // is this okay?? (for ref returns)
 			"System.MathF",
 			"System.NullReferenceException",
 			"System.Object",
 			"System.Single",
+			"System.Single&", // is this okay?? (for ref returns)
 			"System.String",
 			"System.TimeSpan",
 			"System.UInt16",
@@ -80,6 +82,11 @@ namespace TestCilbox
 		override public bool CheckTypeAllowed( String sType )
 		{
 			return whiteListType.Contains( sType );
+		}
+
+		public override bool CheckFieldAllowed(string sType, string sFieldName)
+		{
+			return true; //todo: proper whitelist for test
 		}
 
 		override public bool CheckMethodAllowed( out MethodInfo mi, Type declaringType, String name, Serializee [] parametersIn, Serializee [] genericArgumentsIn, String fullSignature )

@@ -149,6 +149,19 @@ namespace TestCilbox
 			Outer<string>.Middle<int, bool>.Inner<char> complex = new();
 			Validator.Set("ComplexGenericType", complex.GetTypeNames());
 
+			Vector3 testVec = new Vector3(7, 7, 7);
+			testVec.x += 5;
+			float myX = testVec.x;
+			Debug.Log("My X: " + myX );
+
+			int myInt = 14;
+			ReadInt(ref myInt);
+			ReadFloat(ref testVec.y);
+			WriteInt(ref myInt, 42);
+			WriteFloat(ref testVec.y, 42.0f);
+			Debug.Log("New derp: " + myInt );
+			Debug.Log("New testVec.y: " + testVec.y );
+
 			behaviour2.Behaviour2Test();
 		}
 
@@ -168,6 +181,30 @@ namespace TestCilbox
 			Validator.Set( "Execution after timeout", "enabled" );
 			Validator.Set( "Manual Recover After Timeout", "recovered" );
 			Validator.Set( "FixedUpdate", "called" );
+		}
+
+		public void ReadInt(ref int field)
+		{
+			int current = field;
+			Debug.Log("ReadInt: " + current);
+		}
+
+		public void WriteInt(ref int field, int value)
+		{
+			Debug.Log("WriteInt: " + value);
+			field = value;
+		}
+
+		public void ReadFloat(ref float field)
+		{
+			float current = field;
+			Debug.Log("ReadFloat: " + current);
+		}
+
+		public void WriteFloat(ref float field, float value)
+		{
+			Debug.Log("WriteFloat: " + value);
+			field = value;
 		}
 	}
 

@@ -157,7 +157,7 @@ namespace UnityEngine
 
 	public class Vector3
 	{
-		float x, y, z;
+		public float x, y, z;
 		public Vector3( float x, float y, float z ) { this.x = x; this.y = y; this.z = z; }
 	}
 
@@ -220,7 +220,7 @@ namespace UnityEngine
 	        ConstructorInfo ctor = typeof(T).GetConstructor(new Type[]{});
 			T m = (T)ctor.Invoke(new object[] {});
 			m.gameObject = this;
-			AllComponents.Add(m); 
+			AllComponents.Add(m);
 			return (T)m;
 		}
 
@@ -229,11 +229,11 @@ namespace UnityEngine
 	        ConstructorInfo ctor = t.GetConstructor(new Type[]{});
 			MonoBehaviour m = (MonoBehaviour)ctor.Invoke(new object[] {});
 			m.gameObject = this;
-			AllComponents.Add(m); 
+			AllComponents.Add(m);
 			return m;
 		}
 
-		public static T [] FindObjectsByType<T>(FindObjectsSortMode sm) where T:GameObject 
+		public static T [] FindObjectsByType<T>(FindObjectsSortMode sm) where T:GameObject
 		{
 			List<T> ret = new List<T>();
 			foreach( var o in AllObjects )
