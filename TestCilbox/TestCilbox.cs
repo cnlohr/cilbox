@@ -24,6 +24,7 @@ namespace TestCilbox
 			"System.Byte",
 			"System.Char",
 			"System.Collections.Generic.Dictionary",
+			"System.Collections.Generic.IEnumerable",
 			"System.Double",
 			"System.DateTime",
 			"System.DayOfWeek",
@@ -244,6 +245,8 @@ namespace TestCilbox
 			Validator.Validate("TryCatch", "did not catch" );
 			Validator.ValidateCount("TryFinally", 1 );
 			Validator.ValidateCount("TryFinally2", 1 );
+
+			Validator.Validate("JoinFloatArrayResized", "1.5, 2.5, 3.5, 4.5");
 
 			if( Validator.DidFail() ) return -5;
 

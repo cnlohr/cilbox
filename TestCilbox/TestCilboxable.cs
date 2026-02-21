@@ -82,6 +82,11 @@ namespace TestCilbox
 				Validator.AddCount("TryFinally");
 			}
 
+			float[] myArr = new float[] { 1.5f, 2.5f, 3.5f };
+			Array.Resize(ref myArr, myArr.Length + 1);
+			myArr[^1] = 4.5f;
+			Validator.Set("JoinFloatArrayResized", string.Join(", ", myArr) );
+
 			behaviour2.Behaviour2Test();
 		}
 
