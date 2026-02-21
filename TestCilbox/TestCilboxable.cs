@@ -87,6 +87,13 @@ namespace TestCilbox
 			myArr[^1] = 4.5f;
 			Validator.Set("JoinFloatArrayResized", string.Join(", ", myArr) );
 
+			Dictionary<string, string> myDict = new Dictionary<string, string>();
+			myDict["key1"] = "value1";
+			myDict["key2"] = "value2";
+			string[] array = new string[myDict.Count];
+			myDict.Keys.CopyTo(array, 0);
+			Validator.Set("DictionaryKeys", string.Join(", ", array) );
+
 			behaviour2.Behaviour2Test();
 		}
 

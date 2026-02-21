@@ -331,7 +331,11 @@ namespace Cilbox
 				ga = new Type[gs.Length];
 				for( int i = 0; i < gs.Length; i++ )
 					ga[i] = GetNativeTypeFromSerializee( gs[i] );
-				typeName += "`" + gs.Length;
+				int plus = typeName.IndexOf('+');
+				if( plus >= 0 )
+					typeName = typeName.Substring(0, plus) + "`" + gs.Length + typeName.Substring(plus);
+				else
+					typeName += "`" + gs.Length;
 			}
 
 			Type ret = null;

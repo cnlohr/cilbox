@@ -196,7 +196,7 @@ namespace Cilbox
 		{
 			StackType rt = StackTypeFromType( t );
 
-			if( type < StackType.Float ) 
+			if( type < StackType.Float )
 			{
 				switch( rt )
 				{
@@ -619,7 +619,7 @@ namespace Cilbox
 			return new Serializee( b.Slice( iStart, i - iStart ), (ElementType)len );
 		}
 	}
-	
+
 
 	public static class CilboxUtil
 	{
@@ -630,7 +630,7 @@ namespace Cilbox
 				return TypeDescriptor.GetConverter(t).ConvertFrom(sInitialize);
 			else
 			{
-				if( !t.IsPrimitive ) 
+				if( !t.IsPrimitive )
 					return null;
 				else
 					return Activator.CreateInstance(t);
@@ -980,8 +980,14 @@ namespace Cilbox
 			ret["a"] = new Serializee( t.Assembly.GetName().Name );
 			if( t.IsGenericType )
 			{
-				String [] sn = t.FullName.Split( "`" );
-				ret["n"] = new Serializee( sn[0] );
+				String genericDefName = t.GetGenericTypeDefinition().FullName;
+				int tick = genericDefName.IndexOf('`');
+				String baseName = genericDefName.Substring(0, tick);
+				String extra = genericDefName.Substring(tick + 1);
+				int plus = extra.IndexOf('+');
+				if( plus >= 0 )
+					baseName += extra.Substring(plus);
+				ret["n"] = new Serializee( baseName );
 				Type [] ta = t.GenericTypeArguments;
 				Serializee [] sg = new Serializee[ta.Length];
 				for( int i = 0; i < ta.Length; i++ )
