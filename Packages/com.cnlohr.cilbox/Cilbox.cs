@@ -907,9 +907,9 @@ spiperf.Begin();
 						uint bc = BytecodeAsU32( ref pc );
 						StackElement se = stackBuffer[sp--];
 
-						if( se.o is CilboxProxy )
+						if( se.o is CilboxProxy proxy )
 						{
-							stackBuffer[++sp] = StackElement.CreateReference((Array)(((CilboxProxy)se.o).fields), (uint)box.metadatas[bc].fieldIndex);
+							stackBuffer[++sp] = StackElement.CreateReference((Array)(proxy.fields), (uint)box.metadatas[bc].fieldIndex);
 							break;
 						}
 

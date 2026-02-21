@@ -159,7 +159,7 @@ namespace TestCilbox
 			ReadFloat(ref testVec.y);
 			WriteInt(ref myInt, 42);
 			WriteFloat(ref testVec.y, 42.0f);
-			Debug.Log("New derp: " + myInt );
+			Debug.Log("New myInt: " + myInt );
 			Debug.Log("New testVec.y: " + testVec.y );
 
 			behaviour2.Behaviour2Test();

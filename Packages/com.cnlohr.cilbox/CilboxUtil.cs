@@ -71,17 +71,17 @@ namespace Cilbox
 		{
 			switch( o )
 			{
-			case sbyte t0: i = (sbyte)o;	type = StackType.Sbyte; break;
-			case byte  t1: i = (byte)o;		type = StackType.Byte; break;
-			case short t2: i = (short)o;	type = StackType.Short; break;
-			case ushort t3: i = (ushort)o;	type = StackType.Ushort; break;
-			case int t4: i = (int)o;		type = StackType.Int; break;
-			case uint t5: u = (uint)o;		type = StackType.Uint; break;
-			case long t6: l = (long)o;		type = StackType.Long; break;
-			case ulong t7: e = (ulong)o;	type = StackType.Ulong; break;
-			case float t8: f = (float)o;	type = StackType.Float; break;
-			case double t9: d = (double)o;	type = StackType.Double; break;
-			case bool ta0: i = ((bool)o) ? 1 : 0; type = StackType.Boolean; break;
+			case sbyte t0: i = t0;	type = StackType.Sbyte; break;
+			case byte  t1: i = t1;	type = StackType.Byte; break;
+			case short t2: i = t2;	type = StackType.Short; break;
+			case ushort t3: i = t3;	type = StackType.Ushort; break;
+			case int t4: i = t4;	type = StackType.Int; break;
+			case uint t5: u = t5;	type = StackType.Uint; break;
+			case long t6: l = t6;	type = StackType.Long; break;
+			case ulong t7: e = t7;	type = StackType.Ulong; break;
+			case float t8: f = t8;	type = StackType.Float; break;
+			case double t9: d = t9;	type = StackType.Double; break;
+			case bool ta0: i = ta0 ? 1 : 0; type = StackType.Boolean; break;
 			default: this.o = o; type = StackType.Object; break;
 			}
 			return this;
@@ -93,17 +93,17 @@ namespace Cilbox
 			ret.i = 0; ret.o = null;
 			switch( o )
 			{
-			case sbyte t0: ret.i = (sbyte)o;	ret.type = StackType.Sbyte; break;
-			case byte  t1: ret.i = (byte)o;		ret.type = StackType.Byte; break;
-			case short t2: ret.i = (short)o;	ret.type = StackType.Short; break;
-			case ushort t3: ret.i = (ushort)o;	ret.type = StackType.Ushort; break;
-			case int t4: ret.i = (int)o;		ret.type = StackType.Int; break;
-			case uint t5: ret.u = (uint)o;		ret.type = StackType.Uint; break;
-			case long t6: ret.l = (long)o;		ret.type = StackType.Long; break;
-			case ulong t7: ret.e = (ulong)o;	ret.type = StackType.Ulong; break;
-			case float t8: ret.f = (float)o;	ret.type = StackType.Float; break;
-			case double t9: ret.d = (double)o;	ret.type = StackType.Double; break;
-			case bool ta0: ret.i = ((bool)o) ? 1 : 0; ret.type = StackType.Boolean; break;
+			case sbyte t0: ret.i = t0;	ret.type = StackType.Sbyte; break;
+			case byte  t1: ret.i = t1;	ret.type = StackType.Byte; break;
+			case short t2: ret.i = t2;	ret.type = StackType.Short; break;
+			case ushort t3: ret.i = t3;	ret.type = StackType.Ushort; break;
+			case int t4: ret.i = t4;	ret.type = StackType.Int; break;
+			case uint t5: ret.u = t5;	ret.type = StackType.Uint; break;
+			case long t6: ret.l = t6;	ret.type = StackType.Long; break;
+			case ulong t7: ret.e = t7;	ret.type = StackType.Ulong; break;
+			case float t8: ret.f = t8;	ret.type = StackType.Float; break;
+			case double t9: ret.d = t9;	ret.type = StackType.Double; break;
+			case bool ta0: ret.i = ta0 ? 1 : 0; ret.type = StackType.Boolean; break;
 			default: ret.o = o; ret.type = StackType.Object; break;
 			}
 			return ret;
@@ -358,21 +358,21 @@ namespace Cilbox
 
 		public static StackType StackTypeFromType( Type t )
 		{
-			switch( t )
+			return Type.GetTypeCode(t) switch
 			{
-				case Type _ when t == typeof(sbyte): return StackType.Sbyte;
-				case Type _ when t == typeof(byte): return StackType.Byte;
-				case Type _ when t == typeof(short): return StackType.Short;
-				case Type _ when t == typeof(ushort): return StackType.Ushort;
-				case Type _ when t == typeof(int): return StackType.Int;
-				case Type _ when t == typeof(uint): return StackType.Uint;
-				case Type _ when t == typeof(long): return StackType.Long;
-				case Type _ when t == typeof(ulong): return StackType.Ulong;
-				case Type _ when t == typeof(float): return StackType.Float;
-				case Type _ when t == typeof(double): return StackType.Double;
-				case Type _ when t == typeof(bool): return StackType.Boolean;
-				default: return StackType.Object;
-			}
+				TypeCode.Boolean => StackType.Boolean,
+				TypeCode.SByte => StackType.Sbyte,
+				TypeCode.Byte => StackType.Byte,
+				TypeCode.Int16 => StackType.Short,
+				TypeCode.UInt16 => StackType.Ushort,
+				TypeCode.Int32 => StackType.Int,
+				TypeCode.UInt32 => StackType.Uint,
+				TypeCode.Int64 => StackType.Long,
+				TypeCode.UInt64 => StackType.Ulong,
+				TypeCode.Single => StackType.Float,
+				TypeCode.Double => StackType.Double,
+				_ => StackType.Object
+			};
 		}
 
 	}
@@ -611,7 +611,7 @@ namespace Cilbox
 			//Debug.Log( ToString() );
 			Span<byte> sb = b.Span;
 			int iStart = i;
-			if( buffer.Length <= 0 ) new Serializee( null, ElementType.Invalid );
+			if( buffer.Length <= 0 ) return new Serializee( null, ElementType.Invalid );
 			byte bl = sb[i++]; // info byte
 			int len = 0;
 			int blct = bl & 0x7;
