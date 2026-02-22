@@ -74,8 +74,8 @@ crashlytics-build.properties
 /Assets/Fantasy\ Adventure\ Environment.meta
 
 /External/
-/Packages/
-
+/Packages/*
+!/Packages/com.cnlohr.cilbox/
 
 ![Aa]ssets/Bakery/*
 ![Aa]ssets/BakeryLightmaps/
