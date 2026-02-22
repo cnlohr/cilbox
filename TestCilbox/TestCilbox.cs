@@ -16,6 +16,7 @@ namespace TestCilbox
 	{
 		static HashSet<String> whiteListType = new HashSet<String>(){
 			"Cilbox.CilboxPublicUtils",
+			"TestCilbox.DisposeTester",
 			"TestCilbox.Validator",
 			"System.Math",
 			"System.Array",
@@ -28,6 +29,7 @@ namespace TestCilbox
 			"System.DayOfWeek",
 			"System.Diagnostics.Stopwatch",
 			"System.Exception",
+			"System.IDisposable",
 			"System.Int32",
 			"System.MathF",
 			"System.Object",
@@ -74,7 +76,7 @@ namespace TestCilbox
 		{
 			return whiteListType.Contains( sType );
 		}
-		
+
 		override public bool CheckMethodAllowed( out MethodInfo mi, Type declaringType, String name, Serializee [] parametersIn, Serializee [] genericArgumentsIn, String fullSignature )
 		{
 			mi = null;
@@ -93,8 +95,22 @@ namespace TestCilbox
 		private static bool bDidFail = false;
 		public static bool DidFail() { return bDidFail; }
 		public static Dictionary< String, String > TestOutput = new Dictionary< String, String >();
+		public static Dictionary<String, int> TestCounters = new Dictionary<String, int>();
 		public static void Set( String key, String val ) { TestOutput[key] = val; }
 		public static String Get( String key ) { String ret = null; TestOutput.TryGetValue( key, out ret ); return ret; }
+		public static void AddCount( String key )
+		{
+			int cur = 0;
+			TestCounters.TryGetValue( key, out cur );
+			cur += 1;
+			TestCounters[key] = cur;
+		}
+		public static int GetCount( String key )
+		{
+			int cur = 0;
+			TestCounters.TryGetValue( key, out cur );
+			return cur;
+		}
 		public static bool Validate( String key, String comp )
 		{
 			String val;
@@ -113,6 +129,32 @@ namespace TestCilbox
 			}
 			bDidFail = true;
 			return false;
+		}
+		public static bool ValidateCount( String key, int comp )
+		{
+			int val = GetCount( key );
+			if( val == comp )
+			{
+				Console.WriteLine( $"✅ {key} count = {val} " );
+				return true;
+			}
+			Console.WriteLine( $"❌ {key} count = {val} != {comp}" );
+			bDidFail = true;
+			return false;
+		}
+	}
+
+
+	public class DisposeTester : IDisposable
+	{
+		public DisposeTester()
+		{
+			Validator.Set( "Dispose", "not disposed" );
+		}
+
+		public void Dispose()
+		{
+			Validator.Set("Dispose", "disposed" );
 		}
 	}
 
@@ -145,6 +187,7 @@ namespace TestCilbox
 
 			try
 			{
+				proxy.GetType().GetMethod("Awake",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
 				proxy.GetType().GetMethod("Start",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
 				Validator.Validate( "Start Test", "OK" );
 				Validator.Validate( "Start Marks", "I" );
@@ -192,6 +235,15 @@ namespace TestCilbox
 
 			Validator.Validate( "Manual Recover After Timeout", "recovered" );
 			Validator.Validate( "FixedUpdate", "called" );
+
+			Validator.Validate("Dispose", "disposed" );
+			Validator.Validate("TryFinally", "finally");
+			Validator.Validate("TryFinally2", "finally");
+			Validator.Validate("Exited Dispose Tester", "yes" );
+			// for now, we can't catch exceptions so make sure the catch block did not run
+			Validator.Validate("TryCatch", "did not catch" );
+			Validator.ValidateCount("TryFinally", 1 );
+			Validator.ValidateCount("TryFinally2", 1 );
 
 			if( Validator.DidFail() ) return -5;
 

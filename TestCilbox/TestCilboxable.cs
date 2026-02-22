@@ -52,6 +52,36 @@ namespace TestCilbox
 			Validator.Set( "string concatenation", "it" + " " + "works" );
 			Validator.Set( "MathF.Sin", MathF.Sin(3.2f).ToString() );
 
+			using (DisposeTester dt = new DisposeTester())
+			{
+				Validator.Set("Exited Dispose Tester", "no");
+			}
+			Validator.Set( "Exited Dispose Tester", "yes" );
+
+			Validator.Set("TryCatch", "did not catch");
+			try
+			{
+				Validator.Set("TryFinally", "try");
+				try
+				{
+					Validator.Set("TryFinally2", "try");
+				}
+				catch
+				{
+					Validator.Set("TryCatch", "caught");
+				}
+				finally
+				{
+					Validator.Set("TryFinally2", "finally");
+					Validator.AddCount("TryFinally2");
+				}
+			}
+			finally
+			{
+				Validator.Set("TryFinally", "finally");
+				Validator.AddCount("TryFinally");
+			}
+
 			behaviour2.Behaviour2Test();
 		}
 
