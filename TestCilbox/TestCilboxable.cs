@@ -65,8 +65,9 @@ namespace TestCilbox
 				try
 				{
 					Validator.Set("TryFinally2", "try");
+					throw new Exception("Test Exception");
 				}
-				catch
+				catch (Exception)
 				{
 					Validator.Set("TryCatch", "caught");
 				}
@@ -93,6 +94,57 @@ namespace TestCilbox
 			string[] array = new string[myDict.Count];
 			myDict.Keys.CopyTo(array, 0);
 			Validator.Set("DictionaryKeys", string.Join(", ", array) );
+
+			try
+			{
+				Validator.Set("DivideByZeroException", "try");
+				int zero = 0;
+				int test = 5 / zero;
+				Validator.Set("DivideByZeroException", "didn't throw");
+			}
+			catch (DivideByZeroException)
+			{
+				Validator.Set("DivideByZeroException", "caught");
+			}
+
+			try
+			{
+				Validator.Set("TryFinallyNestedTest1", "try");
+				Validator.Set("TryFinallyNestedTest2", "top");
+				try
+				{
+					object test = null;
+					Validator.Set("NullReferenceException", "try");
+					Validator.Set("TryFinally3", "try");
+					Validator.Set("NullRefUnreachable", "didn't reach");
+					int len = test.ToString().Length;
+					Validator.Set("NullRefUnreachable", "reached");
+				}
+				catch (DivideByZeroException)
+				{
+					Validator.Set("NullReferenceException", "caught0");
+				}
+				catch (NullReferenceException)
+				{
+					Validator.Set("NullReferenceException", "caught1");
+				}
+				catch (Exception)
+				{
+					Validator.Set("NullReferenceException", "caught2");
+				}
+				finally
+				{
+					Validator.Set("TryFinally3", "finally");
+					Validator.AddCount("TryFinally3");
+				}
+
+				Validator.Set("TryFinallyNestedTest2", "bottom");
+			}
+			finally
+			{
+				Validator.Set("TryFinallyNestedTest1", "finally");
+				Validator.AddCount("TryFinallyNestedTest1");
+			}
 
 			behaviour2.Behaviour2Test();
 		}

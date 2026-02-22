@@ -1959,6 +1959,7 @@ MonoBehaviour:
   buttonControl1: {fileID: 2985312868362387223}
   buttonControl2: {fileID: 4548913130746211005}
   inputField: {fileID: 6618307039938799520}
+  gameObjectTest: {fileID: 3408261244642880602}
   testScript2: {fileID: 7333561002906449704}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
