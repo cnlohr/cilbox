@@ -33,7 +33,9 @@ namespace Cilbox
 		public int TryEndOffset;
 		public int HandlerOffset;
 		public int HandlerLength;
+		public int HandlerEndOffset;
 		public Type? CatchType;
+		public string? CatchTypeName;
 	}
 
 	public class CilboxMethod
@@ -51,6 +53,7 @@ namespace Cilbox
 		public Type[]   typeParameters;
 		public CilboxExceptionHandlingClause[] exceptionClauses;
 		public bool hasExceptionClauses = false;
+		public Dictionary<int, CilboxExceptionHandlingClause> handlerOffsetToClauseMap;
 
 #if UNITY_EDITOR
 		ProfilerMarker perfMarkerInterpret;
@@ -97,6 +100,7 @@ namespace Cilbox
 			{
 				Serializee[] ehc = ehArray.AsArray();
 				exceptionClauses = new CilboxExceptionHandlingClause[ehc.Length];
+				handlerOffsetToClauseMap = new Dictionary<int, CilboxExceptionHandlingClause>();
 				for (int e = 0; e < ehc.Length; e++)
 				{
 					Dictionary< String, Serializee > thisehc = ehc[e].AsMap();
@@ -107,25 +111,42 @@ namespace Cilbox
 					clause.TryEndOffset = clause.TryOffset + clause.TryLength;
 					clause.HandlerOffset = Convert.ToInt32(thisehc["hOff"].AsString());
 					clause.HandlerLength = Convert.ToInt32(thisehc["hLen"].AsString());
+					clause.HandlerEndOffset = clause.HandlerOffset + clause.HandlerLength;
 					if (thisehc.ContainsKey("cType"))
 					{
 						clause.CatchType = parentClass.box.usage.GetNativeTypeFromSerializee(thisehc["cType"]);
+						if (clause.CatchType == null)
+						{
+							// Check if it's a Cilboxable type
+							String typeName = thisehc["cType"].AsMap()["n"].AsString();
+							if (parentClass.box.classes.ContainsKey(typeName))
+							{
+								clause.CatchTypeName = typeName;
+							}
+						}
 					}
 					exceptionClauses[e] = clause;
+					handlerOffsetToClauseMap[clause.HandlerOffset] = clause;
 				}
 				hasExceptionClauses = exceptionClauses.Length > 0;
 
-				Array.Sort(exceptionClauses, CompareExceptionClausesLengthDesc);
+				Array.Sort(exceptionClauses, CompareExceptionClausesTryLengthDescHandlerOffsetDesc);
 			}
 
 #if UNITY_EDITOR
 			perfMarkerInterpret = new ProfilerMarker(parentClass.className + ":" + fullSignature);
 #endif
 
-			static int CompareExceptionClausesLengthDesc( CilboxExceptionHandlingClause a, CilboxExceptionHandlingClause b )
+			static int CompareExceptionClausesTryLengthDescHandlerOffsetDesc( CilboxExceptionHandlingClause a, CilboxExceptionHandlingClause b )
 			{
-				return b.TryLength.CompareTo( a.TryLength );
+				int res = b.TryLength.CompareTo( a.TryLength );
+				if (res == 0)
+				{
+					return b.HandlerOffset.CompareTo( a.HandlerOffset );
+				}
+				return res;
 			}
+
 		}
 
 		public object Interpret( CilboxProxy ths, object [] parametersIn )
@@ -183,6 +204,7 @@ namespace Cilbox
 
 			int localVarsHead = MaxStackSize;
 			int stackContinues = localVarsHead + methodLocals.Length;
+			StackElement? exceptionRegister = null;
 
 			// Uncomment for debugging.
 #if false
@@ -217,7 +239,7 @@ namespace Cilbox
 						{
 							box.interpreterAccountingCumulitiveTicks = now + box.timeoutLengthUs * box.interpreterTicksInUs - box.interpreterAccountingDropDead;
 							cont = false;
-							throw new Exception( "Script time resources overutilized @ " + pc + " In " + methodName + " (Timeout Us: " + box.interpreterAccountingCumulitiveTicks / box.interpreterTicksInUs + "/" + box.timeoutLengthUs + " )" );
+							throw new CilboxInterpreterTimeoutException( "Script time resources overutilized (Timeout Us: " + box.interpreterAccountingCumulitiveTicks / box.interpreterTicksInUs + "/" + box.timeoutLengthUs + " )", parentClass.className, methodName, pc);
 						}
 					}
 
@@ -244,7 +266,7 @@ spiperf.Begin();
 					switch( b )
 					{
 					case 0x00: break; // nop
-					case 0x01: throw new Exception( $"Debug Break @ {pc}" ); // break
+					case 0x01: throw new CilboxInterpreterRuntimeException($"Debug Break", parentClass.className, methodName, pc); // break
 					case 0x02: stackBuffer[++sp] = parameters[0]; break; //ldarg.0
 					case 0x03: stackBuffer[++sp] = parameters[1]; break; //ldarg.1
 					case 0x04: stackBuffer[++sp] = parameters[2]; break; //ldarg.2
@@ -302,7 +324,7 @@ spiperf.Begin();
 
 						if( !dt.isValid )
 						{
-							throw new Exception( "Error, function " + dt.Name + " Not found in " + parentClass.className + ":" + fullSignature );
+							throw new CilboxInterpreterRuntimeException("Error, function " + dt.Name + " Not found in " + parentClass.className + ":" + fullSignature, parentClass.className, methodName, pc);
 						}
 
 						if( !dt.isNative )
@@ -334,7 +356,7 @@ spiperf.Begin();
 								CilboxMethod targetMethod = targetClass.methods[dt.interpretiveMethod];
 								isVoid = targetMethod.isVoid;
 								if( targetMethod == null )
-									throw( new Exception( $"Function {dt.Name} not found" ) );
+									throw new CilboxInterpreterRuntimeException($"Function {dt.Name} not found", parentClass.className, methodName, pc);
 
 								int staticOffset = (targetMethod.isStatic?0:1);
 								int numParams = targetMethod.signatureParameters.Length;
@@ -417,6 +439,12 @@ spiperf.Begin();
 									callthis = se.o;
 								}
 
+								if (callthis == null)
+								{
+									interpretedThrow(pc - 1, new NullReferenceException());
+									break;
+								}
+
 								iko = st.Invoke( callthis, callpar );
 								if( seorig.type == StackType.Address )
 								{
@@ -468,48 +496,7 @@ spiperf.Begin();
 						sp = -1; // leave(.s) clears the stack.
 						int offset = (b == 0xde) ? (sbyte)byteCode[pc++] : (int)BytecodeAsU32( ref pc );
 						int leaveTarget = pc + offset;
-
-						// early out if no exception clauses.
-						if (!hasExceptionClauses)
-						{
-							pc = leaveTarget;
-							break;
-						}
-
-						if (handlerClauseStack == null)
-						{
-							handlerClauseStack = new Stack<int>();
-						}
-
-						handlerClauseStack.Push(leaveTarget);
-						for( int i = 0; i < exceptionClauses.Length; i++ )
-						{
-							CilboxExceptionHandlingClause c = exceptionClauses[i];
-
-							// only handling Finally for now
-							// todo: add catch handling?
-							if (c.Flags != ExceptionHandlingClauseOptions.Finally)
-							{
-								continue;
-							}
-
-							// Check we are in bounds of the Try block.
-							if (currentInstruction < c.TryOffset || currentInstruction >= c.TryEndOffset)
-							{
-								continue;
-							}
-
-							// Verify leaveTarget is outside the try block.
-							if (leaveTarget >= c.TryOffset && leaveTarget < c.TryEndOffset)
-							{
-								continue;
-							}
-
-							handlerClauseStack.Push(c.HandlerOffset);
-						}
-
-						// Continue to the leave target or innermost handler.
-						pc = handlerClauseStack.Pop();
+						leaveRegionEnqueueFinallys(currentInstruction, leaveTarget, false);
 						break;
 					}
 
@@ -517,9 +504,9 @@ spiperf.Begin();
 					{
 						if (handlerClauseStack == null || handlerClauseStack.Count == 0)
 						{
-							throw new Exception("endfinally without a matching target.");
+							throw new CilboxInterpreterRuntimeException("endfinally without a matching target.", parentClass.className, methodName, pc);
 						}
-						pc = handlerClauseStack.Pop();
+						jumpToNextHandlerDestination();
 						break;
 					}
 
@@ -628,10 +615,10 @@ spiperf.Begin();
 							{
 							case 0: if( sa.o == sb.o ) pc += joffset; break;
 							case 5: if( sa.o != sb.o ) pc += joffset; break;
-							default: throw new( "Invalid object comparison" );
+							default: throw new CilboxInterpreterRuntimeException("Invalid object comparison", parentClass.className, methodName, pc);
 							} break;
 						default:
-							throw new( "Invalid comparison" );
+							throw new CilboxInterpreterRuntimeException("Invalid comparison", parentClass.className, methodName, pc);
 						}
 						break;
 					}
@@ -642,7 +629,7 @@ spiperf.Begin();
 						pc += nsw * 4;
 						StackElement s = stackBuffer[sp--];
 						if( s.type > StackType.Ulong )
-							throw new ( "Stack type invalid for switch statement" );
+							throw new CilboxInterpreterRuntimeException("Stack type invalid for switch statement", parentClass.className, methodName, pc);
 
 						if( s.u < nsw )
 						{
@@ -695,41 +682,98 @@ spiperf.Begin();
 									case StackType.Double:	stackBuffer[sp].LoadDouble( sa.d * sb.d ); break;
 								} break;
 							case 3: // Div
-								switch( promoted )
+							{
+								switch (promoted)
 								{
-									case StackType.Int:		stackBuffer[sp].LoadInt( sa.i / sb.i ); break;
-									case StackType.Uint:	stackBuffer[sp].LoadUint( sa.u / sb.u ); break;
-									case StackType.Long:	stackBuffer[sp].LoadLong( sa.l / sb.l ); break;
-									case StackType.Ulong:	stackBuffer[sp].LoadUlong( sa.e / sb.e ); break;
-									case StackType.Float:	stackBuffer[sp].LoadFloat( sa.f / sb.f ); break;
-									case StackType.Double:	stackBuffer[sp].LoadDouble( sa.d / sb.d ); break;
-								} break;
+									case StackType.Int:
+										if (sb.i == 0) { interpretedThrow(pc - 1, new DivideByZeroException()); break; }
+										stackBuffer[sp].LoadInt(sa.i / sb.i);
+										break;
+									case StackType.Uint:
+										if (sb.u == 0) { interpretedThrow(pc - 1, new DivideByZeroException()); break; }
+										stackBuffer[sp].LoadUint(sa.u / sb.u);
+										break;
+									case StackType.Long:
+										if (sb.l == 0) { interpretedThrow(pc - 1, new DivideByZeroException()); break; }
+										stackBuffer[sp].LoadLong(sa.l / sb.l);
+										break;
+									case StackType.Ulong:
+										if (sb.e == 0) { interpretedThrow(pc - 1, new DivideByZeroException()); break; }
+										stackBuffer[sp].LoadUlong(sa.e / sb.e);
+										break;
+									case StackType.Float:
+										// Floating point division returns Infinity/NaN, does not throw.
+										stackBuffer[sp].LoadFloat(sa.f / sb.f);
+										break;
+									case StackType.Double:
+										stackBuffer[sp].LoadDouble(sa.d / sb.d);
+										break;
+									default: throw new CilboxInterpreterRuntimeException($"Unexpected div instruction behavior {promoted}", parentClass.className, methodName, pc);
+								}
+								break;
+							}
 							case 4: // Div.un
 								switch( promoted )
 								{
-									case StackType.Int:		stackBuffer[sp].LoadUint( sa.u / sb.u ); break;
-									case StackType.Uint:	stackBuffer[sp].LoadUint( sa.u / sb.u ); break;
-									case StackType.Long:	stackBuffer[sp].LoadUlong( sa.e / sb.e ); break;
-									case StackType.Ulong:	stackBuffer[sp].LoadUlong( sa.e / sb.e ); break;
-									default: throw new Exception( $"Unexpected div.un instruction behavior @ {pc}" );
+									case StackType.Int:
+										if (sb.u == 0) { interpretedThrow(pc - 1, new DivideByZeroException()); break; }
+										stackBuffer[sp].LoadUint( sa.u / sb.u );
+										break;
+									case StackType.Uint:
+										if (sb.u == 0) { interpretedThrow(pc - 1, new DivideByZeroException()); break; }
+										stackBuffer[sp].LoadUint( sa.u / sb.u );
+										break;
+									case StackType.Long:
+										if (sb.e == 0) { interpretedThrow(pc - 1, new DivideByZeroException()); break; }
+										stackBuffer[sp].LoadUlong( sa.e / sb.e );
+										break;
+									case StackType.Ulong:
+										if (sb.e == 0) { interpretedThrow(pc - 1, new DivideByZeroException()); break; }
+										stackBuffer[sp].LoadUlong( sa.e / sb.e );
+										break;
+									default: throw new CilboxInterpreterRuntimeException($"Unexpected div.un instruction behavior {promoted}", parentClass.className, methodName, pc);
 								} break;
 							case 5: // rem
 								switch( promoted )
 								{
-									case StackType.Int:		stackBuffer[sp].LoadInt( sa.i % sb.i ); break;
-									case StackType.Uint:	stackBuffer[sp].LoadUint( sa.u % sb.u ); break;
-									case StackType.Long:	stackBuffer[sp].LoadLong( sa.l % sb.l ); break;
-									case StackType.Ulong:	stackBuffer[sp].LoadUlong( sa.e % sb.e ); break;
-									default: throw new Exception( $"Unexpected rem instruction behavior @ {pc}" );
+									case StackType.Int:
+										if (sb.i == 0) { interpretedThrow(pc - 1, new DivideByZeroException()); break; }
+										stackBuffer[sp].LoadInt(sa.i % sb.i);
+										break;
+									case StackType.Uint:
+										if (sb.u == 0) { interpretedThrow(pc - 1, new DivideByZeroException()); break; }
+										stackBuffer[sp].LoadUint(sa.u % sb.u);
+										break;
+									case StackType.Long:
+										if (sb.l == 0) { interpretedThrow(pc - 1, new DivideByZeroException()); break; }
+										stackBuffer[sp].LoadLong(sa.l % sb.l);
+										break;
+									case StackType.Ulong:
+										if (sb.e == 0) { interpretedThrow(pc - 1, new DivideByZeroException()); break; }
+										stackBuffer[sp].LoadUlong(sa.e % sb.e);
+										break;
+									default: throw new CilboxInterpreterRuntimeException($"Unexpected rem instruction behavior {promoted}", parentClass.className, methodName, pc);
 								} break;
 							case 6: // rem.un
 								switch( promoted )
 								{
-									case StackType.Int:		stackBuffer[sp].LoadUint( sa.u % sb.u ); break;
-									case StackType.Uint:	stackBuffer[sp].LoadUint( sa.u % sb.u ); break;
-									case StackType.Long:	stackBuffer[sp].LoadUlong( sa.e % sb.e ); break;
-									case StackType.Ulong:	stackBuffer[sp].LoadUlong( sa.e % sb.e ); break;
-									default: throw new Exception( $"Unexpected rem.un instruction behavior @ {pc}");
+									case StackType.Int:
+										if (sb.u == 0) { interpretedThrow(pc - 1, new DivideByZeroException()); break; }
+										stackBuffer[sp].LoadUint(sa.u % sb.u);
+										break;
+									case StackType.Uint:
+										if (sb.u == 0) { interpretedThrow(pc - 1, new DivideByZeroException()); break; }
+										stackBuffer[sp].LoadUint(sa.u % sb.u);
+										break;
+									case StackType.Long:
+										if (sb.e == 0) { interpretedThrow(pc - 1, new DivideByZeroException()); break; }
+										stackBuffer[sp].LoadUlong(sa.e % sb.e);
+										break;
+									case StackType.Ulong:
+										if (sb.e == 0) { interpretedThrow(pc - 1, new DivideByZeroException()); break; }
+										stackBuffer[sp].LoadUlong(sa.e % sb.e);
+										break;
+									default: throw new CilboxInterpreterRuntimeException($"Unexpected rem.un instruction behavior {promoted}", parentClass.className, methodName, pc);
 								} break;
 							case 7: stackBuffer[sp].LoadUlongType( sa.e & sb.e, promoted ); break; // and
 							case 8: stackBuffer[sp].LoadUlongType( sa.e | sb.e, promoted ); break; // or
@@ -803,12 +847,18 @@ spiperf.Begin();
 
 						if( b == 0x74 && oRet == null )
 						{
-							throw new Exception( $"Error: casting class invalid to {ti.Name}" );
+							throw new CilboxInterpreterRuntimeException($"Error: casting class invalid to {ti.Name}", parentClass.className, methodName, pc);
 						}
 						break;
 					}
 
-					case 0x7a: throw (System.Exception)stackBuffer[sp--].AsObject(); //throw
+					case 0x7a: //throw
+					{
+						object throwable = stackBuffer[sp--].AsObject();
+						// todo: check if cilbox has access to the type?
+						interpretedThrow(pc - 1, throwable);
+						break;
+					}
 					case 0x7b:
 					{
 						uint bc = BytecodeAsU32( ref pc );
@@ -817,7 +867,7 @@ spiperf.Begin();
 						if( se.o is CilboxProxy )
 							stackBuffer[++sp] = ((CilboxProxy)se.o).fields[box.metadatas[bc].fieldIndex];
 						else
-							throw new Exception( "Unimplemented.  Attempting to get field on non-cilbox object" );
+							throw new CilboxInterpreterRuntimeException("Unimplemented.  Attempting to get field on non-cilbox object", parentClass.className, methodName, pc);
 						// Tricky:  Do not allow host-fields without great care. For instance, getting access to PlatformActual.DelegateRepackage would all the program out.
 						break; //ldfld
 					}
@@ -829,7 +879,7 @@ spiperf.Begin();
 						if( se.o is CilboxProxy )
 							stackBuffer[++sp] = StackElement.CreateReference( (Array)(((CilboxProxy)se.o).fields), (uint)box.metadatas[bc].fieldIndex );
 						else
-							throw new Exception( "Unimplemented.  Attempting to get field on non-cilbox object" );
+							throw new CilboxInterpreterRuntimeException("Unimplemented.  Attempting to get field on non-cilbox object", parentClass.className, methodName, pc);
 						break;// ldflda
 					}
 					case 0x7d:
@@ -843,7 +893,7 @@ spiperf.Begin();
 							//Debug.Log( "Type: " + ((CilboxProxy)opths).fields[box.metadatas[bc].fieldIndex].type );
 						}
 						else
-							throw new Exception( "Unimplemented.  Attempting to set field on non-cilbox object" );
+							throw new CilboxInterpreterRuntimeException("Unimplemented.  Attempting to set field on non-cilbox object", parentClass.className, methodName, pc);
 						break; //stfld
 					}
 					case 0x7e:
@@ -875,7 +925,7 @@ spiperf.Begin();
 					{
 						uint otyp = BytecodeAsU32( ref pc );
 						if( stackBuffer[sp].type > StackType.Ulong )
-							throw new Exception( "Invalid type, processing new array" );
+							throw new CilboxInterpreterRuntimeException("Invalid type, processing new array", parentClass.className, methodName, pc);
 						int size = stackBuffer[sp].i;
 						Type t = box.metadatas[otyp].nativeType;
 						stackBuffer[sp].LoadObject( Array.CreateInstance( t, size ) );
@@ -898,7 +948,7 @@ spiperf.Begin();
 					case 0x90: case 0x91: case 0x92: case 0x93: case 0x94:
 					case 0x95: case 0x96: case 0x97: case 0x98: case 0x99:
 					{
-						if( stackBuffer[sp].type > StackType.Uint ) throw new Exception( "Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o );
+						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
 						int index = stackBuffer[sp--].i;
 //						Array a = ((Array)(stackBuffer[sp].o));
 						switch( b - 0x90 )
@@ -921,7 +971,7 @@ spiperf.Begin();
 					}
 					case 0x9a:
 					{
-						if( stackBuffer[sp].type > StackType.Uint ) throw new Exception( "Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o );
+						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
 						int index = stackBuffer[sp--].i;
 						Array a = ((Array)(stackBuffer[sp--].o));
 						stackBuffer[++sp].LoadObject( a.GetValue(index) );
@@ -930,7 +980,7 @@ spiperf.Begin();
 					case 0x9c:
 					{
 						SByte val = (SByte)stackBuffer[sp--].i;
-						if( stackBuffer[sp].type > StackType.Uint ) throw new Exception( "Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o );
+						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
 						int index = stackBuffer[sp--].i;
 						((Array)(stackBuffer[sp--].o)).SetValue( (byte)val, index );
 						break; // stelem.i1
@@ -939,7 +989,7 @@ spiperf.Begin();
 					{
 						float val;
 						val = stackBuffer[sp--].f;
-						if( stackBuffer[sp].type > StackType.Uint ) throw new Exception( "Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o );
+						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
 						int index = stackBuffer[sp--].i;
 						float [] array = (float[])stackBuffer[sp--].AsObject();
 						array[index] = val;
@@ -948,7 +998,7 @@ spiperf.Begin();
 					case 0xa2:
 					{
 						object val = stackBuffer[sp--].AsObject();
-						if( stackBuffer[sp].type > StackType.Uint ) throw new Exception( "Invalid index type" );
+						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type", parentClass.className, methodName, pc);
 						int index = stackBuffer[sp--].i;
 						object [] array = (object[])stackBuffer[sp--].AsObject();
 						array[index] = val;
@@ -958,7 +1008,7 @@ spiperf.Begin();
 					{
 						uint otyp = BytecodeAsU32( ref pc );
 						object val = stackBuffer[sp--].AsObject();
-						if( stackBuffer[sp].type > StackType.Uint ) throw new Exception( "Invalid index type" );
+						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type", parentClass.className, methodName, pc);
 						int index = stackBuffer[sp--].i;
 						object [] array = (object[])stackBuffer[sp--].AsObject();
 						Type t = box.metadatas[otyp].nativeType;
@@ -975,7 +1025,7 @@ spiperf.Begin();
 						}
 						else
 						{
-							throw new Exception( $"Scary Unbox (that we don't have code for) from {otyp} ORIG {metaType.ToString()} @ {pc}" );
+							throw new CilboxInterpreterRuntimeException($"Scary Unbox (that we don't have code for) from {otyp} ORIG {metaType.ToString()}", parentClass.className, methodName, pc);
 						}
 						break; // unbox.any
 					}
@@ -994,7 +1044,7 @@ spiperf.Begin();
 						case MetaTokenType.mtArrayInitializer: // Get type of field.
 							loadedObject = mi.arrayInitializerData;
 							break;
-						default: throw new Exception( "Error: opcode 0xD0 called on token ID " + md.ToString( "X8" ) + " Which is not currently handled." );
+						default: throw new CilboxInterpreterRuntimeException("Error: opcode 0xD0 called on token ID " + md.ToString( "X8" ) + " Which is not currently handled.", parentClass.className, methodName, pc);
 						}
 
 						stackBuffer[++sp].LoadObject( loadedObject );
@@ -1031,9 +1081,9 @@ spiperf.Begin();
 										if( sa.type == StackType.Object && sb.type == StackType.Object )
 											stackBuffer[sp].LoadInt( sa.o == sb.o ? 1 : 0 );
 										else
-											throw new Exception( $"CEQ Unimplemented type promotion unequal {sa.type} != {sb.type}" );
+											throw new CilboxInterpreterRuntimeException($"CEQ Unimplemented type promotion unequal {sa.type} != {sb.type}", parentClass.className, methodName, pc);
 										break;
-									default: throw new Exception( $"CEQ Unimplemented type promotion ({promoted})" );
+									default: throw new CilboxInterpreterRuntimeException($"CEQ Unimplemented type promotion ({promoted})", parentClass.className, methodName, pc);
 								} break;
 							case 0x02: // CGT
 								switch( promoted )
@@ -1044,7 +1094,7 @@ spiperf.Begin();
 									case StackType.Ulong:	stackBuffer[sp].LoadInt( sa.l > sb.l ? 1 : 0 ); break;
 									case StackType.Float:	stackBuffer[sp].LoadInt( sa.f > sb.f ? 1 : 0 ); break;
 									case StackType.Double:	stackBuffer[sp].LoadInt( sa.d > sb.d ? 1 : 0 ); break;
-									default: throw new Exception( $"CEQ Unimplemented type promotion ({promoted})" );
+									default: throw new CilboxInterpreterRuntimeException($"CEQ Unimplemented type promotion ({promoted})", parentClass.className, methodName, pc);
 								} break;
 							case 0x03: // CGT.UN
 								switch( promoted )
@@ -1055,7 +1105,7 @@ spiperf.Begin();
 									case StackType.Ulong:	stackBuffer[sp].LoadInt( sa.e > sb.e ? 1 : 0 ); break;
 									case StackType.Float:	stackBuffer[sp].LoadInt( sa.f > sb.f ? 1 : 0 ); break;
 									case StackType.Double:	stackBuffer[sp].LoadInt( sa.d > sb.d ? 1 : 0 ); break;
-									default: throw new Exception( $"CEQ Unimplemented type promotion ({promoted})" );
+									default: throw new CilboxInterpreterRuntimeException($"CEQ Unimplemented type promotion ({promoted})", parentClass.className, methodName, pc);
 								} break;
 							case 0x04: // CLT
 								switch( promoted )
@@ -1066,7 +1116,7 @@ spiperf.Begin();
 									case StackType.Ulong:	stackBuffer[sp].LoadInt( sa.l < sb.l ? 1 : 0 ); break;
 									case StackType.Float:	stackBuffer[sp].LoadInt( sa.f < sb.f ? 1 : 0 ); break;
 									case StackType.Double:	stackBuffer[sp].LoadInt( sa.d < sb.d ? 1 : 0 ); break;
-									default: throw new Exception( $"CEQ Unimplemented type promotion ({promoted})" );
+									default: throw new CilboxInterpreterRuntimeException($"CEQ Unimplemented type promotion ({promoted})", parentClass.className, methodName, pc);
 								} break;
 							case 0x05: // CLT.UN
 								switch( promoted )
@@ -1077,7 +1127,7 @@ spiperf.Begin();
 									case StackType.Ulong:	stackBuffer[sp].LoadInt( sa.e < sb.e ? 1 : 0 ); break;
 									case StackType.Float:	stackBuffer[sp].LoadInt( sa.f < sb.f ? 1 : 0 ); break;
 									case StackType.Double:	stackBuffer[sp].LoadInt( sa.d < sb.d ? 1 : 0 ); break;
-									default: throw new Exception( $"CEQ Unimplemented type promotion ({promoted})" );
+									default: throw new CilboxInterpreterRuntimeException($"CEQ Unimplemented type promotion ({promoted})", parentClass.className, methodName, pc);
 								} break;
 							}
 							break;
@@ -1087,7 +1137,7 @@ spiperf.Begin();
 							CilMetadataTokenInfo dt = box.metadatas[bc];
 							// Right now, we don't have any way of generating references to functions outside this cilbox.
 							if( dt.isNative )
-								throw new Exception( $"Cannot create references to functions outside this cilbox ({dt.Name})" );
+								throw new CilboxInterpreterRuntimeException($"Cannot create references to functions outside this cilbox ({dt.Name})", parentClass.className, methodName, pc);
 							stackBuffer[++sp].LoadObject( box.classesList[dt.interpretiveMethodClass].methods[dt.interpretiveMethod] );
 							break;
 						case 0x16: // constrained.
@@ -1095,11 +1145,11 @@ spiperf.Begin();
 							BytecodeAsU32( ref pc );
 							break;
 						default:
-							throw new Exception( $"Opcode 0xfe 0x{b.ToString("X2")} unimplemented" );
+							throw new CilboxInterpreterRuntimeException($"Opcode 0xfe 0x{b.ToString("X2")} unimplemented", parentClass.className, methodName, pc);
 						}
 						break;
 
-					default: throw new Exception( $"Opcode 0x{b.ToString("X2")} unimplemented @ {pc}" );
+					default: throw new CilboxInterpreterRuntimeException($"Opcode 0x{b.ToString("X2")} unimplemented", parentClass.className, methodName, pc);
 					}
 #if PER_INSTRUCTION_PROFILING
 spiperf.End();
@@ -1114,7 +1164,13 @@ spiperf.End();
 				box.disabledReason = fullError;
 				box.disabled = true;
 				//box.InterpreterExit();
-				throw;
+
+				if (e is CilboxInterpreterRuntimeException)
+				{
+					throw;
+				}
+
+				throw new CilboxInterpreterRuntimeException($"Breakwarn: Unhandled exception", e, parentClass.className, methodName, pc);
 			}
 #if UNITY_EDITOR
 			perfMarkerInterpret.End();
@@ -1123,6 +1179,140 @@ spiperf.End();
 			//box.InterpreterExit();
 
 			return ( sp == -1 ) ? StackElement.nil : stackBuffer[sp--];
+
+			void interpretedThrow(int currentInstruction, object thrownObj)
+			{
+				sp = -1;
+				exceptionRegister = new StackElement() { type = StackType.Object, o = thrownObj };
+				if (!hasExceptionClauses)
+				{
+					// todo: figure out how to re-throw to outer interpreter.
+					throw new CilboxInterpreterRuntimeException("Exception thrown with no handlers: " + thrownObj.ToString(), parentClass.className, methodName, currentInstruction);
+				}
+
+				CilboxExceptionHandlingClause found = null;
+				for (int i = exceptionClauses.Length - 1; i >= 0; i--)
+				{
+					CilboxExceptionHandlingClause c = exceptionClauses[i];
+
+					// Check we are in bounds of the Try block.
+					if (currentInstruction < c.TryOffset || currentInstruction >= c.TryEndOffset)
+					{
+						continue;
+					}
+
+					// Only Clause and Filter handlers can catch exceptions.
+					if (c.Flags != ExceptionHandlingClauseOptions.Clause && c.Flags != ExceptionHandlingClauseOptions.Filter)
+					{
+						continue;
+					}
+
+					// todo: implement filter handling.
+					if (c.Flags == ExceptionHandlingClauseOptions.Filter)
+					{
+						continue;
+					}
+
+					// Check exception type matches.
+					Type catchType = c.CatchType;
+					if (catchType != null)
+					{
+						if (!catchType.IsInstanceOfType(thrownObj))
+						{
+							continue;
+						}
+					}
+					else if (c.CatchTypeName != null)
+					{
+						// Cilboxable type match
+						// todo: it isn't actually possible to throw a Cilboxable type (yet?)
+						if (!(thrownObj is CilboxProxy && ((CilboxProxy)thrownObj).className == c.CatchTypeName))
+						{
+							continue;
+						}
+					}
+					else
+					{
+						continue;
+					}
+
+					found = c;
+					break;
+				}
+
+				if (found == null)
+				{
+					// how do I handle this?
+					throw new CilboxInterpreterRuntimeException("No handlers matched exception: " + thrownObj.ToString(), parentClass.className, methodName, currentInstruction);
+				}
+
+				leaveRegionEnqueueFinallys(currentInstruction, found.HandlerOffset, true);
+			}
+
+			void leaveRegionEnqueueFinallys(int currentInstruction, int leaveTarget, bool allowFault = false)
+			{
+				// early out if no exception clauses.
+				if (!hasExceptionClauses)
+				{
+					pc = leaveTarget;
+					return;
+				}
+
+				if (handlerClauseStack == null)
+				{
+					handlerClauseStack = new Stack<int>();
+				}
+
+				handlerClauseStack.Push(leaveTarget);
+				for( int i = 0; i < exceptionClauses.Length; i++ )
+				{
+					CilboxExceptionHandlingClause c = exceptionClauses[i];
+
+					// only handling Finally clauses here.
+					if (
+						(c.Flags != ExceptionHandlingClauseOptions.Finally) &&
+						(!(allowFault && c.Flags == ExceptionHandlingClauseOptions.Fault))
+						)
+					{
+						continue;
+					}
+
+					// Check we are in bounds of the Try block.
+					if (currentInstruction < c.TryOffset || currentInstruction >= c.TryEndOffset)
+					{
+						continue;
+					}
+
+					// Verify leaveTarget is outside the try block.
+					if (leaveTarget >= c.TryOffset && leaveTarget < c.TryEndOffset)
+					{
+						continue;
+					}
+
+					handlerClauseStack.Push(c.HandlerOffset);
+				}
+
+				// Continue to the leave target or innermost handler.
+				jumpToNextHandlerDestination();
+			}
+
+			void jumpToNextHandlerDestination()
+			{
+				if (handlerClauseStack == null || handlerClauseStack.Count == 0)
+				{
+					throw new CilboxInterpreterRuntimeException("No more handler clauses to jump to.", parentClass.className, methodName, pc);
+				}
+
+				pc = handlerClauseStack.Pop();
+				if (handlerOffsetToClauseMap.TryGetValue(pc, out CilboxExceptionHandlingClause ehc))
+				{
+					if (ehc.Flags == ExceptionHandlingClauseOptions.Clause && exceptionRegister.HasValue)
+					{
+						stackBufferIn.AsSpan()[++sp] = exceptionRegister.Value;
+						exceptionRegister = null;
+					}
+				}
+			}
 		}
 
 		uint BytecodeAs16( ref int i )
@@ -1438,6 +1628,7 @@ spiperf.End();
 						//{
 						//	Debug.Log( $"SS: {t.Name} {t.declaringTypeName} {i.Key}" );
 						//}
+						//throw new CilboxException( $"Currently cannot reference fields outside of the cilbox. {t.declaringTypeName} in {v.Key}.  Use properties." );
 					}
 
 					t.isValid = true;
@@ -1531,14 +1722,14 @@ spiperf.End();
 						else
 						{
 							t.isValid = false;
-							throw new Exception( $"Error: Could not find internal method {declaringTypeName}:{fullSignature}" );
+							throw new CilboxException( $"Error: Could not find internal method {declaringTypeName}:{fullSignature}" );
 						}
 					}
 					else
 					{
 						Type declaringType = usage.GetNativeTypeFromSerializee( stDt );
 						if( declaringType == null )
-							throw new Exception( $"Error: Could not find referenced type {useAssembly}/{declaringTypeName}/" );
+							throw new CilboxException( $"Error: Could not find referenced type {useAssembly}/{declaringTypeName}/" );
 
 						MethodBase m = usage.GetNativeMethodFromTypeAndName( declaringType, name, parametersSer,
 							genericArguments, fullSignature );
@@ -1550,7 +1741,7 @@ spiperf.End();
 							t.isValid = true;
 						} else if( !t.isNative )
 						{
-							throw new Exception( "Error: Could not find reference to: [" + useAssembly + "][" + declaringType.FullName + "][" + fullSignature + "] Type from:" + declaringTypeName );
+							throw new CilboxException( "Error: Could not find reference to: [" + useAssembly + "][" + declaringType.FullName + "][" + fullSignature + "] Type from:" + declaringTypeName );
 						}
 					}
 					break;
@@ -1620,7 +1811,7 @@ spiperf.End();
 			{
 				// fault from within, abort now.
 				Monitor.Exit( this );
-				throw new Exception( $"Function interpreation happened while box was disabled. This should not be possible. Offender: {m.parentClass.className} {m.fullSignature}" );
+				throw new CilboxException( $"Function interpreation happened while box was disabled. This should not be possible. Offender: {m.parentClass.className} {m.fullSignature}" );
 			}
 			else
 			{
@@ -1629,7 +1820,7 @@ spiperf.End();
 					interpreterAccountingCumulitiveTicks = now + timeoutLengthUs * interpreterTicksInUs - interpreterAccountingDropDead;
 					--interpreterAccountingDepth;
 					Monitor.Exit( this );
-					throw new Exception( $"Function {m.parentClass.className} {m.fullSignature} timed out." );
+					throw new CilboxException( $"Function {m.parentClass.className} {m.fullSignature} timed out." );
 				}
 
 				// Otherwise we are recursively being called. All is well.
@@ -1899,7 +2090,7 @@ spiperf.End();
 												break;
 										*/
 											default:
-												throw new Exception( "Exception decoding opcode at address (confusing meta " + operand.ToString("X8") + ") " + i + " in " + m.Name );
+												throw new CilboxException( "Exception decoding opcode at address (confusing meta " + operand.ToString("X8") + ") " + i + " in " + m.Name );
 											}
 										}
 										else if( ot == CilboxUtil.OpCodes.OperandType.InlineSwitch )
@@ -2151,7 +2342,7 @@ spiperf.End();
 			}
 			else
 			{
-				throw new Exception( "You must have an object with Cilbox (Scene or Avatar)" );
+				throw new CilboxException( "You must have an object with Cilbox (Scene or Avatar)" );
 				//GameObject cilboxDataObject = new GameObject("CilboxData " + new System.Random().Next(0,10000000));
 				//tac = cilboxDataObject.AddComponent( typeof(Cilbox) ) as Cilbox;
 				//EditorUtility.SetDirty( tac );

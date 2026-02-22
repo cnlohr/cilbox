@@ -327,11 +327,13 @@ namespace Cilbox
 			Type [] ga = null;
 			if( ses.TryGetValue( "g", out g ) )
 			{
+				// If there are generics (stored in g) then use the serialized generic name instead of stripped type name
+				// n = Namespace.Outer+Middle+Inner		gn = Namespace.Outer`1+Middle`2+Inner`1
+				typeName = ses["gn"].AsString();
 				Serializee [] gs = g.AsArray();
 				ga = new Type[gs.Length];
 				for( int i = 0; i < gs.Length; i++ )
 					ga[i] = GetNativeTypeFromSerializee( gs[i] );
-				typeName += "`" + gs.Length;
 			}
 
 			Type ret = null;
@@ -396,20 +398,20 @@ namespace Cilbox
 
 		public MethodBase InternalGetNativeMethodFromTypeAndNameNoSecurity( Type declaringType, String name, Type [] parameters, Type [] genericArguments, String fullSignature )
 		{
-			MethodBase m;
-
-			// Can we combine Constructor + Method?
-			m = declaringType.GetMethod(
-				name,
-				genericArguments.Length,
-				/*BindingFlags.NonPublic | */ BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static,
-				null,
-				CallingConventions.Any,
-				parameters,
-				null ); // TODO I don't ... think? we need parameter modifiers? "To be only used when calling through COM interop, and only parameters that are passed by reference are handled. The default binder does not process this parameter."
-
-			if( m == null )
+			if (genericArguments.Length == 0)
 			{
+				// Can we combine Constructor + Method?
+				MethodBase m = declaringType.GetMethod(
+					name,
+					genericArguments.Length,
+					/*BindingFlags.NonPublic | */ BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static,
+					null,
+					CallingConventions.Any,
+					parameters,
+					null ); // TODO I don't ... think? we need parameter modifiers? "To be only used when calling through COM interop, and only parameters that are passed by reference are handled. The default binder does not process this parameter."
+
+				if (m != null) { return m; }
+
 				// Can't use GetConstructor, because somethings have .ctor or .cctor
 				ConstructorInfo[] cts = declaringType.GetConstructors(
 					/*BindingFlags.NonPublic | */ BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static );
@@ -423,44 +425,68 @@ namespace Cilbox
 						break;
 					}
 				}
+				if (m != null) { return m; }
+			}
+
+			if (genericArguments.Length > 0)
+			{
+				foreach (MethodInfo mi in declaringType.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+				{
+					if (mi.Name != name) continue;
+					if (!mi.IsGenericMethodDefinition) continue;
+					if (mi.GetGenericArguments().Length != genericArguments.Length) continue;
+					if (mi.GetParameters().Length != parameters.Length) continue;
+
+					// Need to verify the parameters actually match
+					try
+					{
+						MethodInfo closed = mi.MakeGenericMethod(genericArguments);
+						ParameterInfo[] closedPars = closed.GetParameters();
+						bool match = true;
+						for (int i = 0; i < parameters.Length; i++)
+						{
+							if (closedPars[i].ParameterType != parameters[i])
+							{
+								match = false;
+								break;
+							}
+						}
+
+						if (match) { return closed; }
+					}
+					catch { continue; }
+				}
 			}
 
 			// If we really can't find the method, search through all types of matching assembly names.
 			// This is needed for sometimes when we have AsmDef.<PirvateImplementationDetails>.ComputeStringHash()
-			if( m == null )
+			System.Reflection.Assembly [] assys = AppDomain.CurrentDomain.GetAssemblies();
+			foreach( System.Reflection.Assembly proxyAssembly in assys )
 			{
-				System.Reflection.Assembly [] assys = AppDomain.CurrentDomain.GetAssemblies();
-				foreach( System.Reflection.Assembly proxyAssembly in assys )
+				foreach (Type type in proxyAssembly.GetTypes())
 				{
-					foreach (Type type in proxyAssembly.GetTypes())
+					if( type.Name == declaringType.Name )
 					{
-						if( type.Name == declaringType.Name )
+						MethodBase m = type.GetMethod(
+							name,
+							genericArguments.Length,
+							BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static,
+							null,
+							CallingConventions.Any,
+							parameters,
+							null );
+						if( m != null )
 						{
-							m = type.GetMethod(
-								name,
-								genericArguments.Length,
-								BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static,
-								null,
-								CallingConventions.Any,
-								parameters,
-								null );
-							if( m != null ) Debug.Log( type.Name + " == " + declaringType.Name + " == " + proxyAssembly.GetName().Name + " >> " + m.Name );
-
-							if( m != null ) break;
-							// I don't think there is any case where this would be needed for a type with a constructor.
+							Debug.Log(type.Name + " == " + declaringType.Name + " == " + proxyAssembly.GetName().Name + " >> " + m.Name);
+							return m;
 						}
+
+						// I don't think there is any case where this would be needed for a type with a constructor.
 					}
-					if( m != null ) break;
 				}
 			}
 
-			if( m != null && m is MethodInfo && genericArguments.Length > 0 )
-			{
-		    	m = ((MethodInfo)m).MakeGenericMethod( genericArguments );
-			}
-
-
-			return m;
+			return null;
 		}
 
 	}

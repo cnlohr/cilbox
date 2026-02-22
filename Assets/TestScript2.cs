@@ -20,14 +20,14 @@ public class TestScript2 : MonoBehaviour
 
 	void Start()
 	{
-		if( testPublic != 4 ) Debug.LogError($"testPublic {testPublic}");
+		if( testPublic != 4 ) Debug.LogError($"ERR1: testPublic {testPublic}");
 		test = new Dictionary<String,int>();
 		test["hello"] = 5;
 		test["world"] = 6;
-		if( test["hello"] != 5 || test["world"] != 6 ) Debug.LogError($"{test["hello"]} {test["world"]}" );
-		if( datafloat[2]!= 0.75 ) Debug.LogError($"Should be 0.75 {datafloat[2]} (Changed by parameters)"); // 0.5 originally
-		if( datafloat[1]!= 0.25 ) Debug.LogError($"Should be 0.25 {datafloat[1]} (Changed by constructor)");
-		if( dataint[2] != 1056964608 ) Debug.LogError($"Should be 1056964608 {dataint[2]}"); // 1056964608
+		if( test["hello"] != 5 || test["world"] != 6 ) Debug.LogError($"ERR0: {test["hello"]} {test["world"]}" );
+		if( datafloat[2]!= 0.75 ) Debug.LogError($"ERR2: Should be 0.75 {datafloat[2]} (Changed by parameters)"); // 0.5 originally
+		if( datafloat[1]!= 0.25 ) Debug.LogError($"ERR3: Should be 0.25 {datafloat[1]} (Changed by constructor)");
+		if( dataint[2] != 1056964608 ) Debug.LogError($"ERR4: Should be 1056964608 {dataint[2]}"); // 1056964608
 		if( objs != null )
 		{
 			if( objs.Length > 1 )

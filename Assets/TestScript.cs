@@ -17,6 +17,9 @@ public class TestScript : MonoBehaviour
 	public UnityEngine.UI.Button buttonControl2;
 	public UnityEngine.UI.InputField inputField;
 
+	public GameObject gameObjectTest;
+	public GameObject gameObjectTestEmptyDoNotPopulate;
+
 	public TestScript2 testScript2;
 
 	private String lastButton = "No Button";
@@ -29,7 +32,6 @@ public class TestScript : MonoBehaviour
 		if( testScript2 == null ) Debug.LogError( "Expected nonnnull testScript2" );
 		System.Diagnostics.Stopwatch stopWatch = new System.Diagnostics.Stopwatch();
 		stopWatch.Start();
-		testScript2.testPublic = 88;
 		int fi = Fib(4);
 		int rc = RecursePO2( 3 );
 		stopWatch.Stop();
@@ -51,8 +53,26 @@ public class TestScript : MonoBehaviour
 	object SubFunction( float a, float b ) { return a + b; }
 
 	void Update() {
+		testScript2.testPublic = 88;
+
 		testScript2.AnotherThing();
-		framenoPublic++;
+
+		if( buttonControl1 != null )
+			framenoPublic++;
+
+		if( buttonControl1.name != "Button1" )
+		{
+			Debug.LogError( "Error: name for button wrong" );
+		}
+		if( gameObjectTest.name != "Sphere" )
+		{
+			Debug.LogError( "Error: gameObjectTest is not Sphere" );
+		}
+		if( gameObjectTestEmptyDoNotPopulate )
+		{
+			Debug.LogError( "Error: gameObjectTestEmptyDoNotPopulate is set to something" );
+		}
+
 		textControl.text = framenoPublic + " " + testScript2.reverseFrameNo + "\n" + delegateCount + " - " +
 			lastButton + "\n" +
 			CilboxPublicUtils.GetProxyInitialPath( this ) + "\n" +

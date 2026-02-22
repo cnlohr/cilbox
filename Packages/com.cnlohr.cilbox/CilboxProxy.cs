@@ -171,10 +171,7 @@ namespace Cilbox
 #endif
 		void Awake()
 		{
-			RuntimeProxyLoad();
-
-			// Call Awake after initialization.
-			box.InterpretIID( cls, this, ImportFunctionID.Awake, null );
+			// You cannot do anything in Awake()  Box is not set yet.
 		}
 
 		public void RuntimeProxyLoad()
@@ -405,7 +402,13 @@ namespace Cilbox
 		}
 
 
-		void Start() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.Start, null ); }
+		void Start() {
+			RuntimeProxyLoad();
+
+			// Call Awake after initialization.
+			box.InterpretIID( cls, this, ImportFunctionID.Awake, null );
+			box.InterpretIID( cls, this, ImportFunctionID.Start, null );
+		}
 		void OnEnable() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.OnEnable, null ); }
 		void OnDisable() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.OnDisable, null ); }
 		void Update() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.Update, null ); }

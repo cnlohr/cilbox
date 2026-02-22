@@ -65,8 +65,9 @@ namespace TestCilbox
 				try
 				{
 					Validator.Set("TryFinally2", "try");
+					throw new Exception("Test Exception");
 				}
-				catch
+				catch (Exception)
 				{
 					Validator.Set("TryCatch", "caught");
 				}
@@ -81,6 +82,72 @@ namespace TestCilbox
 				Validator.Set("TryFinally", "finally");
 				Validator.AddCount("TryFinally");
 			}
+
+			try
+			{
+				Validator.Set("DivideByZeroException", "try");
+				int zero = 0;
+				int test = 5 / zero;
+				Validator.Set("DivideByZeroException", "didn't throw");
+			}
+			catch (DivideByZeroException)
+			{
+				Validator.Set("DivideByZeroException", "caught");
+			}
+
+			try
+			{
+				Validator.Set("TryFinallyNestedTest1", "try");
+				Validator.Set("TryFinallyNestedTest2", "top");
+				try
+				{
+					object test = null;
+					Validator.Set("NullReferenceException", "try");
+					Validator.Set("TryFinally3", "try");
+					Validator.Set("NullRefUnreachable", "didn't reach");
+					int len = test.ToString().Length;
+					Validator.Set("NullRefUnreachable", "reached");
+				}
+				catch (DivideByZeroException)
+				{
+					Validator.Set("NullReferenceException", "caught0");
+				}
+				catch (NullReferenceException)
+				{
+					Validator.Set("NullReferenceException", "caught1");
+				}
+				catch (Exception)
+				{
+					Validator.Set("NullReferenceException", "caught2");
+				}
+				finally
+				{
+					Validator.Set("TryFinally3", "finally");
+					Validator.AddCount("TryFinally3");
+				}
+
+				Validator.Set("TryFinallyNestedTest2", "bottom");
+			}
+			finally
+			{
+				Validator.Set("TryFinallyNestedTest1", "finally");
+				Validator.AddCount("TryFinallyNestedTest1");
+			}
+
+			float[] myArr = new float[] { 1.5f, 2.5f, 3.5f };
+			Array.Resize(ref myArr, myArr.Length + 1);
+			myArr[^1] = 4.5f;
+			Validator.Set("JoinFloatArrayResized", string.Join(", ", myArr) );
+
+			Dictionary<string, string> myDict = new Dictionary<string, string>();
+			myDict["key1"] = "value1";
+			myDict["key2"] = "value2";
+			string[] array = new string[myDict.Count];
+			myDict.Keys.CopyTo(array, 0);
+			Validator.Set("DictionaryKeys", string.Join(", ", array) );
+
+			Outer<string>.Middle<int, bool>.Inner<char> complex = new();
+			Validator.Set("ComplexGenericType", complex.GetTypeNames());
 
 			behaviour2.Behaviour2Test();
 		}
