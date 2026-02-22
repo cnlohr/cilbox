@@ -5,6 +5,7 @@ using System.Collections.Specialized;
 using System.Collections;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Text;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -981,13 +982,30 @@ namespace Cilbox
 			if( t.IsGenericType )
 			{
 				String genericDefName = t.GetGenericTypeDefinition().FullName;
-				int tick = genericDefName.IndexOf('`');
-				String baseName = genericDefName.Substring(0, tick);
-				String extra = genericDefName.Substring(tick + 1);
-				int plus = extra.IndexOf('+');
-				if( plus >= 0 )
-					baseName += extra.Substring(plus);
+				StringBuilder typeNameBuilder = new StringBuilder();
+
+				// The following section strips out arity (`1, `2, etc) from the generic type definition name.
+				// This way we do not need to whitelist each generic arity of a type; We just need to whitelist the base name.
+				// Extreme example: Namespace.Outer`1+Middle`2+Inner`1 would be stripped to Namespace.Outer+Middle+Inner
+				for (int i = 0; i < genericDefName.Length; i++)
+				{
+					if (genericDefName[i] != '`')
+					{
+						typeNameBuilder.Append(genericDefName[i]);
+						continue;
+					}
+
+					int j = i + 1;
+					while (j < genericDefName.Length && char.IsDigit(genericDefName[j]))
+						j++;
+
+					if (j == genericDefName.Length || genericDefName[j] == '+' || genericDefName[j] == '[')
+						i = j - 1;
+				}
+				string baseName = typeNameBuilder.ToString();
+
 				ret["n"] = new Serializee( baseName );
+				ret["gn"] = new Serializee( genericDefName ); // Store the generic name so it does not have to be rebuilt
 				Type [] ta = t.GenericTypeArguments;
 				Serializee [] sg = new Serializee[ta.Length];
 				for( int i = 0; i < ta.Length; i++ )

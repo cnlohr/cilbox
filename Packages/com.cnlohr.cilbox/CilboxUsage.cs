@@ -327,15 +327,13 @@ namespace Cilbox
 			Type [] ga = null;
 			if( ses.TryGetValue( "g", out g ) )
 			{
+				// If there are generics (stored in g) then use the serialized generic name instead of stripped type name
+				// n = Namespace.Outer+Middle+Inner		gn = Namespace.Outer`1+Middle`2+Inner`1
+				typeName = ses["gn"].AsString();
 				Serializee [] gs = g.AsArray();
 				ga = new Type[gs.Length];
 				for( int i = 0; i < gs.Length; i++ )
 					ga[i] = GetNativeTypeFromSerializee( gs[i] );
-				int plus = typeName.IndexOf('+');
-				if( plus >= 0 )
-					typeName = typeName.Substring(0, plus) + "`" + gs.Length + typeName.Substring(plus);
-				else
-					typeName += "`" + gs.Length;
 			}
 
 			Type ret = null;

@@ -44,6 +44,7 @@ namespace TestCilbox
 			"System.UInt32",
 			"System.ValueTuple",
 			"System.Void",
+			"TestCilbox.Outer+Middle+Inner",
 			"UnityEngine.Component",
 			"UnityEngine.Debug",
 			"UnityEngine.Events.UnityAction",
@@ -167,6 +168,21 @@ namespace TestCilbox
 	}
 
 
+	public class Outer<T>
+	{
+		public class Middle<U, V>
+		{
+			public class Inner<W>
+			{
+				public string GetTypeNames()
+				{
+					return typeof(T).Name + ", " + typeof(U).Name + ", " + typeof(V).Name + ", " + typeof(W).Name;
+				}
+			}
+		}
+	}
+
+
 	public class Program
 	{
 		public static int Main()
@@ -253,9 +269,6 @@ namespace TestCilbox
 			Validator.ValidateCount("TryFinally", 1 );
 			Validator.ValidateCount("TryFinally2", 1 );
 
-			Validator.Validate("JoinFloatArrayResized", "1.5, 2.5, 3.5, 4.5");
-			Validator.Validate("DictionaryKeys", "key1, key2");
-
 			Validator.Validate("TryFinally3", "finally");
 			Validator.ValidateCount("TryFinally3", 1 );
 			Validator.Validate("NullReferenceException", "caught1" );
@@ -264,6 +277,10 @@ namespace TestCilbox
 			Validator.Validate("TryFinallyNestedTest2", "bottom");
 			Validator.ValidateCount("TryFinallyNestedTest1", 1);
 			Validator.Validate("DivideByZeroException", "caught");
+
+			Validator.Validate("JoinFloatArrayResized", "1.5, 2.5, 3.5, 4.5");
+			Validator.Validate("DictionaryKeys", "key1, key2");
+			Validator.Validate("ComplexGenericType", "String, Int32, Boolean, Char");
 
 			return -1 * Validator.NumValidationErrors();
 		}

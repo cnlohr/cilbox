@@ -83,18 +83,6 @@ namespace TestCilbox
 				Validator.AddCount("TryFinally");
 			}
 
-			float[] myArr = new float[] { 1.5f, 2.5f, 3.5f };
-			Array.Resize(ref myArr, myArr.Length + 1);
-			myArr[^1] = 4.5f;
-			Validator.Set("JoinFloatArrayResized", string.Join(", ", myArr) );
-
-			Dictionary<string, string> myDict = new Dictionary<string, string>();
-			myDict["key1"] = "value1";
-			myDict["key2"] = "value2";
-			string[] array = new string[myDict.Count];
-			myDict.Keys.CopyTo(array, 0);
-			Validator.Set("DictionaryKeys", string.Join(", ", array) );
-
 			try
 			{
 				Validator.Set("DivideByZeroException", "try");
@@ -145,6 +133,21 @@ namespace TestCilbox
 				Validator.Set("TryFinallyNestedTest1", "finally");
 				Validator.AddCount("TryFinallyNestedTest1");
 			}
+
+			float[] myArr = new float[] { 1.5f, 2.5f, 3.5f };
+			Array.Resize(ref myArr, myArr.Length + 1);
+			myArr[^1] = 4.5f;
+			Validator.Set("JoinFloatArrayResized", string.Join(", ", myArr) );
+
+			Dictionary<string, string> myDict = new Dictionary<string, string>();
+			myDict["key1"] = "value1";
+			myDict["key2"] = "value2";
+			string[] array = new string[myDict.Count];
+			myDict.Keys.CopyTo(array, 0);
+			Validator.Set("DictionaryKeys", string.Join(", ", array) );
+
+			Outer<string>.Middle<int, bool>.Inner<char> complex = new();
+			Validator.Set("ComplexGenericType", complex.GetTypeNames());
 
 			behaviour2.Behaviour2Test();
 		}
