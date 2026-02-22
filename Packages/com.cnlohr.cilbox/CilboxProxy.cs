@@ -269,8 +269,7 @@ namespace Cilbox
 				{
 					try
 					{
-						object defaultValue = Activator.CreateInstance( fieldType );
-						fields[i].LoadObject( defaultValue );
+						fields[i].LoadObject( fieldType );
 						Debug.Log( $"Default field init {cls.instanceFieldNames[i]} <- default({fieldType}) [boxed]" );
 					}
 					catch( Exception e )
