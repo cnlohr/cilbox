@@ -240,9 +240,8 @@ namespace Cilbox
 				Serializee miid;
 				if( dict.TryGetValue( "t", out val ) && dict.TryGetValue( "miid", out miid ) )
 				{
-					int nMIID = -1;
-					if( Int32.TryParse( miid.AsString(), out nMIID ) &&
-						nMIID >= 0 &&
+					UInt32 nMIID = UInt32.MaxValue;
+					if( UInt32.TryParse( miid.AsString(), out nMIID ) &&
 						nMIID < matchingSerializeeInstanceField.Length )
 					{
 						matchingSerializeeInstanceField[nMIID] = s;
@@ -305,7 +304,6 @@ namespace Cilbox
 					fields[i].Load( o );
 			}
 
-			box.InterpretIID( cls, this, ImportFunctionID.Start, null );
 
 			proxyWasSetup = true;
 			Debug.Log( $"RuntimeProxyLoad complete for class {className}" );
