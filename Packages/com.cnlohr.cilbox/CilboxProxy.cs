@@ -73,7 +73,7 @@ namespace Cilbox
 				lstObjects.Add( e );
 			}
 
-			serializedObjectData =
+			serializedObjectData = 
 				Convert.ToBase64String(new Serializee(lstObjects.ToArray()).DumpAsMemory().ToArray());
 
 			buildTimeGuid = Guid.NewGuid().ToString();
@@ -195,7 +195,7 @@ namespace Cilbox
 
 			if( string.IsNullOrEmpty( className ) )
 			{
-				Debug.LogError( "Class name not set" );
+				Debug.LogError( $"[CilboxProxy:{gameObject.name}] RuntimeProxyLoad aborted: class {className} was not found in Cilbox assembly data." );
 				return;
 			}
 
@@ -231,7 +231,6 @@ namespace Cilbox
 
 			Serializee [] d = new Serializee( Convert.FromBase64String( serializedObjectData ), Serializee.ElementType.Map ).AsArray();
 
-			bool [] fieldNeedsDefault = new bool[cls.instanceFieldNames.Length];
 			Serializee [] matchingSerializeeInstanceField = new Serializee[cls.instanceFieldNames.Length];
 			foreach( Serializee s in d )
 			{
@@ -241,37 +240,51 @@ namespace Cilbox
 				Serializee miid;
 				if( dict.TryGetValue( "t", out val ) && dict.TryGetValue( "miid", out miid ) )
 				{
-					String sT = val.AsString();
 					int nMIID = -1;
 					if( Int32.TryParse( miid.AsString(), out nMIID ) &&
-						nMIID < fieldNeedsDefault.Length )
+						nMIID >= 0 &&
+						nMIID < matchingSerializeeInstanceField.Length )
 					{
 						matchingSerializeeInstanceField[nMIID] = s;
-
-						if( sT[0] == 's' || sT[0] == 'e' )
-						{
-							fieldNeedsDefault[nMIID] = true;
-						}
 					}
 				}
 			}
 
-			// Preinitialize any default values needed.
+			// Preinitialize every field to its CLR default value so that non-serialized fields
+			// (especially UnityEngine.Object references) are not left as implicit StackType.Boolean.
 			for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
 			{
-				if( fieldNeedsDefault[i] )
+				Type fieldType = cls.instanceFieldTypes[i];
+				if( fieldType == null )
 				{
-					StackType st;
-					if( StackElement.TypeToStackType.TryGetValue(cls.instanceFieldTypes[i].ToString(), out st ) )
-					{
-						fields[i].type = st;
-					}
-					else
-					{
-						fields[i].LoadObject( null );
-					}
+					fields[i].LoadObject( null );
 				}
 
+				StackType st = StackElement.StackTypeFromType( fieldType );
+				if( st < StackType.Object )
+				{
+					fields[i].type = st;
+					Debug.Log( $"Default field init {cls.instanceFieldNames[i]} <- default({fieldType})" );
+				}
+				else if( fieldType.IsValueType )
+				{
+					try
+					{
+						object defaultValue = Activator.CreateInstance( fieldType );
+						fields[i].LoadObject( defaultValue );
+						Debug.Log( $"Default field init {cls.instanceFieldNames[i]} <- default({fieldType}) [boxed]" );
+					}
+					catch( Exception e )
+					{
+						fields[i].LoadObject( null );
+						Debug.LogWarning( $"[CilboxProxy:{gameObject.name}] Failed to create default value for {cls.instanceFieldNames[i]} ({fieldType}): {e.Message}" );
+					}
+				}
+				else
+				{
+					fields[i].LoadObject( null );
+					Debug.Log( $"Default field init {cls.instanceFieldNames[i]} <- null" );
+				}
 			}
 
 			// Call interpreted constructor.
@@ -292,7 +305,10 @@ namespace Cilbox
 					fields[i].Load( o );
 			}
 
+			box.InterpretIID( cls, this, ImportFunctionID.Start, null );
+
 			proxyWasSetup = true;
+			Debug.Log( $"RuntimeProxyLoad complete for class {className}" );
 		}
 
 
@@ -310,7 +326,7 @@ namespace Cilbox
 					Serializee seFO;
 					int iFO;
 					if( dict.TryGetValue( "fo", out seFO ) &&
-						Int32.TryParse( seFO.AsString(), out iFO ) &&
+						Int32.TryParse( seFO.AsString(), out iFO ) && 
 						iFO < fieldsObjects.Count )
 					{
 						UnityEngine.Object o = fieldsObjects[iFO];
@@ -327,10 +343,11 @@ namespace Cilbox
 
 							return true;
 						}
+						Debug.LogWarning( $"[CilboxProxy:{gameObject.name}] Object reference slot {iFO} for field {rootFieldName} is null/missing at load time." );
 					}
 					else
 					{
-						Debug.LogWarning( $"Failure to load object in field id:{rootFieldName} of {className}");
+						Debug.LogWarning( $"Failure to load object in field id:{rootFieldName} of {className} (slot parse failed or out of range, fieldsObjects count={fieldsObjects.Count})");
 					}
 				}
 				else if( sT[0] == 'a' )
@@ -338,8 +355,8 @@ namespace Cilbox
 					Serializee seT, seAT, seAL, seAD;
 					int aLen;
 					if( dict.TryGetValue( "t", out seT ) &&
-						dict.TryGetValue( "at", out seAT ) &&
-						dict.TryGetValue( "al", out seAL ) &&
+						dict.TryGetValue( "at", out seAT ) && 
+						dict.TryGetValue( "al", out seAL ) && 
 						dict.TryGetValue( "ad", out seAD ) &&
 						Int32.TryParse( seAL.AsString(), out aLen ) )
 					{
