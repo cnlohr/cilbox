@@ -18,6 +18,7 @@ public class TestScript : MonoBehaviour
 	public UnityEngine.UI.InputField inputField;
 
 	public GameObject gameObjectTest;
+	public GameObject gameObjectTestEmptyDoNotPopulate;
 
 	public TestScript2 testScript2;
 
@@ -66,6 +67,10 @@ public class TestScript : MonoBehaviour
 		if( gameObjectTest.name != "Sphere" )
 		{
 			Debug.LogError( "Error: gameObjectTest is not Sphere" );
+		}
+		if( gameObjectTestEmptyDoNotPopulate )
+		{
+			Debug.LogError( "Error: gameObjectTestEmptyDoNotPopulate is set to something" );
 		}
 
 		textControl.text = framenoPublic + " " + testScript2.reverseFrameNo + "\n" + delegateCount + " - " +
