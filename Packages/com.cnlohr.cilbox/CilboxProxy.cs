@@ -269,6 +269,7 @@ namespace Cilbox
 				{
 					try
 					{
+						// We clean the fieldtype before https://github.com/cnlohr/cilbox/blob/fc608341d293186e0aacf519ea9f0beb43d42cee/Packages/com.cnlohr.cilbox/Cilbox.cs#L1389C40-L1389C67
 						object defaultValue = Activator.CreateInstance( fieldType );
 						fields[i].LoadObject( defaultValue );
 						Debug.Log( $"Default field init {cls.instanceFieldNames[i]} <- default({fieldType}) [boxed]" );
