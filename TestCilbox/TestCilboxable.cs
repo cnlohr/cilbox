@@ -151,25 +151,26 @@ namespace TestCilbox
 
 			Vector3 testVec = new Vector3(7, 7, 7);
 			testVec.x += 5;
-			float myX = testVec.x;
-			Debug.Log("My X: " + myX );
+			Validator.Set("TestVec.x", testVec.x.ToString() );
 			testVec.y++;
+			Validator.Set("TestVec.y", testVec.y.ToString() );
 
 			int myInt = 14;
 			ReadInt(ref myInt);
 			ReadFloat(ref testVec.y);
 			WriteInt(ref myInt, 42);
 			WriteFloat(ref testVec.y, 42.0f);
-			Debug.Log("New myInt: " + myInt );
-			Debug.Log("New testVec.y: " + testVec.y );
+			Validator.Set("New myInt", myInt.ToString() );
+			Validator.Set("New testVec.y", testVec.y.ToString() );
 			Vector3 testObj = null;
 			try
 			{
 				Debug.Log("testObj ToString: " + testObj.x);
+				Validator.Set("FieldAccessNullRef", "try");
 			}
-			catch (NullReferenceException e)
+			catch (NullReferenceException)
 			{
-				Debug.Log(e.ToString());
+				Validator.Set("FieldAccessNullRef", "caught");
 			}
 
 			behaviour2.Behaviour2Test();
@@ -196,25 +197,29 @@ namespace TestCilbox
 		public void ReadInt(ref int field)
 		{
 			int current = field;
-			Debug.Log("ReadInt: " + current);
+			Validator.AddCount("ReadInt");
+			Validator.Set("ReadInt_" + Validator.GetCount("ReadInt"), current.ToString() );
 		}
 
 		public void WriteInt(ref int field, int value)
 		{
-			Debug.Log("WriteInt: " + value);
 			field = value;
+			Validator.AddCount("WriteInt");
+			Validator.Set("WriteInt_" + Validator.GetCount("WriteInt"), value.ToString() );
 		}
 
 		public void ReadFloat(ref float field)
 		{
 			float current = field;
-			Debug.Log("ReadFloat: " + current);
+			Validator.AddCount("ReadFloat");
+			Validator.Set("ReadFloat_" + Validator.GetCount("ReadFloat"), current.ToString() );
 		}
 
 		public void WriteFloat(ref float field, float value)
 		{
-			Debug.Log("WriteFloat: " + value);
 			field = value;
+			Validator.AddCount("WriteFloat");
+			Validator.Set("WriteFloat_" + Validator.GetCount("WriteFloat"), value.ToString() );
 		}
 	}
 

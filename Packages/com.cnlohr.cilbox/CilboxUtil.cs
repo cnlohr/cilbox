@@ -339,7 +339,6 @@ namespace Cilbox
 		// XXX RISKY - generally copy this in-place.
 		public void DereferenceLoadAddress( object overwrite )
 		{
-			// todo: should we dereference NativeHandle? If so, we would need to use the box metadata here
 			if( o.GetType() == typeof(StackElement[]) )
 				((StackElement[])o)[i].Load( overwrite );
 			else

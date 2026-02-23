@@ -289,6 +289,16 @@ namespace TestCilbox
 			Validator.Validate("DictionaryKeys", "key1, key2");
 			Validator.Validate("ComplexGenericType", "String, Int32, Boolean, Char");
 
+			Validator.Validate("TestVec.x", "12");
+			Validator.Validate("TestVec.y", "8");
+			Validator.Validate("New myInt", "42");
+			Validator.Validate("New testVec.y", "42");
+			Validator.Validate("FieldAccessNullRef", "caught");
+			Validator.Validate("ReadInt_1", "14");
+			Validator.Validate("ReadFloat_1", "8");
+			Validator.Validate("WriteInt_1", "42");
+			Validator.Validate("WriteFloat_1", "42");
+
 			return -1 * Validator.NumValidationErrors();
 		}
 	}
