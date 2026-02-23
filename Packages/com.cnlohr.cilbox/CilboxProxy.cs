@@ -257,8 +257,8 @@ namespace Cilbox
 				if( fieldType == null )
 				{
 					fields[i].LoadObject( null );
+					continue;
 				}
-
 				StackType st = StackElement.StackTypeFromType( fieldType );
 				if( st < StackType.Object )
 				{
