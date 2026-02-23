@@ -162,6 +162,15 @@ namespace TestCilbox
 			WriteFloat(ref testVec.y, 42.0f);
 			Debug.Log("New myInt: " + myInt );
 			Debug.Log("New testVec.y: " + testVec.y );
+			Vector3 testObj = null;
+			try
+			{
+				Debug.Log("testObj ToString: " + testObj.x);
+			}
+			catch (NullReferenceException e)
+			{
+				Debug.Log(e.ToString());
+			}
 
 			behaviour2.Behaviour2Test();
 		}

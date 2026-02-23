@@ -872,7 +872,7 @@ spiperf.Begin();
 
 						object opths = stackBuffer[sp--].AsObject(box);
 						if (opths == null) {
-							// interpretedThrow NullReferenceException
+							interpretedThrow(pc - 1, new NullReferenceException());
 							break;
 						}
 
@@ -890,7 +890,7 @@ spiperf.Begin();
 
 						if (ldfldMeta.nativeField == null)
 						{
-							// interpretedThrow MissingFieldException?
+							interpretedThrow(pc - 1, new MissingFieldException($"Field {ldfldMeta.Name} on type {ldfldMeta.nativeType.FullName} does not exist or is not accessible."));
 							break;
 						}
 
@@ -903,7 +903,7 @@ spiperf.Begin();
 						uint bc = BytecodeAsU32( ref pc );
 						object opths = stackBuffer[sp--].AsObject(box);
 						if (opths == null) {
-							// interpretedThrow NullReferenceException
+							interpretedThrow(pc - 1, new NullReferenceException());
 							break;
 						}
 
@@ -923,7 +923,7 @@ spiperf.Begin();
 						object opths = stackBuffer[sp--].AsObject(box);
 						if (opths == null)
 						{
-							// interpretedThrow NullReferenceException
+							interpretedThrow(pc - 1, new NullReferenceException());
 							break;
 						}
 
@@ -943,7 +943,7 @@ spiperf.Begin();
 
 						if (ldfldMeta.nativeField == null)
 						{
-							// interpretedThrow MissingFieldException?
+							interpretedThrow(pc - 1, new MissingFieldException($"Field {ldfldMeta.Name} on type {ldfldMeta.nativeType.FullName} does not exist or is not accessible."));
 							break;
 						}
 
@@ -958,7 +958,7 @@ spiperf.Begin();
 
 						if (obj == null)
 						{
-							// interpretedThrow NullReferenceException
+							interpretedThrow(pc - 1, new NullReferenceException());
 							break;
 						}
 
