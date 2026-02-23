@@ -280,12 +280,12 @@ spiperf.Begin();
 					case 0x0c: stackBuffer[localVarsHead+2] = stackBuffer[sp--]; break; //stloc.2
 					case 0x0d: stackBuffer[localVarsHead+3] = stackBuffer[sp--]; break; //stloc.3
 					case 0x0e: stackBuffer[++sp] = parameters[byteCode[pc++]]; break; // ldarg.s <uint8 (argNum)>
-					case 0x0f: stackBuffer[++sp] = StackElement.CreateReference( parametersIn.Array, (uint)parametersIn.Offset + (uint)byteCode[pc++] ); break; // ldarga.s <uint8 (argNum)>
+					case 0x0f: stackBuffer[++sp] = StackElement.CreateAddressReference( parametersIn.Array, (uint)parametersIn.Offset + (uint)byteCode[pc++] ); break; // ldarga.s <uint8 (argNum)>
 					case 0x11: stackBuffer[++sp] = stackBuffer[localVarsHead+byteCode[pc++]]; break; //ldloc.s
 					case 0x12:
 					{
 						uint whichLocal = byteCode[pc++];
-						stackBuffer[++sp] = StackElement.CreateReference( stackBufferIn.Array, (uint)(localVarsHead+whichLocal+stackBufferIn.Offset) );
+						stackBuffer[++sp] = StackElement.CreateAddressReference( stackBufferIn.Array, (uint)(localVarsHead+whichLocal+stackBufferIn.Offset) );
 						break; //ldloca.s // Load address of local variable.
 					}
 					case 0x13: stackBuffer[localVarsHead+byteCode[pc++]] = stackBuffer[sp--]; break; //stloc.s
@@ -431,7 +431,7 @@ spiperf.Begin();
 
 								if( seorig.type == StackType.NativeHandle )
 								{
-									callthis = box.metadatas[seorig.u].nativeField.GetValue( seorig.o );
+									callthis = seorig.DereferenceNativeHandle(box);
 								}
 								else if( t.IsValueType && se.type < StackType.Object )
 								{
@@ -452,12 +452,9 @@ spiperf.Begin();
 								iko = st.Invoke( callthis, callpar );
 								if( seorig.type == StackType.Address )
 								{
-									seorig.DereferenceLoad( callthis );
+									seorig.DereferenceLoadAddress( callthis );
 								}
-								else if( seorig.type == StackType.NativeHandle )
-								{
-									box.metadatas[seorig.u].nativeField.SetValue( seorig.o, callthis );
-								}
+								// todo: will there be NativeHandle here?
 							}
 							else
 							{
@@ -470,12 +467,13 @@ spiperf.Begin();
 								StackElement se = callpar_se[ik];
 								if( se.type == StackType.Address )
 								{
-									callpar_se[ik].DereferenceLoad( callpar[ik] );
+									callpar_se[ik].DereferenceLoadAddress( callpar[ik] );
 									//if( se.o.GetType() == typeof(StackElement[]) )
 									//	((StackElement[])se.o)[se.i].Load( callpar[ik] );
 									//else
 									//	((Array)se.o).SetValue(callpar[ik], se.i);
 								}
+								// todo: will there be NativeHandle here?
 							}
 
 							if( !isVoid )
@@ -867,20 +865,18 @@ spiperf.Begin();
 						interpretedThrow(pc - 1, throwable);
 						break;
 					}
-					case 0x7b:
+					case 0x7b: // ldfld
 					{
 						// Tricky:  Do not allow host-fields without great care. For instance, getting access to PlatformActual.DelegateRepackage would all the program out.
 						uint bc = BytecodeAsU32( ref pc );
 
-						StackElement se = stackBuffer[sp--];
-
-						if (se.o == null)
-						{
+						object opths = stackBuffer[sp--].AsObject(box);
+						if (opths == null) {
 							// interpretedThrow NullReferenceException
 							break;
 						}
 
-						if( se.o is CilboxProxy proxy )
+						if( opths is CilboxProxy proxy )
 						{
 							stackBuffer[++sp] = proxy.fields[box.metadatas[bc].fieldIndex];
 							break;
@@ -898,34 +894,33 @@ spiperf.Begin();
 							break;
 						}
 
-						object val = ldfldMeta.nativeField.GetValue( se.o );
+						object val = ldfldMeta.nativeField.GetValue( opths );
 						stackBuffer[++sp].Load( val );
 						break;
 					}
 					case 0x7c: // ldflda
 					{
 						uint bc = BytecodeAsU32( ref pc );
-						StackElement se = stackBuffer[sp--];
-
-						if( se.o is CilboxProxy proxy )
-						{
-							stackBuffer[++sp] = StackElement.CreateReference((Array)(proxy.fields), (uint)box.metadatas[bc].fieldIndex);
+						object opths = stackBuffer[sp--].AsObject(box);
+						if (opths == null) {
+							// interpretedThrow NullReferenceException
 							break;
 						}
 
-						StackElement handle = new StackElement();
-						handle.type = StackType.NativeHandle;
-						handle.u = bc;
-						handle.o = se.o;
-						stackBuffer[++sp] = handle;
+						if( opths is CilboxProxy proxy )
+						{
+							stackBuffer[++sp] = StackElement.CreateAddressReference((Array)(proxy.fields), (uint)box.metadatas[bc].fieldIndex);
+							break;
+						}
 
+						stackBuffer[++sp] = StackElement.CreateNativeHandleReference( opths, bc );
 						break;
 					}
 					case 0x7d: // stfld
 					{
 						uint bc = BytecodeAsU32( ref pc );
 						StackElement se = stackBuffer[sp--];
-						object opths = stackBuffer[sp--].AsObject();
+						object opths = stackBuffer[sp--].AsObject(box);
 						if (opths == null)
 						{
 							// interpretedThrow NullReferenceException
@@ -959,18 +954,7 @@ spiperf.Begin();
 					case 0x4b: case 0x4c: case 0x4d: case 0x4e: case 0x4f: case 0x50:
 					{
 						StackElement se = stackBuffer[sp--];
-						object obj = null;
-						switch (se.type)
-						{
-							case StackType.Address:
-								Console.WriteLine($"[Cilbox] ldind dereference as Address: {se.o} [{se.i}]");
-								obj = se.Dereference();
-								break;
-							case StackType.NativeHandle:
-								Console.WriteLine($"[Cilbox] ldind dereference as NativeHandle: {se.u}");
-								obj = box.metadatas[se.u].nativeField.GetValue(se.o);
-								break;
-						}
+						object obj = se.Dereference(box);
 
 						if (obj == null)
 						{
@@ -1044,18 +1028,7 @@ spiperf.Begin();
 						StackElement val = stackBuffer[sp--];
 						StackElement addr = stackBuffer[sp--];
 						object obj = val.AsObject();
-						switch (addr.type)
-						{
-							case StackType.Address:
-								addr.DereferenceLoad( obj );
-								break;
-							case StackType.NativeHandle:
-								box.metadatas[addr.u].nativeField.SetValue( addr.o, obj );
-								break;
-							default:
-								// interpretedThrow NullReferenceException
-								break;
-						}
+						addr.DereferenceLoad(box, obj);
 						break;
 					}
 					case 0x7e: // ldsfld
@@ -1067,7 +1040,7 @@ spiperf.Begin();
 					case 0x7f: // ldsflda
 					{
 						uint bc = BytecodeAsU32( ref pc );
-						stackBuffer[++sp] = StackElement.CreateReference( (Array)(parentClass.staticFields), (uint)box.metadatas[bc].fieldIndex );
+						stackBuffer[++sp] = StackElement.CreateAddressReference( (Array)(parentClass.staticFields), (uint)box.metadatas[bc].fieldIndex );
 						break;
 					}
 					case 0x80: // stsfld
@@ -1104,7 +1077,7 @@ spiperf.Begin();
 						/*uint whichClass = */BytecodeAsU32( ref pc ); // (For now, ignored)
 						uint index = stackBuffer[sp--].u;
 						Array a = (Array)(stackBuffer[sp--].AsObject());
-						stackBuffer[++sp] = StackElement.CreateReference( a, index );
+						stackBuffer[++sp] = StackElement.CreateAddressReference( a, index );
 						break;
 					}
 					case 0x90: case 0x91: case 0x92: case 0x93: case 0x94: // ldelem

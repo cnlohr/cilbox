@@ -152,7 +152,7 @@ namespace Cilbox
 			{
 				Component c;
 				ret.Load( ((GameObject)o).TryGetComponent(t, out c) );
-				parameters[1].DereferenceLoad( c );
+				parameters[1].DereferenceLoadAddress( c );
 			}
 			return ret;
 		}
@@ -177,7 +177,7 @@ namespace Cilbox
 					if( p.className == compName && parameters[1].type == StackType.Address )
 					{
 						ret.Load( true );
-						parameters[1].DereferenceLoad( p );
+						parameters[1].DereferenceLoadAddress( p );
 						break;
 					}
 				}

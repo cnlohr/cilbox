@@ -51,7 +51,7 @@ namespace Cilbox
 		[FieldOffset(8)]public ulong e;
 		[FieldOffset(16)]public object o;
 
-		static public StackElement nil;
+		public static StackElement nil;
 
 		public static readonly Dictionary< String, StackType > TypeToStackType = new Dictionary<String, StackType>(){
 			{ "System.Boolean", StackType.Boolean },
@@ -87,7 +87,7 @@ namespace Cilbox
 			return this;
 		}
 
-		static public StackElement LoadAsStatic( object o )
+		public static StackElement LoadAsStatic( object o )
 		{
 			StackElement ret = new StackElement();
 			ret.i = 0; ret.o = null;
@@ -153,25 +153,25 @@ namespace Cilbox
 			}
 		}
 
-		public object AsObject()
+		public object AsObject(Cilbox? box = null)
 		{
-			switch( type )
+			return type switch
 			{
-			case StackType.Sbyte: return (sbyte)i;
-			case StackType.Byte: return (byte)i;
-			case StackType.Short: return (short)i;
-			case StackType.Ushort: return (ushort)i;
-			case StackType.Int: return (int)i;
-			case StackType.Uint: return (uint)u;
-			case StackType.Long: return (long)l;
-			case StackType.Ulong: return (ulong)e;
-			case StackType.Float: return (float)f;
-			case StackType.Double: return (double)d;
-			case StackType.Boolean: return (bool)b;
-			case StackType.Address: return Dereference();
-			// todo: handle NativeHandle somehow
-			default: return o;
-			}
+				StackType.Sbyte => (sbyte)i,
+				StackType.Byte => (byte)i,
+				StackType.Short => (short)i,
+				StackType.Ushort => (ushort)i,
+				StackType.Int => i,
+				StackType.Uint => u,
+				StackType.Long => l,
+				StackType.Ulong => e,
+				StackType.Float => f,
+				StackType.Double => d,
+				StackType.Boolean => b,
+				StackType.Address => DereferenceAddress(),
+				StackType.NativeHandle => DereferenceNativeHandle(box),
+				_ => o
+			};
 		}
 
 		public int AsInt()
@@ -190,8 +190,8 @@ namespace Cilbox
 			case StackType.Float: return (int)f;
 			case StackType.Double: return (int)d;
 			case StackType.Boolean: return b ? 1 : 0;
-			case StackType.Address: return (int)Dereference();
-			// todo: handle NativeHandle somehow
+			case StackType.Address: return (int)DereferenceAddress();
+			// todo: handle NativeHandle somehow (or delete this unused method?)
 			default: return (int)o;
 			}
 		}
@@ -291,7 +291,7 @@ namespace Cilbox
 			throw new Exception( "Erorr invalid type conversion from " + type + " to " + t );
 		}
 
-		public object Dereference()
+		public object DereferenceAddress()
 		{
 			// todo: should we dereference NativeHandle? If so, we would need to use the box metadata here
 			if( o.GetType() == typeof(StackElement[]) )
@@ -300,8 +300,28 @@ namespace Cilbox
 				return ((Array)o).GetValue(i);
 		}
 
+		public object DereferenceNativeHandle(Cilbox? box)
+		{
+			if (box == null)
+			{
+				throw new CilboxException("Cannot dereference NativeHandle without a Cilbox instance");
+			}
+
+			return box.metadatas[u].nativeField.GetValue(o);
+		}
+
+		public object Dereference(Cilbox? box)
+		{
+			return type switch
+			{
+				StackType.Address => DereferenceAddress(),
+				StackType.NativeHandle => DereferenceNativeHandle(box),
+				_ => throw new CilboxException($"Cannot dereference StackElement of type {type}")
+			};
+		}
+
 		// Mostly like a Dereference.
-		static public StackElement ResolveToStackElement( StackElement tr )
+		public static StackElement ResolveToStackElement( StackElement tr )
 		{
 			if( tr.type == StackType.Address )
 			{
@@ -317,7 +337,7 @@ namespace Cilbox
 		}
 
 		// XXX RISKY - generally copy this in-place.
-		public void DereferenceLoad( object overwrite )
+		public void DereferenceLoadAddress( object overwrite )
 		{
 			// todo: should we dereference NativeHandle? If so, we would need to use the box metadata here
 			if( o.GetType() == typeof(StackElement[]) )
@@ -326,7 +346,27 @@ namespace Cilbox
 				((Array)o).SetValue(overwrite, i);
 		}
 
-		static public StackElement CreateReference( Array array, uint index )
+		public void DereferenceLoadNativeHandle( Cilbox? box, object overwrite )
+		{
+			if (box == null)
+			{
+				throw new CilboxException("Cannot dereference NativeHandle without a Cilbox instance");
+			}
+
+			box.metadatas[u].nativeField.SetValue(o, overwrite);
+		}
+
+		public void DereferenceLoad( Cilbox? box, object overwrite )
+		{
+			switch( type )
+			{
+			case StackType.Address: DereferenceLoadAddress( overwrite ); break;
+			case StackType.NativeHandle: DereferenceLoadNativeHandle( box, overwrite ); break;
+			default: throw new CilboxException($"Cannot dereference load StackElement of type {type}");
+			}
+		}
+
+		public static StackElement CreateAddressReference( Array array, uint index )
 		{
 			StackElement ret = new StackElement();
 			ret.type = StackType.Address;
@@ -335,8 +375,17 @@ namespace Cilbox
 			return ret;
 		}
 
+		public static StackElement CreateNativeHandleReference( object o, uint index )
+		{
+			StackElement ret = new StackElement();
+			ret.type = StackType.NativeHandle;
+			ret.u = index;
+			ret.o = o;
+			return ret;
+		}
+
 		// This logic is probably incorrect.
-		static public StackType StackTypeMaxPromote( StackType a, StackType b )
+		public static StackType StackTypeMaxPromote( StackType a, StackType b )
 		{
 			if( a < StackType.Int ) a = StackType.Int;
 			if( b < StackType.Int ) b = StackType.Int;
@@ -417,7 +466,7 @@ namespace Cilbox
 			e = ElementType.String;
 		}
 
-		static public Serializee CreateFromBlob( byte [] bytes ) // For serialization
+		public static Serializee CreateFromBlob( byte [] bytes ) // For serialization
 		{
 			int len = bytes.Length;
 			byte lenBytes = ComputeLengthBytes( len );
@@ -630,7 +679,7 @@ namespace Cilbox
 	public static class CilboxUtil
 	{
 		// Used both in Cilbox + CilboxProxy for getting strings of fields into objects.
-		static public object DeserializeDataForProxyField( Type t, String sInitialize )
+		public static object DeserializeDataForProxyField( Type t, String sInitialize )
 		{
 			if( sInitialize != null && sInitialize.Length > 0 )
 				return TypeDescriptor.GetConverter(t).ConvertFrom(sInitialize);

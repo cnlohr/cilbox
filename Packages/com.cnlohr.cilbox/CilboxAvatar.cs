@@ -88,7 +88,7 @@ namespace Cilbox
 		override public bool CheckFieldAllowed( String sType, String sFieldName )
 		{
 			if( !CheckTypeAllowed( sType ) ) return false;
-			if( sType.length < 1 || sFieldName.length < 1 ) return false;
+			if( sType.Length < 1 || sFieldName.Length < 1 ) return false;
 			if( !whiteListFields.Contains( sType + "." + sFieldName ) ) return false;
 			return true;
 		}

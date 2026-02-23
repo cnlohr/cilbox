@@ -66,6 +66,8 @@ public class TestScript2 : MonoBehaviour
 		{
 			Debug.LogError( "testVector.z should be 9\n" );
 		}
+
+		Debug.Log("testVector: [" + testVector.x + "," + testVector.y + "," + testVector.z + "]" );
 	}
 
 	public void AnotherThing()
@@ -125,7 +127,7 @@ public class TestScript2 : MonoBehaviour
 //		{
 //			Debug.Log( tr );
 //		}
-		
+
 
 	}
 

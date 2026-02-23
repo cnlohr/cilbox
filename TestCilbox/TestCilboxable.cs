@@ -153,6 +153,7 @@ namespace TestCilbox
 			testVec.x += 5;
 			float myX = testVec.x;
 			Debug.Log("My X: " + myX );
+			testVec.y++;
 
 			int myInt = 14;
 			ReadInt(ref myInt);
