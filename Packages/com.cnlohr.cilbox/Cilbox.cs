@@ -280,12 +280,12 @@ spiperf.Begin();
 					case 0x0c: stackBuffer[localVarsHead+2] = stackBuffer[sp--]; break; //stloc.2
 					case 0x0d: stackBuffer[localVarsHead+3] = stackBuffer[sp--]; break; //stloc.3
 					case 0x0e: stackBuffer[++sp] = parameters[byteCode[pc++]]; break; // ldarg.s <uint8 (argNum)>
-					case 0x0f: stackBuffer[++sp] = StackElement.CreateReference( parametersIn.Array, (uint)parametersIn.Offset + (uint)byteCode[pc++] ); break; // ldarga.s <uint8 (argNum)>
+					case 0x0f: stackBuffer[++sp] = StackElement.CreateAddressReference( parametersIn.Array, (uint)parametersIn.Offset + (uint)byteCode[pc++] ); break; // ldarga.s <uint8 (argNum)>
 					case 0x11: stackBuffer[++sp] = stackBuffer[localVarsHead+byteCode[pc++]]; break; //ldloc.s
 					case 0x12:
 					{
 						uint whichLocal = byteCode[pc++];
-						stackBuffer[++sp] = StackElement.CreateReference( stackBufferIn.Array, (uint)(localVarsHead+whichLocal+stackBufferIn.Offset) );
+						stackBuffer[++sp] = StackElement.CreateAddressReference( stackBufferIn.Array, (uint)(localVarsHead+whichLocal+stackBufferIn.Offset) );
 						break; //ldloca.s // Load address of local variable.
 					}
 					case 0x13: stackBuffer[localVarsHead+byteCode[pc++]] = stackBuffer[sp--]; break; //stloc.s
@@ -400,7 +400,7 @@ spiperf.Begin();
 							{
 								StackElement se = stackBuffer[sp--];
 								callpar_se[numFields-ik-1] = se;
-								object o = se.AsObject();
+								object o = se.AsObject(box);
 								Type t = pa[numFields-ik-1].ParameterType;
 
 								// XXX TODO: Copy mechanism below from ResolveToStackElement and Coerce
@@ -429,7 +429,11 @@ spiperf.Begin();
 								StackElement se = StackElement.ResolveToStackElement( seorig );
 								Type t = mi.DeclaringType;
 
-								if( t.IsValueType && se.type < StackType.Object )
+								if( seorig.type == StackType.NativeHandle )
+								{
+									callthis = seorig.DereferenceNativeHandle(box);
+								}
+								else if( t.IsValueType && se.type < StackType.Object )
 								{
 									// Try to coerce types.
 									callthis = se.CoerceToObject( t );
@@ -448,7 +452,11 @@ spiperf.Begin();
 								iko = st.Invoke( callthis, callpar );
 								if( seorig.type == StackType.Address )
 								{
-									seorig.DereferenceLoad( callthis );
+									seorig.DereferenceLoadAddress( callthis );
+								}
+								else if ( seorig.type == StackType.NativeHandle )
+								{
+									seorig.DereferenceLoadNativeHandle( box, callthis );
 								}
 							}
 							else
@@ -460,13 +468,13 @@ spiperf.Begin();
 							for( ik = 0; ik < numFields; ik++ )
 							{
 								StackElement se = callpar_se[ik];
-								if( se.type == StackType.Address )
+								if (se.type == StackType.Address)
 								{
-									callpar_se[ik].DereferenceLoad( callpar[ik] );
-									//if( se.o.GetType() == typeof(StackElement[]) )
-									//	((StackElement[])se.o)[se.i].Load( callpar[ik] );
-									//else
-									//	((Array)se.o).SetValue(callpar[ik], se.i);
+									callpar_se[ik].DereferenceLoadAddress( callpar[ik] );
+								}
+								else if ( se.type == StackType.NativeHandle )
+								{
+									callpar_se[ik].DereferenceLoadNativeHandle( box, callpar[ik] );
 								}
 							}
 
@@ -552,13 +560,26 @@ spiperf.Begin();
 							case 2: if( sa.i >  sb.i ) pc += joffset; break;
 							case 3: if( sa.i <= sb.i ) pc += joffset; break;
 							case 4: if( sa.i <  sb.i ) pc += joffset; break;
-							case 5: if( sa.e != sb.e ) pc += joffset; break;
-							case 6: if( sa.e >= sb.e ) pc += joffset; break;
-							case 7: if( sa.e >  sb.e ) pc += joffset; break;
-							case 8: if( sa.e <= sb.e ) pc += joffset; break;
-							case 9: if( sa.e <  sb.e ) pc += joffset; break;
+							case 5: if( sa.u != sb.u ) pc += joffset; break;
+							case 6: if( sa.u >= sb.u ) pc += joffset; break;
+							case 7: if( sa.u >  sb.u ) pc += joffset; break;
+							case 8: if( sa.u <= sb.u ) pc += joffset; break;
+							case 9: if( sa.u <  sb.u ) pc += joffset; break;
 							} break;
-						case StackType.Byte: case StackType.Ushort: case StackType.Uint: case StackType.Ulong:
+						case StackType.Byte: case StackType.Ushort: case StackType.Uint:
+							switch( iop )	{
+							case 0: if( sa.u == sb.u ) pc += joffset; break;
+							case 1: if( sa.u >= sb.u ) pc += joffset; break;
+							case 2: if( sa.u >  sb.u ) pc += joffset; break;
+							case 3: if( sa.u <= sb.u ) pc += joffset; break;
+							case 4: if( sa.u <  sb.u ) pc += joffset; break;
+							case 5: if( sa.u != sb.u ) pc += joffset; break;
+							case 6: if( sa.u >= sb.u ) pc += joffset; break;
+							case 7: if( sa.u >  sb.u ) pc += joffset; break;
+							case 8: if( sa.u <= sb.u ) pc += joffset; break;
+							case 9: if( sa.u <  sb.u ) pc += joffset; break;
+							} break;
+						case StackType.Ulong:
 							switch( iop )	{
 							case 0: if( sa.e == sb.e ) pc += joffset; break;
 							case 1: if( sa.e >= sb.e ) pc += joffset; break;
@@ -859,61 +880,213 @@ spiperf.Begin();
 						interpretedThrow(pc - 1, throwable);
 						break;
 					}
-					case 0x7b:
+					case 0x7b: // ldfld
 					{
-						uint bc = BytecodeAsU32( ref pc );
-
-						StackElement se = stackBuffer[sp--];
-						if( se.o is CilboxProxy )
-							stackBuffer[++sp] = ((CilboxProxy)se.o).fields[box.metadatas[bc].fieldIndex];
-						else
-							throw new CilboxInterpreterRuntimeException("Unimplemented.  Attempting to get field on non-cilbox object", parentClass.className, methodName, pc);
 						// Tricky:  Do not allow host-fields without great care. For instance, getting access to PlatformActual.DelegateRepackage would all the program out.
-						break; //ldfld
-					}
-					case 0x7c:
-					{
 						uint bc = BytecodeAsU32( ref pc );
-						StackElement se = stackBuffer[sp--];
 
-						if( se.o is CilboxProxy )
-							stackBuffer[++sp] = StackElement.CreateReference( (Array)(((CilboxProxy)se.o).fields), (uint)box.metadatas[bc].fieldIndex );
-						else
-							throw new CilboxInterpreterRuntimeException("Unimplemented.  Attempting to get field on non-cilbox object", parentClass.className, methodName, pc);
-						break;// ldflda
+						object opths = stackBuffer[sp--].AsObject(box);
+						if (opths == null) {
+							interpretedThrow(pc - 1, new NullReferenceException());
+							break;
+						}
+
+						if( opths is CilboxProxy proxy )
+						{
+							stackBuffer[++sp] = proxy.fields[box.metadatas[bc].fieldIndex];
+							break;
+						}
+
+						CilMetadataTokenInfo ldfldMeta = box.metadatas[bc];
+						if(!ldfldMeta.isFieldWhiteListed)
+						{
+							throw new CilboxInterpreterRuntimeException($"Can not access non-whitelisted field {ldfldMeta.Name} on type {ldfldMeta.nativeType.FullName}", parentClass.className, methodName, pc);
+						}
+
+						if (ldfldMeta.nativeField == null)
+						{
+							interpretedThrow(pc - 1, new MissingFieldException($"Field {ldfldMeta.Name} on type {ldfldMeta.nativeType.FullName} does not exist or is not accessible."));
+							break;
+						}
+
+						object val = ldfldMeta.nativeField.GetValue( opths );
+						stackBuffer[++sp].Load( val );
+						break;
 					}
-					case 0x7d:
+					case 0x7c: // ldflda
+					{
+						uint bc = BytecodeAsU32( ref pc );
+						object opths = stackBuffer[sp--].AsObject(box);
+						if (opths == null) {
+							interpretedThrow(pc - 1, new NullReferenceException());
+							break;
+						}
+
+						if( opths is CilboxProxy proxy )
+						{
+							stackBuffer[++sp] = StackElement.CreateAddressReference((Array)(proxy.fields), (uint)box.metadatas[bc].fieldIndex);
+							break;
+						}
+
+						stackBuffer[++sp] = StackElement.CreateNativeHandleReference( opths, bc );
+						break;
+					}
+					case 0x7d: // stfld
 					{
 						uint bc = BytecodeAsU32( ref pc );
 						StackElement se = stackBuffer[sp--];
-						object opths = stackBuffer[sp--].AsObject();
-						if( opths is CilboxProxy )
+						object opths = stackBuffer[sp--].AsObject(box);
+						if (opths == null)
 						{
-							((CilboxProxy)opths).fields[box.metadatas[bc].fieldIndex] = se;
+							interpretedThrow(pc - 1, new NullReferenceException());
+							break;
+						}
+
+						if( opths is CilboxProxy proxy )
+						{
+							proxy.fields[box.metadatas[bc].fieldIndex] = se;
 							//Debug.Log( "Type: " + ((CilboxProxy)opths).fields[box.metadatas[bc].fieldIndex].type );
+							break;
+						}
+
+						CilMetadataTokenInfo ldfldMeta = box.metadatas[bc];
+
+						if (!ldfldMeta.isFieldWhiteListed)
+						{
+							throw new CilboxInterpreterRuntimeException($"Can not access non-whitelisted field {ldfldMeta.Name} on type {ldfldMeta?.nativeType?.FullName}", parentClass.className, methodName, pc);
+						}
+
+						if (ldfldMeta.nativeField == null)
+						{
+							interpretedThrow(pc - 1, new MissingFieldException($"Field {ldfldMeta.Name} on type {ldfldMeta.nativeType.FullName} does not exist or is not accessible."));
+							break;
+						}
+
+						ldfldMeta.nativeField.SetValue( opths, se.CoerceToObject( ldfldMeta.nativeType ) );
+						break;
+					}
+					case 0x46: case 0x47: case 0x48: case 0x49: case 0x4a: // ldind
+					case 0x4b: case 0x4c: case 0x4d: case 0x4e: case 0x4f: case 0x50:
+					{
+						StackElement se = stackBuffer[sp--];
+						object obj = null;
+						if (se.type == StackType.Address)
+						{
+							obj = se.DereferenceAddress();
+						}
+						else if (se.type == StackType.NativeHandle)
+						{
+							obj = se.DereferenceNativeHandle(box);
 						}
 						else
-							throw new CilboxInterpreterRuntimeException("Unimplemented.  Attempting to set field on non-cilbox object", parentClass.className, methodName, pc);
-						break; //stfld
+						{
+							throw new CilboxInterpreterRuntimeException("Invalid stack type for ldind instruction", parentClass.className, methodName, pc);
+						}
+
+						if (obj == null)
+						{
+							interpretedThrow(pc - 1, new NullReferenceException());
+							break;
+						}
+
+						switch (b - 0x46)
+						{
+							case 0: // ldind.i1
+							{
+								stackBuffer[++sp].LoadSByte( Convert.ToSByte(obj) );
+								break;
+							}
+							case 1: // ldind.u1
+							{
+								stackBuffer[++sp].LoadByte( Convert.ToByte(obj) );
+								break;
+							}
+							case 2: // ldind.i2
+							{
+								stackBuffer[++sp].LoadShort( Convert.ToInt16(obj) );
+								break;
+							}
+							case 3: // ldind.u2
+							{
+								stackBuffer[++sp].LoadUshort( Convert.ToUInt16(obj) );
+								break;
+							}
+							case 4: // ldind.i4
+							{
+								stackBuffer[++sp].LoadInt( Convert.ToInt32(obj) );
+								break;
+							}
+							case 5: // ldind.u4
+							{
+								stackBuffer[++sp].LoadUint( Convert.ToUInt32(obj) );
+								break;
+							}
+							case 6: // ldind.i8 / ldind.u8
+							{
+								stackBuffer[++sp].LoadLong( Convert.ToInt64(obj) );
+								break;
+							}
+							case 7: // ldind.i
+							{
+								stackBuffer[++sp].LoadLong( Convert.ToInt64(obj) );
+								break;
+							}
+							case 8: // ldind.r4
+							{
+								stackBuffer[++sp].LoadFloat( Convert.ToSingle(obj) );
+								break;
+							}
+							case 9: // ldind.r8
+							{
+								stackBuffer[++sp].LoadDouble( Convert.ToDouble(obj) );
+								break;
+							}
+							case 10: // ldind.ref
+							{
+								stackBuffer[++sp].LoadObject(obj);
+								break;
+							}
+						}
+						break;
 					}
-					case 0x7e:
+					case 0x51: case 0x52: case 0x53: case 0x54: case 0x55: // stind
+					case 0x56: case 0x57:
+					{
+						StackElement val = stackBuffer[sp--];
+						StackElement addr = stackBuffer[sp--];
+						object obj = val.AsObject();
+						if (addr.type == StackType.Address)
+						{
+							addr.DereferenceLoadAddress(obj);
+						}
+						else if (addr.type == StackType.NativeHandle)
+						{
+							addr.DereferenceLoadNativeHandle(box, obj);
+						}
+						else
+						{
+							throw new CilboxInterpreterRuntimeException("Invalid stack type for stind instruction", parentClass.className, methodName, pc);
+						}
+						break;
+					}
+					case 0x7e: // ldsfld
 					{
 						uint bc = BytecodeAsU32( ref pc );
 						stackBuffer[++sp].Load( parentClass.staticFields[box.metadatas[bc].fieldIndex] );
-						break; //ldsfld
+						break;
 					}
-					case 0x7f:
+					case 0x7f: // ldsflda
 					{
 						uint bc = BytecodeAsU32( ref pc );
-						stackBuffer[++sp] = StackElement.CreateReference( (Array)(parentClass.staticFields), (uint)box.metadatas[bc].fieldIndex );
-						break;// ldsflda
+						stackBuffer[++sp] = StackElement.CreateAddressReference( (Array)(parentClass.staticFields), (uint)box.metadatas[bc].fieldIndex );
+						break;
 					}
-					case 0x80:
+					case 0x80: // stsfld
 					{
 						uint bc = BytecodeAsU32( ref pc );
 						object obj = stackBuffer[sp--].AsObject();
 						parentClass.staticFields[box.metadatas[bc].fieldIndex] = obj;
-						break; //stsfld
+						break;
 					}
 					case 0x8C: // box (This pulls off a type)
 					{
@@ -921,35 +1094,47 @@ spiperf.Begin();
 						stackBuffer[sp].LoadObject( stackBuffer[sp].AsObject() );//(metaType.nativeType)stackBuffer[sp-1].AsObject();
 						break;
 					}
-					case 0x8d:
+					case 0x8d: // newarr <etype>
 					{
 						uint otyp = BytecodeAsU32( ref pc );
 						if( stackBuffer[sp].type > StackType.Ulong )
 							throw new CilboxInterpreterRuntimeException("Invalid type, processing new array", parentClass.className, methodName, pc);
 						int size = stackBuffer[sp].i;
-						Type t = box.metadatas[otyp].nativeType;
-						stackBuffer[sp].LoadObject( Array.CreateInstance( t, size ) );
-						//newarr <etype>
+						CilMetadataTokenInfo arrMeta = box.metadatas[otyp];
+						if( arrMeta.nativeTypeIsCilboxProxy )
+							stackBuffer[sp].LoadObject( new object[size] );
+						else
+							stackBuffer[sp].LoadObject( Array.CreateInstance( arrMeta.nativeType, size ) );
 						break;
 					}
-					case 0x8e:
+					case 0x8e: // ldlen
 					{
 						stackBuffer[sp].LoadInt( ((Array)(stackBuffer[sp].o)).Length );
-						break; //ldlen
+						break;
 					}
-					case 0x8f:
+					case 0x8f: // ldelema
 					{
 						/*uint whichClass = */BytecodeAsU32( ref pc ); // (For now, ignored)
-						uint index = stackBuffer[sp--].u;
+						int index = stackBuffer[sp--].i;
 						Array a = (Array)(stackBuffer[sp--].AsObject());
-						stackBuffer[++sp] = StackElement.CreateReference( a, index );
-						break; //ldlema
+						if (index < 0 || index >= a.Length)
+						{
+							interpretedThrow(pc - 1, new IndexOutOfRangeException());
+							break;
+						}
+						stackBuffer[++sp] = StackElement.CreateAddressReference( a, (uint)index );
+						break;
 					}
-					case 0x90: case 0x91: case 0x92: case 0x93: case 0x94:
+					case 0x90: case 0x91: case 0x92: case 0x93: case 0x94: // ldelem
 					case 0x95: case 0x96: case 0x97: case 0x98: case 0x99:
 					{
 						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
 						int index = stackBuffer[sp--].i;
+						if (index < 0 || index >= ((Array)(stackBuffer[sp].o)).Length)
+						{
+							interpretedThrow(pc - 1, new IndexOutOfRangeException());
+							break;
+						}
 //						Array a = ((Array)(stackBuffer[sp].o));
 						switch( b - 0x90 )
 						{
@@ -969,23 +1154,28 @@ spiperf.Begin();
 						}
 						break;
 					}
-					case 0x9a:
+					case 0x9a: // Ldelem_Ref
 					{
 						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
 						int index = stackBuffer[sp--].i;
 						Array a = ((Array)(stackBuffer[sp--].o));
+						if (index < 0 || index >= a.Length)
+						{
+							interpretedThrow(pc - 1, new IndexOutOfRangeException());
+							break;
+						}
 						stackBuffer[++sp].LoadObject( a.GetValue(index) );
-						break; //Ldelem_Ref
+						break;
 					}
-					case 0x9c:
+					case 0x9c: // stelem.i1
 					{
 						SByte val = (SByte)stackBuffer[sp--].i;
 						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
 						int index = stackBuffer[sp--].i;
 						((Array)(stackBuffer[sp--].o)).SetValue( (byte)val, index );
-						break; // stelem.i1
+						break;
 					}
-					case 0xa0:
+					case 0xa0: // stelem.r4
 					{
 						float val;
 						val = stackBuffer[sp--].f;
@@ -993,18 +1183,18 @@ spiperf.Begin();
 						int index = stackBuffer[sp--].i;
 						float [] array = (float[])stackBuffer[sp--].AsObject();
 						array[index] = val;
-						break; // stelem.r4
+						break;
 					}
-					case 0xa2:
+					case 0xa2: // stelem.ref
 					{
 						object val = stackBuffer[sp--].AsObject();
 						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type", parentClass.className, methodName, pc);
 						int index = stackBuffer[sp--].i;
 						object [] array = (object[])stackBuffer[sp--].AsObject();
 						array[index] = val;
-						break; // stelem.ref
+						break;
 					}
-					case 0xa4:
+					case 0xa4: // stelem
 					{
 						uint otyp = BytecodeAsU32( ref pc );
 						object val = stackBuffer[sp--].AsObject();
@@ -1013,9 +1203,9 @@ spiperf.Begin();
 						object [] array = (object[])stackBuffer[sp--].AsObject();
 						Type t = box.metadatas[otyp].nativeType;
 						array[index] = Convert.ChangeType( val, t );  // This shouldn't be type changing.s
-						break; // stelem
+						break;
 					}
-					case 0xA5:
+					case 0xA5: // unbox.any
 					{
 						uint otyp = BytecodeAsU32( ref pc ); // Let's hope that somehow this isn't needed?
 						CilMetadataTokenInfo metaType = box.metadatas[otyp];
@@ -1027,9 +1217,9 @@ spiperf.Begin();
 						{
 							throw new CilboxInterpreterRuntimeException($"Scary Unbox (that we don't have code for) from {otyp} ORIG {metaType.ToString()}", parentClass.className, methodName, pc);
 						}
-						break; // unbox.any
+						break;
 					}
-					case 0xD0:
+					case 0xD0: // ldtoken <token>
 					{
 						uint md = BytecodeAsU32( ref pc ); // Let's hope that somehow this isn't needed?
 						CilMetadataTokenInfo mi = box.metadatas[md];
@@ -1049,7 +1239,7 @@ spiperf.Begin();
 
 						stackBuffer[++sp].LoadObject( loadedObject );
 
-						break; // ldtoken <token>
+						break;
 					}
 
 					case 0xfe: // Extended opcodes
@@ -1433,6 +1623,7 @@ spiperf.End();
 		public int fieldIndex; // Only used for fields of cilbox objects.
 		public Type fieldExpectsToBeOnObjectOfType; // The object type
 		public bool isFieldWhiteListed = false;
+		public FieldInfo nativeField; // For whitelisted fields on non-cilbox objects.
 
 		public bool fieldIsStatic;
 
@@ -1584,15 +1775,15 @@ spiperf.End();
 						bool bAllowed = CheckFieldAllowed( t.declaringTypeName, t.Name );
 						if( !bAllowed )
 						{
-							throw new Exception( $"Illegal field reference outside of the cilbox. {t.declaringTypeName}.{t.Name} in {v.Key}." );
+							throw new CilboxException( $"Illegal field reference outside of the cilbox. {t.declaringTypeName}.{t.Name} in {v.Key}." );
 						}
 						t.isFieldWhiteListed = true;
-					
+
 						Serializee typ = st["dt"];
 						Type ty = t.fieldExpectsToBeOnObjectOfType = usage.GetNativeTypeFromSerializee( typ );
 						if( ty == null )
 						{
-							throw new Exception( $"Could not get allowed type for checking field, {t.declaringTypeName} in {v.Key}." );
+							throw new CilboxException( $"Could not get allowed type for checking field, {t.declaringTypeName} in {v.Key}." );
 						}
 
 						// We have a type for the declaring type, but, we need a field.
@@ -1600,17 +1791,18 @@ spiperf.End();
 
 						if( f == null )
 						{
-							throw new Exception( $"Could not find field for object type {t.declaringTypeName}.{t.Name} in {v.Key}." );
+							throw new CilboxException( $"Could not find field for object type {t.declaringTypeName}.{t.Name} in {v.Key}." );
 						}
 
-						if( !CheckTypeAllowed( f.FieldType.AsString() ) )
+						if( !CheckTypeAllowed( f.FieldType.ToString() ) )
 						{
-							throw new Exception( $"Field for {t.declaringTypeName}.{t.Name} in {v.Key} of type {f.FieldType.AsString()} not allowed." );
+							throw new CilboxException( $"Field for {t.declaringTypeName}.{t.Name} in {v.Key} of type {f.FieldType.ToString()} not allowed." );
 						}
 
 						t.isFieldWhiteListed = true;
 						t.fieldIsStatic = f.IsStatic;
 						t.nativeType = f.FieldType;
+						t.nativeField = f;
 						t.isValid = true;
 
 						StackType seType = StackElement.StackTypeFromType( t.nativeType );
@@ -1962,6 +2154,8 @@ spiperf.End();
 			System.Reflection.Assembly [] assys = AppDomain.CurrentDomain.GetAssemblies();
 			foreach( System.Reflection.Assembly proxyAssembly in assys )
 			{
+				assemblyMetadataReverseOriginal.Clear();
+
 				foreach (Type type in proxyAssembly.GetTypes())
 				{
 					if( type.GetCustomAttributes(typeof(CilboxableAttribute), true).Length <= 0 )
@@ -2444,7 +2638,7 @@ spiperf.End();
 			perf.End(); perf = new ProfilerMarker( "Updating Game Objects" ); perf.Begin();
 
 			// Iterate over all GameObjects, and find the ones that have Cilboxable scripts.
-			object[] obj = GameObject.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+			object[] obj = GameObject.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None);
 			foreach (object o in obj)
 			{
 				GameObject g = (GameObject) o;

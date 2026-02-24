@@ -18,6 +18,7 @@ namespace TestCilbox
 			"Cilbox.CilboxPublicUtils",
 			"TestCilbox.DisposeTester",
 			"TestCilbox.Validator",
+			"TestCilbox.TestUtil",
 			"System.Math",
 			"System.Array",
 			"System.Boolean",
@@ -33,7 +34,10 @@ namespace TestCilbox
 			"System.DivideByZeroException",
 			"System.Exception",
 			"System.IDisposable",
+			"System.IndexOutOfRangeException",
+			"System.Int16",
 			"System.Int32",
+			"System.Int64",
 			"System.MathF",
 			"System.NullReferenceException",
 			"System.Object",
@@ -75,11 +79,22 @@ namespace TestCilbox
 			"UnityEngine.Vector3",
 		};
 
+		static HashSet<String> whiteListField = new HashSet<String>(){
+			"UnityEngine.Vector3.x",
+			"UnityEngine.Vector3.y",
+			"UnityEngine.Vector3.z",
+		};
+
 		static public HashSet<String> GetWhiteListTypes() { return whiteListType; }
 
 		override public bool CheckTypeAllowed( String sType )
 		{
 			return whiteListType.Contains( sType );
+		}
+
+		public override bool CheckFieldAllowed(string sType, string sFieldName)
+		{
+			return whiteListField.Contains( sType + "." + sFieldName );
 		}
 
 		override public bool CheckMethodAllowed( out MethodInfo mi, Type declaringType, String name, Serializee [] parametersIn, Serializee [] genericArgumentsIn, String fullSignature )
@@ -183,6 +198,12 @@ namespace TestCilbox
 	}
 
 
+	public class TestUtil
+	{
+		public static void Increment(ref float val) { val += 1.0f; }
+	}
+
+
 	public class Program
 	{
 		public static int Main()
@@ -281,6 +302,56 @@ namespace TestCilbox
 			Validator.Validate("JoinFloatArrayResized", "1.5, 2.5, 3.5, 4.5");
 			Validator.Validate("DictionaryKeys", "key1, key2");
 			Validator.Validate("ComplexGenericType", "String, Int32, Boolean, Char");
+
+			Validator.Validate("TestVec.x", "12");
+			Validator.Validate("TestVec.y", "8");
+			Validator.Validate("New myInt", "42");
+			Validator.Validate("New testVec.y", "42");
+			Validator.Validate("FieldAccessNullRef", "caught");
+			Validator.Validate("ReadInt_1", "14");
+			Validator.Validate("ReadFloat_1", "8");
+			Validator.Validate("WriteInt_1", "42");
+			Validator.Validate("WriteFloat_1", "42");
+
+			Validator.Validate("NegativeIndexAccess", "caught");
+			Validator.Validate("PositiveIndexAccess", "caught");
+
+			Validator.Validate("StfldNullRef", "caught");
+			Validator.Validate("LdfldaNullRef", "caught");
+
+			// ldind/stind byte (ldind.u1 / stind.i1)
+			Validator.Validate("ReadByte_1", "200");
+			Validator.Validate("WriteByte_1", "42");
+			Validator.Validate("New myByte", "42");
+
+			// ldind/stind short (ldind.i2 / stind.i2)
+			Validator.Validate("ReadShort_1", "1234");
+			Validator.Validate("WriteShort_1", "99");
+			Validator.Validate("New myShort", "99");
+
+			// ldind/stind long (ldind.i8 / stind.i8)
+			Validator.Validate("ReadLong_1", "9876543210");
+			Validator.Validate("WriteLong_1", "42");
+			Validator.Validate("New myLong", "42");
+
+			// ldind/stind double (ldind.r8 / stind.r8)
+			Validator.Validate("ReadDouble_1", "3.14");
+			Validator.Validate("WriteDouble_1", "2.718");
+			Validator.Validate("New myDouble", "2.718");
+
+			// ldind/stind ref (ldind.ref / stind.ref)
+			Validator.Validate("ReadString_1", "hello");
+			Validator.Validate("WriteString_1", "world");
+			Validator.Validate("New myString", "world");
+
+			// ldind.ref / stind.ref for Cilboxable type
+			Validator.Validate("ReadCilboxable", "12345");
+			Validator.Validate("WriteCilboxable", "12345");
+			Validator.Validate("RefCilboxable Same", "True");
+
+			Validator.Validate("NativeRefMethodCall", "11");
+
+			Validator.Validate("Vector3CheckThis", "OK");
 
 			return -1 * Validator.NumValidationErrors();
 		}

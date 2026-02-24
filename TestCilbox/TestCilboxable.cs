@@ -19,6 +19,9 @@ namespace TestCilbox
 		static public int ipublicstatic = 558;
 		static public int recursive_test_counter = 0;
 		public TestCilboxBehaviour2 behaviour2;
+		public int[] intArr = new int[] { 1, 2, 3 };
+		public TestCilboxBehaviour3[] myBehaviour3Arr;
+
 		public TestCilboxBehaviour() { }
 
 		public void RecursiveTest(int i)
@@ -149,6 +152,116 @@ namespace TestCilbox
 			Outer<string>.Middle<int, bool>.Inner<char> complex = new();
 			Validator.Set("ComplexGenericType", complex.GetTypeNames());
 
+			Vector3 testVec = new Vector3(7, 7, 7);
+			testVec.x += 5;
+			Validator.Set("TestVec.x", testVec.x.ToString() );
+			testVec.y++;
+			Validator.Set("TestVec.y", testVec.y.ToString() );
+
+			int myInt = 14;
+			ReadInt(ref myInt);
+			ReadFloat(ref testVec.y);
+			WriteInt(ref myInt, 42);
+			WriteFloat(ref testVec.y, 42.0f);
+			Validator.Set("New myInt", myInt.ToString() );
+			Validator.Set("New testVec.y", testVec.y.ToString() );
+			Vector3 testObj = null;
+			try
+			{
+				Debug.Log("testObj ToString: " + testObj.x);
+				Validator.Set("FieldAccessNullRef", "try");
+			}
+			catch (NullReferenceException)
+			{
+				Validator.Set("FieldAccessNullRef", "caught");
+			}
+
+			try
+			{
+				int idx = -1;
+				Debug.Log("Negative index: " + intArr[idx]);
+			}
+			catch (IndexOutOfRangeException)
+			{
+				Validator.Set("NegativeIndexAccess", "caught");
+			}
+
+			try
+			{
+				int idx = 999;
+				Debug.Log("Positive OOB: " + intArr[idx]);
+			}
+			catch (IndexOutOfRangeException)
+			{
+				Validator.Set("PositiveIndexAccess", "caught");
+			}
+
+			// stfld on null
+			try
+			{
+				testObj.x = 5.0f;
+				Validator.Set("StfldNullRef", "didn't throw");
+			}
+			catch (NullReferenceException)
+			{
+				Validator.Set("StfldNullRef", "caught");
+			}
+
+			// ldflda on null
+			try
+			{
+				ReadFloat(ref testObj.x);
+				Validator.Set("LdfldaNullRef", "didn't throw");
+			}
+			catch (NullReferenceException)
+			{
+				Validator.Set("LdfldaNullRef", "caught");
+			}
+
+			// ldind/stind for byte (ldind.u1 / stind.i1)
+			byte myByte = 200;
+			ReadByte(ref myByte);
+			WriteByte(ref myByte, 42);
+			Validator.Set("New myByte", myByte.ToString() );
+
+			// ldind/stind for short (ldind.i2 / stind.i2)
+			short myShort = 1234;
+			ReadShort(ref myShort);
+			WriteShort(ref myShort, 99);
+			Validator.Set("New myShort", myShort.ToString() );
+
+			// ldind/stind for long (ldind.i8 / stind.i8)
+			long myLong = 9876543210L;
+			ReadLong(ref myLong);
+			WriteLong(ref myLong, 42L);
+			Validator.Set("New myLong", myLong.ToString() );
+
+			// ldind/stind for double (ldind.r8 / stind.r8)
+			double myDouble = 3.14;
+			ReadDouble(ref myDouble);
+			WriteDouble(ref myDouble, 2.718);
+			Validator.Set("New myDouble", myDouble.ToString() );
+
+			// ldind/stind for ref type (ldind.ref / stind.ref)
+			string myString = "hello";
+			ReadString(ref myString);
+			WriteString(ref myString, "world");
+			Validator.Set("New myString", myString );
+
+			// ldind.ref / stind.ref for Cilboxable type
+			TestCilboxBehaviour2 myRef = behaviour2;
+			ReadCilboxable(ref myRef);
+			WriteCilboxable(ref myRef, behaviour2);
+			Validator.Set("RefCilboxable Same", (myRef == behaviour2).ToString() );
+
+			// NativeHandle through native method ref modification
+			Vector3 nativeRefVec = new Vector3(10, 20, 30);
+			TestUtil.Increment(ref nativeRefVec.x);
+			Validator.Set("NativeRefMethodCall", nativeRefVec.x.ToString() );
+
+			Vector3 checkThis = new Vector3(1, 2, 3);
+			Validator.Set("Vector3CheckThis", checkThis.x == checkThis[0] && checkThis.y == checkThis[1] && checkThis.z == checkThis[2] ? "OK" : "Fail" );
+
 			behaviour2.Behaviour2Test();
 		}
 
@@ -169,6 +282,116 @@ namespace TestCilbox
 			Validator.Set( "Manual Recover After Timeout", "recovered" );
 			Validator.Set( "FixedUpdate", "called" );
 		}
+
+		public void ReadInt(ref int field)
+		{
+			int current = field;
+			Validator.AddCount("ReadInt");
+			Validator.Set("ReadInt_" + Validator.GetCount("ReadInt"), current.ToString() );
+		}
+
+		public void WriteInt(ref int field, int value)
+		{
+			field = value;
+			Validator.AddCount("WriteInt");
+			Validator.Set("WriteInt_" + Validator.GetCount("WriteInt"), value.ToString() );
+		}
+
+		public void ReadFloat(ref float field)
+		{
+			float current = field;
+			Validator.AddCount("ReadFloat");
+			Validator.Set("ReadFloat_" + Validator.GetCount("ReadFloat"), current.ToString() );
+		}
+
+		public void WriteFloat(ref float field, float value)
+		{
+			field = value;
+			Validator.AddCount("WriteFloat");
+			Validator.Set("WriteFloat_" + Validator.GetCount("WriteFloat"), value.ToString() );
+		}
+
+		public void ReadByte(ref byte field)
+		{
+			byte current = field;
+			Validator.AddCount("ReadByte");
+			Validator.Set("ReadByte_" + Validator.GetCount("ReadByte"), current.ToString() );
+		}
+
+		public void WriteByte(ref byte field, byte value)
+		{
+			field = value;
+			Validator.AddCount("WriteByte");
+			Validator.Set("WriteByte_" + Validator.GetCount("WriteByte"), value.ToString() );
+		}
+
+		public void ReadShort(ref short field)
+		{
+			short current = field;
+			Validator.AddCount("ReadShort");
+			Validator.Set("ReadShort_" + Validator.GetCount("ReadShort"), current.ToString() );
+		}
+
+		public void WriteShort(ref short field, short value)
+		{
+			field = value;
+			Validator.AddCount("WriteShort");
+			Validator.Set("WriteShort_" + Validator.GetCount("WriteShort"), value.ToString() );
+		}
+
+		public void ReadLong(ref long field)
+		{
+			long current = field;
+			Validator.AddCount("ReadLong");
+			Validator.Set("ReadLong_" + Validator.GetCount("ReadLong"), current.ToString() );
+		}
+
+		public void WriteLong(ref long field, long value)
+		{
+			field = value;
+			Validator.AddCount("WriteLong");
+			Validator.Set("WriteLong_" + Validator.GetCount("WriteLong"), value.ToString() );
+		}
+
+		public void ReadDouble(ref double field)
+		{
+			double current = field;
+			Validator.AddCount("ReadDouble");
+			Validator.Set("ReadDouble_" + Validator.GetCount("ReadDouble"), current.ToString() );
+		}
+
+		public void WriteDouble(ref double field, double value)
+		{
+			field = value;
+			Validator.AddCount("WriteDouble");
+			Validator.Set("WriteDouble_" + Validator.GetCount("WriteDouble"), value.ToString() );
+		}
+
+		public void ReadString(ref string field)
+		{
+			string current = field;
+			Validator.AddCount("ReadString");
+			Validator.Set("ReadString_" + Validator.GetCount("ReadString"), current );
+		}
+
+		public void WriteString(ref string field, string value)
+		{
+			field = value;
+			Validator.AddCount("WriteString");
+			Validator.Set("WriteString_" + Validator.GetCount("WriteString"), value );
+		}
+
+		public void ReadCilboxable(ref TestCilboxBehaviour2 field)
+		{
+			TestCilboxBehaviour2 current = field;
+			Validator.Set("ReadCilboxable", current.pubsettee.ToString() );
+		}
+
+		public void WriteCilboxable(ref TestCilboxBehaviour2 field, TestCilboxBehaviour2 value)
+		{
+			field = value;
+			Validator.Set("WriteCilboxable", value.pubsettee.ToString() );
+		}
 	}
 
 
@@ -181,6 +404,11 @@ namespace TestCilbox
 			Validator.Set( "Method Called On Peer", "OK" );
 			Validator.Set( "Public Field Change In Editor", pubsettee.ToString() ); // Should not be 35254
 		}
+	}
+
+	[Cilboxable]
+	public class TestCilboxBehaviour3 : MonoBehaviour
+	{
 	}
 }
 
