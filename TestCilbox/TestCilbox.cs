@@ -331,6 +331,11 @@ namespace TestCilbox
 			Validator.Validate("WriteString_1", "world");
 			Validator.Validate("New myString", "world");
 
+			// ldind.ref / stind.ref for Cilboxable type
+			Validator.Validate("ReadCilboxable", "12345");
+			Validator.Validate("WriteCilboxable", "12345");
+			Validator.Validate("RefCilboxable Same", "True");
+
 			return -1 * Validator.NumValidationErrors();
 		}
 	}

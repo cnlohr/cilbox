@@ -248,6 +248,12 @@ namespace TestCilbox
 			WriteString(ref myString, "world");
 			Validator.Set("New myString", myString );
 
+			// ldind.ref / stind.ref for Cilboxable type
+			TestCilboxBehaviour2 myRef = behaviour2;
+			ReadCilboxable(ref myRef);
+			WriteCilboxable(ref myRef, behaviour2);
+			Validator.Set("RefCilboxable Same", (myRef == behaviour2).ToString() );
+
 			behaviour2.Behaviour2Test();
 		}
 
@@ -365,6 +371,18 @@ namespace TestCilbox
 			field = value;
 			Validator.AddCount("WriteString");
 			Validator.Set("WriteString_" + Validator.GetCount("WriteString"), value );
+		}
+
+		public void ReadCilboxable(ref TestCilboxBehaviour2 field)
+		{
+			TestCilboxBehaviour2 current = field;
+			Validator.Set("ReadCilboxable", current.pubsettee.ToString() );
+		}
+
+		public void WriteCilboxable(ref TestCilboxBehaviour2 field, TestCilboxBehaviour2 value)
+		{
+			field = value;
+			Validator.Set("WriteCilboxable", value.pubsettee.ToString() );
 		}
 	}
 

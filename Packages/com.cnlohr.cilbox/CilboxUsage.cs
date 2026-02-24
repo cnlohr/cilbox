@@ -326,6 +326,10 @@ namespace Cilbox
 			// Strip array suffix: "Foo.Bar[]" or "Foo.Bar[][]" -> "Foo.Bar"
 			int bracket = typeName.IndexOf( '[' );
 			String baseName = bracket >= 0 ? typeName.Substring( 0, bracket ) : typeName;
+
+			// strip "&" for ref types
+			if( baseName.EndsWith('&') ) baseName = baseName.Substring( 0, baseName.Length - 1 );
+
 			if( box.classes.ContainsKey( baseName ) ) return true;
 
 			return false;
