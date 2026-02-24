@@ -299,6 +299,8 @@ namespace TestCilbox
 			Validator.Validate("WriteInt_1", "42");
 			Validator.Validate("WriteFloat_1", "42");
 
+			Validator.Validate("NegativeIndexAccess", "caught");
+
 			return -1 * Validator.NumValidationErrors();
 		}
 	}

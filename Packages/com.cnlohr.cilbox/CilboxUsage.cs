@@ -314,12 +314,25 @@ namespace Cilbox
 		// INTERNAL CHECKING ///////////////////////////////////////////////////////////////
 		////////////////////////////////////////////////////////////////////////////////////
 
+		// Strip array suffixes and nested type suffixes to check if the base type is Cilboxable
+		public bool IsCilboxInternalType( String typeName )
+		{
+			if( box.classes.ContainsKey( typeName ) ) return true;
+
+			// Strip array suffix: "Foo.Bar[]" or "Foo.Bar[][]" -> "Foo.Bar"
+			int bracket = typeName.IndexOf( '[' );
+			String baseName = bracket >= 0 ? typeName.Substring( 0, bracket ) : typeName;
+			if( box.classes.ContainsKey( baseName ) ) return true;
+
+			return false;
+		}
+
 		public Type GetNativeTypeFromSerializee( Serializee s )
 		{
 			Dictionary< String, Serializee > ses = s.AsMap();
 			String typeName = ses["n"].AsString();
 			String assemblyName = ses["a"].AsString();
-			if( box.classes.ContainsKey( typeName ) ) return null;
+			if( IsCilboxInternalType( typeName ) ) return null;
 			typeName = CheckReplaceTypeNotRecursive( typeName );
 			if( typeName == null ) return null;
 
@@ -368,7 +381,7 @@ namespace Cilbox
 		{
 			Dictionary< String, Serializee > ses = s.AsMap();
 			String typeName = ses["n"].AsString();
-			if( box.classes.ContainsKey( typeName ) ) return typeName;
+			if( IsCilboxInternalType( typeName ) ) return typeName;
 			typeName = CheckReplaceTypeNotRecursive( typeName );
 			if( typeName == null ) return null;
 
@@ -467,21 +480,30 @@ namespace Cilbox
 				{
 					if( type.Name == declaringType.Name )
 					{
-						MethodBase m = type.GetMethod(
-							name,
-							genericArguments.Length,
-							BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static,
-							null,
-							CallingConventions.Any,
-							parameters,
-							null );
-						if( m != null )
+						try
 						{
-							Debug.Log(type.Name + " == " + declaringType.Name + " == " + proxyAssembly.GetName().Name + " >> " + m.Name);
-							return m;
+							// I don't think there is any case where this would be needed for a type with a constructor.
+							MethodBase m = type.GetMethod(
+								name,
+								genericArguments.Length,
+								BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static,
+								null,
+								CallingConventions.Any,
+								parameters,
+								null );
+							if( m != null )
+							{
+								Debug.Log(type.Name + " == " + declaringType.Name + " == " + proxyAssembly.GetName().Name + " >> " + m.Name);
+								return m;
+							}
+						}
+						catch (Exception e)
+						{
+							Debug.LogWarning(e.ToString());
+							Debug.LogWarning("Failed to find method " + name + " on type " + type.FullName + " with parameters " + string.Join(", ", (object[])parameters) + " and generic arguments " + string.Join(", ", (object[])genericArguments) + " in assembly " + proxyAssembly.GetName().Name);
+							continue;
 						}
 
-						// I don't think there is any case where this would be needed for a type with a constructor.
 					}
 				}
 			}

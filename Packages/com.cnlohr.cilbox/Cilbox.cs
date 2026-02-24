@@ -558,13 +558,26 @@ spiperf.Begin();
 							case 2: if( sa.i >  sb.i ) pc += joffset; break;
 							case 3: if( sa.i <= sb.i ) pc += joffset; break;
 							case 4: if( sa.i <  sb.i ) pc += joffset; break;
-							case 5: if( sa.e != sb.e ) pc += joffset; break;
-							case 6: if( sa.e >= sb.e ) pc += joffset; break;
-							case 7: if( sa.e >  sb.e ) pc += joffset; break;
-							case 8: if( sa.e <= sb.e ) pc += joffset; break;
-							case 9: if( sa.e <  sb.e ) pc += joffset; break;
+							case 5: if( sa.u != sb.u ) pc += joffset; break;
+							case 6: if( sa.u >= sb.u ) pc += joffset; break;
+							case 7: if( sa.u >  sb.u ) pc += joffset; break;
+							case 8: if( sa.u <= sb.u ) pc += joffset; break;
+							case 9: if( sa.u <  sb.u ) pc += joffset; break;
 							} break;
-						case StackType.Byte: case StackType.Ushort: case StackType.Uint: case StackType.Ulong:
+						case StackType.Byte: case StackType.Ushort: case StackType.Uint:
+							switch( iop )	{
+							case 0: if( sa.u == sb.u ) pc += joffset; break;
+							case 1: if( sa.u >= sb.u ) pc += joffset; break;
+							case 2: if( sa.u >  sb.u ) pc += joffset; break;
+							case 3: if( sa.u <= sb.u ) pc += joffset; break;
+							case 4: if( sa.u <  sb.u ) pc += joffset; break;
+							case 5: if( sa.u != sb.u ) pc += joffset; break;
+							case 6: if( sa.u >= sb.u ) pc += joffset; break;
+							case 7: if( sa.u >  sb.u ) pc += joffset; break;
+							case 8: if( sa.u <= sb.u ) pc += joffset; break;
+							case 9: if( sa.u <  sb.u ) pc += joffset; break;
+							} break;
+						case StackType.Ulong:
 							switch( iop )	{
 							case 0: if( sa.e == sb.e ) pc += joffset; break;
 							case 1: if( sa.e >= sb.e ) pc += joffset; break;
@@ -1056,15 +1069,17 @@ spiperf.Begin();
 						stackBuffer[sp].LoadObject( stackBuffer[sp].AsObject() );//(metaType.nativeType)stackBuffer[sp-1].AsObject();
 						break;
 					}
-					case 0x8d:
+					case 0x8d: // newarr <etype>
 					{
 						uint otyp = BytecodeAsU32( ref pc );
 						if( stackBuffer[sp].type > StackType.Ulong )
 							throw new CilboxInterpreterRuntimeException("Invalid type, processing new array", parentClass.className, methodName, pc);
 						int size = stackBuffer[sp].i;
-						Type t = box.metadatas[otyp].nativeType;
-						stackBuffer[sp].LoadObject( Array.CreateInstance( t, size ) );
-						//newarr <etype>
+						CilMetadataTokenInfo arrMeta = box.metadatas[otyp];
+						if( arrMeta.nativeTypeIsCilboxProxy )
+							stackBuffer[sp].LoadObject( new object[size] );
+						else
+							stackBuffer[sp].LoadObject( Array.CreateInstance( arrMeta.nativeType, size ) );
 						break;
 					}
 					case 0x8e: // ldlen
@@ -1072,12 +1087,17 @@ spiperf.Begin();
 						stackBuffer[sp].LoadInt( ((Array)(stackBuffer[sp].o)).Length );
 						break;
 					}
-					case 0x8f: // ldlema
+					case 0x8f: // ldelema
 					{
 						/*uint whichClass = */BytecodeAsU32( ref pc ); // (For now, ignored)
-						uint index = stackBuffer[sp--].u;
+						int index = stackBuffer[sp--].i;
 						Array a = (Array)(stackBuffer[sp--].AsObject());
-						stackBuffer[++sp] = StackElement.CreateAddressReference( a, index );
+						if (index < 0 || index >= a.Length)
+						{
+							interpretedThrow(pc - 1, new IndexOutOfRangeException());
+							break;
+						}
+						stackBuffer[++sp] = StackElement.CreateAddressReference( a, (uint)index );
 						break;
 					}
 					case 0x90: case 0x91: case 0x92: case 0x93: case 0x94: // ldelem
@@ -1085,6 +1105,11 @@ spiperf.Begin();
 					{
 						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
 						int index = stackBuffer[sp--].i;
+						if (index < 0 || index >= ((Array)(stackBuffer[sp].o)).Length)
+						{
+							interpretedThrow(pc - 1, new IndexOutOfRangeException());
+							break;
+						}
 //						Array a = ((Array)(stackBuffer[sp].o));
 						switch( b - 0x90 )
 						{
@@ -1109,6 +1134,11 @@ spiperf.Begin();
 						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
 						int index = stackBuffer[sp--].i;
 						Array a = ((Array)(stackBuffer[sp--].o));
+						if (index < 0 || index >= a.Length)
+						{
+							interpretedThrow(pc - 1, new IndexOutOfRangeException());
+							break;
+						}
 						stackBuffer[++sp].LoadObject( a.GetValue(index) );
 						break;
 					}
@@ -2583,7 +2613,7 @@ spiperf.End();
 			perf.End(); perf = new ProfilerMarker( "Updating Game Objects" ); perf.Begin();
 
 			// Iterate over all GameObjects, and find the ones that have Cilboxable scripts.
-			object[] obj = GameObject.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+			object[] obj = GameObject.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None);
 			foreach (object o in obj)
 			{
 				GameObject g = (GameObject) o;

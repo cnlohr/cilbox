@@ -19,6 +19,9 @@ namespace TestCilbox
 		static public int ipublicstatic = 558;
 		static public int recursive_test_counter = 0;
 		public TestCilboxBehaviour2 behaviour2;
+		public int[] intArr = new int[] { 1, 2, 3 };
+		public TestCilboxBehaviour3[] myBehaviour3Arr;
+
 		public TestCilboxBehaviour() { }
 
 		public void RecursiveTest(int i)
@@ -173,6 +176,16 @@ namespace TestCilbox
 				Validator.Set("FieldAccessNullRef", "caught");
 			}
 
+			try
+			{
+				int idx = -1;
+				Debug.Log("Negative index: " + intArr[idx]);
+			}
+			catch (Exception)
+			{
+				Validator.Set("NegativeIndexAccess", "caught");
+			}
+
 			behaviour2.Behaviour2Test();
 		}
 
@@ -233,6 +246,11 @@ namespace TestCilbox
 			Validator.Set( "Method Called On Peer", "OK" );
 			Validator.Set( "Public Field Change In Editor", pubsettee.ToString() ); // Should not be 35254
 		}
+	}
+
+	[Cilboxable]
+	public class TestCilboxBehaviour3 : MonoBehaviour
+	{
 	}
 }
 

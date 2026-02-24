@@ -233,7 +233,7 @@ namespace UnityEngine
 			return m;
 		}
 
-		public static T [] FindObjectsByType<T>(FindObjectsSortMode sm) where T:GameObject
+		public static T [] FindObjectsByType<T>(FindObjectsInactive foi, FindObjectsSortMode sm) where T:GameObject
 		{
 			List<T> ret = new List<T>();
 			foreach( var o in AllObjects )
@@ -263,6 +263,12 @@ namespace UnityEngine
 	{
 		None
 	};
+
+	public enum FindObjectsInactive
+	{
+		Include,
+		Exclude,
+	}
 
 	public class Object
 	{

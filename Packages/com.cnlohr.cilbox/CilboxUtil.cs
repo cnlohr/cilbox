@@ -1006,7 +1006,7 @@ namespace Cilbox
 		{
 			List<MonoBehaviour> ret = new List<MonoBehaviour>();
 
-			object[] objToCheck = GameObject.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+			object[] objToCheck = GameObject.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None);
 			foreach (object o in objToCheck)
 			{
 				GameObject g = (GameObject) o;
