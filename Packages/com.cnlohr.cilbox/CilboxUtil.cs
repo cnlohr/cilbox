@@ -174,28 +174,6 @@ namespace Cilbox
 			};
 		}
 
-		public int AsInt()
-		{
-			switch( type )
-			{
-			case StackType.Sbyte:
-			case StackType.Byte:
-			case StackType.Short:
-			case StackType.Ushort:
-			case StackType.Int:
-			case StackType.Uint:
-			case StackType.Long:
-			case StackType.Ulong:
-				return (int)i;
-			case StackType.Float: return (int)f;
-			case StackType.Double: return (int)d;
-			case StackType.Boolean: return b ? 1 : 0;
-			case StackType.Address: return (int)DereferenceAddress();
-			// todo: handle NativeHandle somehow (or delete this unused method?)
-			default: return (int)o;
-			}
-		}
-
 		public object CoerceToObject( Type t )
 		{
 			StackType rt = StackTypeFromType( t );

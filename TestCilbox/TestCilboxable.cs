@@ -181,10 +181,72 @@ namespace TestCilbox
 				int idx = -1;
 				Debug.Log("Negative index: " + intArr[idx]);
 			}
-			catch (Exception)
+			catch (IndexOutOfRangeException)
 			{
 				Validator.Set("NegativeIndexAccess", "caught");
 			}
+
+			try
+			{
+				int idx = 999;
+				Debug.Log("Positive OOB: " + intArr[idx]);
+			}
+			catch (IndexOutOfRangeException)
+			{
+				Validator.Set("PositiveIndexAccess", "caught");
+			}
+
+			// stfld on null
+			try
+			{
+				testObj.x = 5.0f;
+				Validator.Set("StfldNullRef", "didn't throw");
+			}
+			catch (NullReferenceException)
+			{
+				Validator.Set("StfldNullRef", "caught");
+			}
+
+			// ldflda on null
+			try
+			{
+				ReadFloat(ref testObj.x);
+				Validator.Set("LdfldaNullRef", "didn't throw");
+			}
+			catch (NullReferenceException)
+			{
+				Validator.Set("LdfldaNullRef", "caught");
+			}
+
+			// ldind/stind for byte (ldind.u1 / stind.i1)
+			byte myByte = 200;
+			ReadByte(ref myByte);
+			WriteByte(ref myByte, 42);
+			Validator.Set("New myByte", myByte.ToString() );
+
+			// ldind/stind for short (ldind.i2 / stind.i2)
+			short myShort = 1234;
+			ReadShort(ref myShort);
+			WriteShort(ref myShort, 99);
+			Validator.Set("New myShort", myShort.ToString() );
+
+			// ldind/stind for long (ldind.i8 / stind.i8)
+			long myLong = 9876543210L;
+			ReadLong(ref myLong);
+			WriteLong(ref myLong, 42L);
+			Validator.Set("New myLong", myLong.ToString() );
+
+			// ldind/stind for double (ldind.r8 / stind.r8)
+			double myDouble = 3.14;
+			ReadDouble(ref myDouble);
+			WriteDouble(ref myDouble, 2.718);
+			Validator.Set("New myDouble", myDouble.ToString() );
+
+			// ldind/stind for ref type (ldind.ref / stind.ref)
+			string myString = "hello";
+			ReadString(ref myString);
+			WriteString(ref myString, "world");
+			Validator.Set("New myString", myString );
 
 			behaviour2.Behaviour2Test();
 		}
@@ -233,6 +295,76 @@ namespace TestCilbox
 			field = value;
 			Validator.AddCount("WriteFloat");
 			Validator.Set("WriteFloat_" + Validator.GetCount("WriteFloat"), value.ToString() );
+		}
+
+		public void ReadByte(ref byte field)
+		{
+			byte current = field;
+			Validator.AddCount("ReadByte");
+			Validator.Set("ReadByte_" + Validator.GetCount("ReadByte"), current.ToString() );
+		}
+
+		public void WriteByte(ref byte field, byte value)
+		{
+			field = value;
+			Validator.AddCount("WriteByte");
+			Validator.Set("WriteByte_" + Validator.GetCount("WriteByte"), value.ToString() );
+		}
+
+		public void ReadShort(ref short field)
+		{
+			short current = field;
+			Validator.AddCount("ReadShort");
+			Validator.Set("ReadShort_" + Validator.GetCount("ReadShort"), current.ToString() );
+		}
+
+		public void WriteShort(ref short field, short value)
+		{
+			field = value;
+			Validator.AddCount("WriteShort");
+			Validator.Set("WriteShort_" + Validator.GetCount("WriteShort"), value.ToString() );
+		}
+
+		public void ReadLong(ref long field)
+		{
+			long current = field;
+			Validator.AddCount("ReadLong");
+			Validator.Set("ReadLong_" + Validator.GetCount("ReadLong"), current.ToString() );
+		}
+
+		public void WriteLong(ref long field, long value)
+		{
+			field = value;
+			Validator.AddCount("WriteLong");
+			Validator.Set("WriteLong_" + Validator.GetCount("WriteLong"), value.ToString() );
+		}
+
+		public void ReadDouble(ref double field)
+		{
+			double current = field;
+			Validator.AddCount("ReadDouble");
+			Validator.Set("ReadDouble_" + Validator.GetCount("ReadDouble"), current.ToString() );
+		}
+
+		public void WriteDouble(ref double field, double value)
+		{
+			field = value;
+			Validator.AddCount("WriteDouble");
+			Validator.Set("WriteDouble_" + Validator.GetCount("WriteDouble"), value.ToString() );
+		}
+
+		public void ReadString(ref string field)
+		{
+			string current = field;
+			Validator.AddCount("ReadString");
+			Validator.Set("ReadString_" + Validator.GetCount("ReadString"), current );
+		}
+
+		public void WriteString(ref string field, string value)
+		{
+			field = value;
+			Validator.AddCount("WriteString");
+			Validator.Set("WriteString_" + Validator.GetCount("WriteString"), value );
 		}
 	}
 

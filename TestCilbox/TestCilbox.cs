@@ -33,13 +33,14 @@ namespace TestCilbox
 			"System.DivideByZeroException",
 			"System.Exception",
 			"System.IDisposable",
+			"System.IndexOutOfRangeException",
+			"System.Int16",
 			"System.Int32",
-			"System.Int32&", // is this okay?? (for ref returns)
+			"System.Int64",
 			"System.MathF",
 			"System.NullReferenceException",
 			"System.Object",
 			"System.Single",
-			"System.Single&", // is this okay?? (for ref returns)
 			"System.String",
 			"System.TimeSpan",
 			"System.UInt16",
@@ -300,6 +301,35 @@ namespace TestCilbox
 			Validator.Validate("WriteFloat_1", "42");
 
 			Validator.Validate("NegativeIndexAccess", "caught");
+			Validator.Validate("PositiveIndexAccess", "caught");
+
+			Validator.Validate("StfldNullRef", "caught");
+			Validator.Validate("LdfldaNullRef", "caught");
+
+			// ldind/stind byte (ldind.u1 / stind.i1)
+			Validator.Validate("ReadByte_1", "200");
+			Validator.Validate("WriteByte_1", "42");
+			Validator.Validate("New myByte", "42");
+
+			// ldind/stind short (ldind.i2 / stind.i2)
+			Validator.Validate("ReadShort_1", "1234");
+			Validator.Validate("WriteShort_1", "99");
+			Validator.Validate("New myShort", "99");
+
+			// ldind/stind long (ldind.i8 / stind.i8)
+			Validator.Validate("ReadLong_1", "9876543210");
+			Validator.Validate("WriteLong_1", "42");
+			Validator.Validate("New myLong", "42");
+
+			// ldind/stind double (ldind.r8 / stind.r8)
+			Validator.Validate("ReadDouble_1", "3.14");
+			Validator.Validate("WriteDouble_1", "2.718");
+			Validator.Validate("New myDouble", "2.718");
+
+			// ldind/stind ref (ldind.ref / stind.ref)
+			Validator.Validate("ReadString_1", "hello");
+			Validator.Validate("WriteString_1", "world");
+			Validator.Validate("New myString", "world");
 
 			return -1 * Validator.NumValidationErrors();
 		}

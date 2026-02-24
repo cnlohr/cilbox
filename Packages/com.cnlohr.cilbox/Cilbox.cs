@@ -979,52 +979,52 @@ spiperf.Begin();
 						{
 							case 0: // ldind.i1
 							{
-								stackBuffer[++sp].LoadSByte( (sbyte)obj );
+								stackBuffer[++sp].LoadSByte( Convert.ToSByte(obj) );
 								break;
 							}
 							case 1: // ldind.u1
 							{
-								stackBuffer[++sp].LoadByte( (byte)obj );
+								stackBuffer[++sp].LoadByte( Convert.ToByte(obj) );
 								break;
 							}
 							case 2: // ldind.i2
 							{
-								stackBuffer[++sp].LoadShort((short)obj);
+								stackBuffer[++sp].LoadShort( Convert.ToInt16(obj) );
 								break;
 							}
 							case 3: // ldind.u2
 							{
-								stackBuffer[++sp].LoadUshort((ushort)obj);
+								stackBuffer[++sp].LoadUshort( Convert.ToUInt16(obj) );
 								break;
 							}
 							case 4: // ldind.i4
 							{
-								stackBuffer[++sp].LoadInt((int)obj);
+								stackBuffer[++sp].LoadInt( Convert.ToInt32(obj) );
 								break;
 							}
 							case 5: // ldind.u4
 							{
-								stackBuffer[++sp].LoadUint((uint)obj);
+								stackBuffer[++sp].LoadUint( Convert.ToUInt32(obj) );
 								break;
 							}
 							case 6: // ldind.i8 / ldind.u8
 							{
-								stackBuffer[++sp].LoadLong((long)obj);
+								stackBuffer[++sp].LoadLong( Convert.ToInt64(obj) );
 								break;
 							}
 							case 7: // ldind.i
 							{
-								stackBuffer[++sp].LoadLong((long)obj);
+								stackBuffer[++sp].LoadLong( Convert.ToInt64(obj) );
 								break;
 							}
 							case 8: // ldind.r4
 							{
-								stackBuffer[++sp].LoadFloat((float)obj);
+								stackBuffer[++sp].LoadFloat( Convert.ToSingle(obj) );
 								break;
 							}
 							case 9: // ldind.r8
 							{
-								stackBuffer[++sp].LoadDouble((double)obj);
+								stackBuffer[++sp].LoadDouble( Convert.ToDouble(obj) );
 								break;
 							}
 							case 10: // ldind.ref

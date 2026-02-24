@@ -282,6 +282,9 @@ namespace Cilbox
 				typeName = typeof(byte[]).FullName;
 			}
 
+			// Perform check without & for ref types
+			String refSuffix = "";
+			if( typeName.EndsWith('&') ) { refSuffix = "&"; typeName = typeName[..^1]; }
 			// Perform check without array[]
 			//  i.e.  System.byte[][] ===> System.byte  /  [][]
 			String [] vTypeNameNoArray = typeName.Split( "[" );
@@ -289,7 +292,7 @@ namespace Cilbox
 			String arrayEnding = typeName.Substring( typeNameNoArray.Length );
 			typeNameNoArray = CheckTypeSecurity( typeNameNoArray  );
 			if( typeNameNoArray == null ) return null;
-			return typeNameNoArray + arrayEnding;
+			return typeNameNoArray + arrayEnding + refSuffix;
 		}
 
 		Type CheckTypeSecurityRecursive( Type t )
@@ -297,6 +300,7 @@ namespace Cilbox
 			TypeInfo typeInfo = t.GetTypeInfo();
 			if( typeInfo == null ) return null;
 			String typeName = typeInfo.ToString();
+			if( typeName.EndsWith('&') ) typeName = typeName.Substring( 0, typeName.Length - 1 );
 			String [] vTypeNameNoArray = typeName.Split( "[" );
 			typeName = ( vTypeNameNoArray.Length > 0 ) ? vTypeNameNoArray[0] : typeName;
 			String [] vTypeNameNoGenerics = typeName.Split( "`" );
