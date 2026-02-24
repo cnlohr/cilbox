@@ -2099,6 +2099,8 @@ spiperf.End();
 			System.Reflection.Assembly [] assys = AppDomain.CurrentDomain.GetAssemblies();
 			foreach( System.Reflection.Assembly proxyAssembly in assys )
 			{
+				assemblyMetadataReverseOriginal.Clear();
+
 				foreach (Type type in proxyAssembly.GetTypes())
 				{
 					if( type.GetCustomAttributes(typeof(CilboxableAttribute), true).Length <= 0 )
