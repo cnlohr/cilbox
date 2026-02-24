@@ -1061,6 +1061,8 @@ namespace Cilbox
 			else
 			{
 				ret["n"] = new Serializee( t.FullName );
+				if( t.IsEnum && t.GetCustomAttributes(typeof(CilboxableAttribute), true).Length > 0 )
+					ret["ut"] = GetSerializeeFromNativeType( t.GetEnumUnderlyingType() );
 			}
 			return new Serializee( ret );
 		}

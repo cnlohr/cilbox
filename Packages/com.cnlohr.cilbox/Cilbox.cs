@@ -1559,7 +1559,10 @@ spiperf.End();
 			{
 				Dictionary< String, Serializee > field = staticFields[k].AsMap();
 				String fieldName = staticFieldNames[id] = field["name"].AsString();
-				Type t = staticFieldTypes[id] = box.usage.GetNativeTypeFromSerializee( field["type"] );
+				Type t = box.usage.GetNativeTypeFromSerializee( field["type"] );
+				if( t != null && t.IsEnum )
+					t = Enum.GetUnderlyingType( t );
+				staticFieldTypes[id] = t;
 
 				//staticFieldIDs[id] = Cilbox.FindInternalMetadataID( className, 4, fieldName );
 				this.staticFields[id] = CilboxUtil.DeserializeDataForProxyField( t, "" );
@@ -1576,7 +1579,10 @@ spiperf.End();
 			{
 				Dictionary< String, Serializee > field = instanceFields[k].AsMap();
 				String fieldName = instanceFieldNames[id] = field["name"].AsString();
-				instanceFieldTypes[id] = box.usage.GetNativeTypeFromSerializee( field["type"] );
+				Type ft = box.usage.GetNativeTypeFromSerializee( field["type"] );
+				if( ft != null && ft.IsEnum )
+					ft = Enum.GetUnderlyingType( ft );
+				instanceFieldTypes[id] = ft;
 				id++;
 			}
 
@@ -1842,11 +1848,29 @@ spiperf.End();
 					}
 					else
 					{
+						Dictionary< String, Serializee > typMap = typ.AsMap();
+
+						// Check if this is an enum with a serialized underlying type.
+						Serializee utSer;
+						if( typMap.TryGetValue( "ut", out utSer ) )
+						{
+							t.nativeType = usage.GetNativeTypeFromSerializee( utSer );
+							StackType utSeType = StackElement.StackTypeFromType( t.nativeType );
+							if( utSeType < StackType.Object )
+							{
+								t.nativeTypeIsStackType = true;
+								t.nativeTypeStackType = utSeType;
+								t.Name = typMap["n"].AsString();
+								t.isValid = true;
+								break;
+							}
+						}
+
 						// Maybe it's a type inside our cilbox?
 						t.isValid = false;
 						foreach( CilboxClass c in classesList )
 						{
-							if( c.className == typ.AsMap()["n"].AsString() )
+							if( c.className == typMap["n"].AsString() )
 							{
 								t.Name = c.className;
 								t.nativeTypeIsCilboxProxy = true;
@@ -1855,7 +1879,7 @@ spiperf.End();
 						}
 
 						if( !t.isValid )
-							Debug.LogError( $"Error: Could not find type: {typ.AsMap()["n"].AsString()}" );
+							Debug.LogError( $"Error: Could not find type: {typMap["n"].AsString()}" );
 					}
 					break;
 				}
@@ -2158,6 +2182,9 @@ spiperf.End();
 				foreach (Type type in proxyAssembly.GetTypes())
 				{
 					if( type.GetCustomAttributes(typeof(CilboxableAttribute), true).Length <= 0 )
+						continue;
+
+					if( type.IsEnum )
 						continue;
 
 					// Cilbox is not in use... But do ALL cilboxes if no scene is loaded.
@@ -2468,6 +2495,9 @@ spiperf.End();
 				foreach (Type type in proxyAssembly.GetTypes())
 				{
 					if( type.GetCustomAttributes(typeof(CilboxableAttribute), true).Length <= 0 )
+						continue;
+
+					if( type.IsEnum )
 						continue;
 
 					ProfilerMarker perfType = new ProfilerMarker(type.ToString()); perfType.Begin();

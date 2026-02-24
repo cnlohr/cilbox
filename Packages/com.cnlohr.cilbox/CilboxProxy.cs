@@ -122,8 +122,18 @@ namespace Cilbox
 
 			StackType st;
 
+			// Serialize enum as underlying type
+			if( fv.GetType().IsEnum )
+			{
+				object underlying = Convert.ChangeType( fv, Enum.GetUnderlyingType( fv.GetType() ) );
+				if( StackElement.TypeToStackType.TryGetValue( underlying.GetType().ToString(), out st ) && st < StackType.Object )
+				{
+					instanceFields["d"] = new Serializee(underlying.ToString());
+					instanceFields["t"] = new Serializee("e" + st);
+				}
+			}
 			// Not a proxiable script.
-			if (attribs != null && attribs.Length > 0)
+			else if (attribs != null && attribs.Length > 0)
 			{
 				// This is a cilboxable thing.
 				instanceFields["fo"] = new Serializee(fieldsObjects.Count.ToString());

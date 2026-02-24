@@ -345,6 +345,8 @@ namespace Cilbox
 		public Type GetNativeTypeFromSerializee( Serializee s )
 		{
 			Dictionary< String, Serializee > ses = s.AsMap();
+			Serializee utSer;
+			if( ses.TryGetValue( "ut", out utSer ) ) return GetNativeTypeFromSerializee( utSer );
 			String typeName = ses["n"].AsString();
 			String assemblyName = ses["a"].AsString();
 			if( IsCilboxInternalType( typeName ) ) return null;
@@ -395,6 +397,8 @@ namespace Cilbox
 		public String GetNativeTypeNameFromSerializee( Serializee s )
 		{
 			Dictionary< String, Serializee > ses = s.AsMap();
+			Serializee utSer;
+			if( ses.TryGetValue( "ut", out utSer ) ) return GetNativeTypeNameFromSerializee( utSer );
 			String typeName = ses["n"].AsString();
 			if( IsCilboxInternalType( typeName ) ) return typeName;
 			typeName = CheckReplaceTypeNotRecursive( typeName );

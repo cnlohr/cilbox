@@ -21,6 +21,15 @@ namespace TestCilbox
 		public TestCilboxBehaviour2 behaviour2;
 		public int[] intArr = new int[] { 1, 2, 3 };
 		public TestCilboxBehaviour3[] myBehaviour3Arr;
+		public MyEnum myEnumField = MyEnum.Value2;
+
+		[Cilboxable]
+		public enum MyEnum
+		{
+			Value1,
+			Value2,
+			Value3,
+		}
 
 		public TestCilboxBehaviour() { }
 
@@ -262,6 +271,12 @@ namespace TestCilbox
 			Vector3 checkThis = new Vector3(1, 2, 3);
 			Validator.Set("Vector3CheckThis", checkThis.x == checkThis[0] && checkThis.y == checkThis[1] && checkThis.z == checkThis[2] ? "OK" : "Fail" );
 
+			Debug.Log("My Enum: " + (myEnumField == MyEnum.Value2) );
+			Debug.Log("My Enum: " + (myEnumField == MyEnum.Value3) );
+			Debug.Log("My Enum: " + (nameof(MyEnum.Value1)) );
+			Debug.Log("My Enum: " + myEnumField );
+			Debug.Log("My Enum: " + myEnumField.ToString() );
+
 			behaviour2.Behaviour2Test();
 		}
 
@@ -391,6 +406,11 @@ namespace TestCilbox
 		{
 			field = value;
 			Validator.Set("WriteCilboxable", value.pubsettee.ToString() );
+		}
+
+		public void LogEnum(MyEnum e)
+		{
+			Debug.Log("Enum value: " + e);
 		}
 	}
 
