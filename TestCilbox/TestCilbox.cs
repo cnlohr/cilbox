@@ -351,6 +351,8 @@ namespace TestCilbox
 
 			Validator.Validate("NativeRefMethodCall", "11");
 
+			Validator.Validate("Vector3CheckThis", "OK");
+
 			return -1 * Validator.NumValidationErrors();
 		}
 	}

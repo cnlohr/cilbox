@@ -282,8 +282,11 @@ namespace Cilbox
 				typeName = typeof(byte[]).FullName;
 			}
 
-			// Perform check without & for ref types
-			String refSuffix = "";
+			// Perform check by removing "&" from the end of ref types
+			// This happens when the type is a reference to a specific type
+			// But for security purposes, we just want to check the base type
+			//  i.e.  System.byte& ===> System.byte  /  &
+			String refSuffix = ""; // store the ref suffix ("&") to add back on after the check
 			if( typeName.EndsWith('&') ) { refSuffix = "&"; typeName = typeName[..^1]; }
 			// Perform check without array[]
 			//  i.e.  System.byte[][] ===> System.byte  /  [][]
@@ -300,7 +303,11 @@ namespace Cilbox
 			TypeInfo typeInfo = t.GetTypeInfo();
 			if( typeInfo == null ) return null;
 			String typeName = typeInfo.ToString();
-			if( typeName.EndsWith('&') ) typeName = typeName.Substring( 0, typeName.Length - 1 );
+			// Perform check by removing "&" from the end of ref types
+			// This happens when the type is a reference to a specific type
+			// But for security purposes, we just want to check the base type
+			//  i.e.  System.byte& ===> System.byte
+			if( typeName.EndsWith('&') ) typeName = typeName[..^1];
 			String [] vTypeNameNoArray = typeName.Split( "[" );
 			typeName = ( vTypeNameNoArray.Length > 0 ) ? vTypeNameNoArray[0] : typeName;
 			String [] vTypeNameNoGenerics = typeName.Split( "`" );
@@ -327,7 +334,7 @@ namespace Cilbox
 			int bracket = typeName.IndexOf( '[' );
 			String baseName = bracket >= 0 ? typeName.Substring( 0, bracket ) : typeName;
 
-			// strip "&" for ref types
+			// Strip "&" for ref types: "Foo.Bar&" -> "Foo.Bar"
 			if( baseName.EndsWith('&') ) baseName = baseName.Substring( 0, baseName.Length - 1 );
 
 			if( box.classes.ContainsKey( baseName ) ) return true;
@@ -473,9 +480,17 @@ namespace Cilbox
 							}
 						}
 
-						if (match) { return closed; }
+						if (match)
+						{
+							return closed;
+						}
 					}
-					catch { continue; }
+					catch
+					{
+						// Continue checking the rest of the methods to see if there is another match
+						// (maybe there could be one with the same signature but wrong constraints that would cause MakeGenericMethod to fail)
+						continue;
+					}
 				}
 			}
 
@@ -509,6 +524,7 @@ namespace Cilbox
 						{
 							Debug.LogWarning(e.ToString());
 							Debug.LogWarning("Failed to find method " + name + " on type " + type.FullName + " with parameters " + string.Join(", ", (object[])parameters) + " and generic arguments " + string.Join(", ", (object[])genericArguments) + " in assembly " + proxyAssembly.GetName().Name);
+							// Continue searching the rest of the assemblies to see if there is another match
 							continue;
 						}
 
@@ -516,6 +532,7 @@ namespace Cilbox
 				}
 			}
 
+			// If we reach here, no appropriate method was found.
 			return null;
 		}
 

@@ -207,6 +207,8 @@ namespace Cilbox
 				UnityEngine.Object o = fieldsObjects[i];
 				if (o == null)
 				{
+					// This is hit when serialized data is expected but the object is null
+					// This can happen when a referenced object is missing by the time the scene is built/loaded but was present for serialization
 					Debug.LogWarning("[CilboxProxy] Null reference found in script " + className + " for field ID " + cls.instanceFieldNames[i]);
 					continue;
 				}

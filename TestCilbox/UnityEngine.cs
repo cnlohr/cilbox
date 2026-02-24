@@ -159,6 +159,20 @@ namespace UnityEngine
 	{
 		public float x, y, z;
 		public Vector3( float x, float y, float z ) { this.x = x; this.y = y; this.z = z; }
+
+		public float this[int index]
+		{
+			get
+			{
+				return index switch
+				{
+					0 => this.x,
+					1 => this.y,
+					2 => this.z,
+					_ => throw new IndexOutOfRangeException("Invalid Vector3 index!")
+				};
+			}
+		}
 	}
 
 	public static class Random

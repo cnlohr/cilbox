@@ -450,9 +450,13 @@ spiperf.Begin();
 								}
 
 								iko = st.Invoke( callthis, callpar );
-								if( seorig.type == StackType.Address || seorig.type == StackType.NativeHandle )
+								if( seorig.type == StackType.Address )
 								{
-									seorig.DereferenceLoad( box, callthis );
+									seorig.DereferenceLoadAddress( callthis );
+								}
+								else if ( seorig.type == StackType.NativeHandle )
+								{
+									seorig.DereferenceLoadNativeHandle( box, callthis );
 								}
 							}
 							else
@@ -464,9 +468,13 @@ spiperf.Begin();
 							for( ik = 0; ik < numFields; ik++ )
 							{
 								StackElement se = callpar_se[ik];
-								if( se.type == StackType.Address || se.type == StackType.NativeHandle )
+								if (se.type == StackType.Address)
 								{
-									callpar_se[ik].DereferenceLoad( box, callpar[ik] );
+									callpar_se[ik].DereferenceLoadAddress( callpar[ik] );
+								}
+								else if ( se.type == StackType.NativeHandle )
+								{
+									callpar_se[ik].DereferenceLoadNativeHandle( box, callpar[ik] );
 								}
 							}
 
@@ -961,7 +969,19 @@ spiperf.Begin();
 					case 0x4b: case 0x4c: case 0x4d: case 0x4e: case 0x4f: case 0x50:
 					{
 						StackElement se = stackBuffer[sp--];
-						object obj = se.Dereference(box);
+						object obj = null;
+						if (se.type == StackType.Address)
+						{
+							obj = se.DereferenceAddress();
+						}
+						else if (se.type == StackType.NativeHandle)
+						{
+							obj = se.DereferenceNativeHandle(box);
+						}
+						else
+						{
+							throw new CilboxInterpreterRuntimeException("Invalid stack type for ldind instruction", parentClass.className, methodName, pc);
+						}
 
 						if (obj == null)
 						{
@@ -1035,7 +1055,18 @@ spiperf.Begin();
 						StackElement val = stackBuffer[sp--];
 						StackElement addr = stackBuffer[sp--];
 						object obj = val.AsObject();
-						addr.DereferenceLoad(box, obj);
+						if (addr.type == StackType.Address)
+						{
+							addr.DereferenceLoadAddress(obj);
+						}
+						else if (addr.type == StackType.NativeHandle)
+						{
+							addr.DereferenceLoadNativeHandle(box, obj);
+						}
+						else
+						{
+							throw new CilboxInterpreterRuntimeException("Invalid stack type for stind instruction", parentClass.className, methodName, pc);
+						}
 						break;
 					}
 					case 0x7e: // ldsfld

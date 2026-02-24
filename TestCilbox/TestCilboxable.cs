@@ -259,6 +259,9 @@ namespace TestCilbox
 			TestUtil.Increment(ref nativeRefVec.x);
 			Validator.Set("NativeRefMethodCall", nativeRefVec.x.ToString() );
 
+			Vector3 checkThis = new Vector3(1, 2, 3);
+			Validator.Set("Vector3CheckThis", checkThis.x == checkThis[0] && checkThis.y == checkThis[1] && checkThis.z == checkThis[2] ? "OK" : "Fail" );
+
 			behaviour2.Behaviour2Test();
 		}
 

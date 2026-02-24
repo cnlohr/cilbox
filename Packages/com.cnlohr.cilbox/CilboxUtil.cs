@@ -271,31 +271,15 @@ namespace Cilbox
 
 		public object DereferenceAddress()
 		{
-			// todo: should we dereference NativeHandle? If so, we would need to use the box metadata here
 			if( o.GetType() == typeof(StackElement[]) )
 				return ((StackElement[])o)[i].AsObject();
 			else
 				return ((Array)o).GetValue(i);
 		}
 
-		public object DereferenceNativeHandle(Cilbox? box)
+		public object DereferenceNativeHandle(Cilbox box)
 		{
-			if (box == null)
-			{
-				throw new CilboxException("Cannot dereference NativeHandle without a Cilbox instance");
-			}
-
 			return box.metadatas[u].nativeField.GetValue(o);
-		}
-
-		public object Dereference(Cilbox? box)
-		{
-			return type switch
-			{
-				StackType.Address => DereferenceAddress(),
-				StackType.NativeHandle => DereferenceNativeHandle(box),
-				_ => throw new CilboxException($"Cannot dereference StackElement of type {type}")
-			};
 		}
 
 		// Mostly like a Dereference.
@@ -323,24 +307,9 @@ namespace Cilbox
 				((Array)o).SetValue(overwrite, i);
 		}
 
-		public void DereferenceLoadNativeHandle( Cilbox? box, object overwrite )
+		public void DereferenceLoadNativeHandle( Cilbox box, object overwrite )
 		{
-			if (box == null)
-			{
-				throw new CilboxException("Cannot dereference NativeHandle without a Cilbox instance");
-			}
-
 			box.metadatas[u].nativeField.SetValue(o, overwrite);
-		}
-
-		public void DereferenceLoad( Cilbox? box, object overwrite )
-		{
-			switch( type )
-			{
-			case StackType.Address: DereferenceLoadAddress( overwrite ); break;
-			case StackType.NativeHandle: DereferenceLoadNativeHandle( box, overwrite ); break;
-			default: throw new CilboxException($"Cannot dereference load StackElement of type {type}");
-			}
 		}
 
 		public static StackElement CreateAddressReference( Array array, uint index )
