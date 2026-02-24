@@ -400,7 +400,7 @@ spiperf.Begin();
 							{
 								StackElement se = stackBuffer[sp--];
 								callpar_se[numFields-ik-1] = se;
-								object o = se.AsObject();
+								object o = se.AsObject(box);
 								Type t = pa[numFields-ik-1].ParameterType;
 
 								// XXX TODO: Copy mechanism below from ResolveToStackElement and Coerce
@@ -450,11 +450,10 @@ spiperf.Begin();
 								}
 
 								iko = st.Invoke( callthis, callpar );
-								if( seorig.type == StackType.Address )
+								if( seorig.type == StackType.Address || seorig.type == StackType.NativeHandle )
 								{
-									seorig.DereferenceLoadAddress( callthis );
+									seorig.DereferenceLoad( box, callthis );
 								}
-								// todo: will there be NativeHandle here?
 							}
 							else
 							{
@@ -465,15 +464,10 @@ spiperf.Begin();
 							for( ik = 0; ik < numFields; ik++ )
 							{
 								StackElement se = callpar_se[ik];
-								if( se.type == StackType.Address )
+								if( se.type == StackType.Address || se.type == StackType.NativeHandle )
 								{
-									callpar_se[ik].DereferenceLoadAddress( callpar[ik] );
-									//if( se.o.GetType() == typeof(StackElement[]) )
-									//	((StackElement[])se.o)[se.i].Load( callpar[ik] );
-									//else
-									//	((Array)se.o).SetValue(callpar[ik], se.i);
+									callpar_se[ik].DereferenceLoad( box, callpar[ik] );
 								}
-								// todo: will there be NativeHandle here?
 							}
 
 							if( !isVoid )

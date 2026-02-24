@@ -254,6 +254,11 @@ namespace TestCilbox
 			WriteCilboxable(ref myRef, behaviour2);
 			Validator.Set("RefCilboxable Same", (myRef == behaviour2).ToString() );
 
+			// NativeHandle through native method ref modification
+			Vector3 nativeRefVec = new Vector3(10, 20, 30);
+			TestUtil.Increment(ref nativeRefVec.x);
+			Validator.Set("NativeRefMethodCall", nativeRefVec.x.ToString() );
+
 			behaviour2.Behaviour2Test();
 		}
 

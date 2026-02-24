@@ -18,6 +18,7 @@ namespace TestCilbox
 			"Cilbox.CilboxPublicUtils",
 			"TestCilbox.DisposeTester",
 			"TestCilbox.Validator",
+			"TestCilbox.TestUtil",
 			"System.Math",
 			"System.Array",
 			"System.Boolean",
@@ -191,6 +192,12 @@ namespace TestCilbox
 	}
 
 
+	public class TestUtil
+	{
+		public static void Increment(ref float val) { val += 1.0f; }
+	}
+
+
 	public class Program
 	{
 		public static int Main()
@@ -335,6 +342,8 @@ namespace TestCilbox
 			Validator.Validate("ReadCilboxable", "12345");
 			Validator.Validate("WriteCilboxable", "12345");
 			Validator.Validate("RefCilboxable Same", "True");
+
+			Validator.Validate("NativeRefMethodCall", "11");
 
 			return -1 * Validator.NumValidationErrors();
 		}
