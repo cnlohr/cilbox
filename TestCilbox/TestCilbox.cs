@@ -79,6 +79,12 @@ namespace TestCilbox
 			"UnityEngine.Vector3",
 		};
 
+		static HashSet<String> whiteListField = new HashSet<String>(){
+			"UnityEngine.Vector3.x",
+			"UnityEngine.Vector3.y",
+			"UnityEngine.Vector3.z",
+		};
+
 		static public HashSet<String> GetWhiteListTypes() { return whiteListType; }
 
 		override public bool CheckTypeAllowed( String sType )
@@ -88,7 +94,7 @@ namespace TestCilbox
 
 		public override bool CheckFieldAllowed(string sType, string sFieldName)
 		{
-			return true; //todo: proper whitelist for test
+			return whiteListField.Contains( sType + "." + sFieldName );
 		}
 
 		override public bool CheckMethodAllowed( out MethodInfo mi, Type declaringType, String name, Serializee [] parametersIn, Serializee [] genericArgumentsIn, String fullSignature )
