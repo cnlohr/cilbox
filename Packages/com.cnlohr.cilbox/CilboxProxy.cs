@@ -33,10 +33,7 @@ namespace Cilbox
 
 		private void ProxyDebugLog( string message )
 		{
-			if( ShouldDebugLog() )
-			{
 				Debug.Log( $"[CilboxProxy:{gameObject.name}] {message}" );
-			}
 		}
 
 		public CilboxProxy() { }
@@ -275,7 +272,8 @@ namespace Cilbox
 				if( st < StackType.Object )
 				{
 					fields[i].type = st;
-					ProxyDebugLog( $"Default field init {cls.instanceFieldNames[i]} <- default({fieldType})" );
+					if (ShouldDebugLog())
+						ProxyDebugLog( $"Default field init {cls.instanceFieldNames[i]} <- default({fieldType})" );
 				}
 				else if( fieldType.IsValueType )
 				{
@@ -284,18 +282,20 @@ namespace Cilbox
 						// We clean the fieldtype before https://github.com/cnlohr/cilbox/blob/fc608341d293186e0aacf519ea9f0beb43d42cee/Packages/com.cnlohr.cilbox/Cilbox.cs#L1389C40-L1389C67
 						object defaultValue = Activator.CreateInstance( fieldType );
 						fields[i].LoadObject( defaultValue );
-						ProxyDebugLog( $"Default field init {cls.instanceFieldNames[i]} <- default({fieldType}) [boxed]" );
+						if (ShouldDebugLog())
+							ProxyDebugLog( $"Default field init {cls.instanceFieldNames[i]} <- default({fieldType}) [boxed]" );
 					}
 					catch( Exception e )
 					{
 						fields[i].LoadObject( null );
-						ProxyDebugLog( $"[CilboxProxy:{gameObject.name}] Failed to create default value for {cls.instanceFieldNames[i]} ({fieldType}): {e.Message}" );
+						Debug.LogWarning( $"[CilboxProxy:{gameObject.name}] Failed to create default value for {cls.instanceFieldNames[i]} ({fieldType}): {e.Message}" );
 					}
 				}
 				else
 				{
 					fields[i].LoadObject( null );
-					Debug.Log( $"Default field init {cls.instanceFieldNames[i]} <- null" );
+					if (ShouldDebugLog())
+						ProxyDebugLog( $"Default field init {cls.instanceFieldNames[i]} <- null" );
 				}
 			}
 
