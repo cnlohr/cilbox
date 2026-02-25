@@ -283,6 +283,7 @@ namespace Cilbox
 						object defaultValue = Activator.CreateInstance( fieldType );
 						fields[i].LoadObject( defaultValue );
 						if (ShouldDebugLog())
+							if (ShouldDebugLog())
 							ProxyDebugLog( $"Default field init {cls.instanceFieldNames[i]} <- default({fieldType}) [boxed]" );
 					}
 					catch( Exception e )
@@ -294,6 +295,8 @@ namespace Cilbox
 				else
 				{
 					fields[i].LoadObject( null );
+					if (ShouldDebugLog())
+						ProxyDebugLog( $"Default field init {cls.instanceFieldNames[i]} <- null" );
 					if (ShouldDebugLog())
 						ProxyDebugLog( $"Default field init {cls.instanceFieldNames[i]} <- null" );
 				}
