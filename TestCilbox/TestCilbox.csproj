@@ -12,7 +12,6 @@
 
 	<ItemGroup>
 		<Compile Include="../Packages/com.cnlohr.cilbox/Cilbox.cs" />
-		<Compile Include="../Packages/com.cnlohr.cilbox/CilboxException.cs" />
 		<Compile Include="../Packages/com.cnlohr.cilbox/CilboxProxy.cs" />
 		<Compile Include="../Packages/com.cnlohr.cilbox/CilboxUtil.cs" />
 		<Compile Include="../Packages/com.cnlohr.cilbox/CilboxUsage.cs" />
