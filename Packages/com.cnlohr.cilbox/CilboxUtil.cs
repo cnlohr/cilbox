@@ -84,7 +84,11 @@ namespace Cilbox
 			case double t9: d = t9;	type = StackType.Double; break;
 			case bool ta0: l = ta0 ? 1 : 0; type = StackType.Boolean; break;
 			default:
-				if (o != null && o.GetType().IsEnum) { l = Convert.ToInt64(o); type = StackTypeFromType(o.GetType().GetEnumUnderlyingType()); }
+				// if the object is a cilboxed enum, load the underlying value and type to the stack
+				if (o is BoxedCilboxEnum bce) { l = bce.value; type = bce.enumDef.underlyingType; }
+				// if the object is a native enum, load the underlying value and type to the stack
+				else if (o != null && o.GetType().IsEnum) { l = Convert.ToInt64(o); type = StackTypeFromType(o.GetType().GetEnumUnderlyingType()); }
+				// load the object as normal
 				else { this.o = o; type = StackType.Object; }
 				break;
 			}
@@ -360,6 +364,36 @@ namespace Cilbox
 				_ => StackType.Object
 			};
 		}
+	}
+
+	public class CilboxEnum
+	{
+		public string enumName;
+		public StackType underlyingType;
+		public Dictionary<long, string> valueToName;
+
+		public string GetName(long value)
+		{
+			if (valueToName.TryGetValue(value, out string name))
+				return name;
+			return value.ToString();
+		}
+	}
+
+	public class BoxedCilboxEnum
+	{
+		public CilboxEnum enumDef;
+		public long value;
+
+		public BoxedCilboxEnum(CilboxEnum enumDef, long value)
+		{
+			this.enumDef = enumDef;
+			this.value = value;
+		}
+
+		public override string ToString() => enumDef.GetName(value);
+		public override bool Equals(object obj) => obj is BoxedCilboxEnum other && enumDef == other.enumDef && value == other.value;
+		public override int GetHashCode() => value.GetHashCode();
 	}
 
 	///////////////////////////////////////////////////////////////////////////

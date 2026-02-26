@@ -87,7 +87,7 @@ namespace Cilbox
 
 			return m;
 		disallowed:
-			Debug.LogError( $"Privelege failed {declaringType}.{name}" );
+			Debug.LogError( $"Privilege failed {declaringType}.{name}" );
 			return null;
 		}
 
@@ -329,6 +329,7 @@ namespace Cilbox
 		public bool IsCilboxInternalType( String typeName )
 		{
 			if( box.classes.ContainsKey( typeName ) ) return true;
+			if( box.cilboxEnums != null && box.cilboxEnums.ContainsKey( typeName ) ) return true;
 
 			// Strip array suffix: "Foo.Bar[]" or "Foo.Bar[][]" -> "Foo.Bar"
 			int bracket = typeName.IndexOf( '[' );
@@ -338,6 +339,7 @@ namespace Cilbox
 			if( baseName.EndsWith('&') ) baseName = baseName.Substring( 0, baseName.Length - 1 );
 
 			if( box.classes.ContainsKey( baseName ) ) return true;
+			if( box.cilboxEnums != null && box.cilboxEnums.ContainsKey( baseName ) ) return true;
 
 			return false;
 		}

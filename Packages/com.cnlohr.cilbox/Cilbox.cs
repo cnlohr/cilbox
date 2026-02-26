@@ -436,7 +436,10 @@ spiperf.Begin();
 								}
 								else if( constrainedMeta != null && se.type < StackType.Object )
 								{
-									callthis = se.CoerceToObject( constrainedMeta.nativeType );
+									if( constrainedMeta.cilboxEnum != null )
+										callthis = new BoxedCilboxEnum(constrainedMeta.cilboxEnum, se.l);
+									else
+										callthis = se.CoerceToObject( constrainedMeta.nativeType );
 								}
 								else if( t.IsValueType && se.type < StackType.Object )
 								{
@@ -456,7 +459,7 @@ spiperf.Begin();
 								}
 
 								iko = st.Invoke( callthis, callpar );
-								if( seorig.type == StackType.Address )
+								if( seorig.type == StackType.Address  && callthis is not BoxedCilboxEnum ) // enums are immutable
 								{
 									seorig.DereferenceLoadAddress( callthis );
 								}
@@ -1098,7 +1101,9 @@ spiperf.Begin();
 					{
 						uint otyp = BytecodeAsU32( ref pc );
 						CilMetadataTokenInfo meta = box.metadatas[otyp];
-						if( meta.nativeType != null && meta.nativeType.IsEnum )
+						if( meta.cilboxEnum != null )
+							stackBuffer[sp].LoadObject( new BoxedCilboxEnum(meta.cilboxEnum, stackBuffer[sp].l) );
+						else if( meta.nativeType != null && meta.nativeType.IsEnum )
 							stackBuffer[sp].LoadObject( Enum.ToObject(meta.nativeType, stackBuffer[sp].l) );
 						else
 							stackBuffer[sp].LoadObject( stackBuffer[sp].AsObject() );
@@ -1245,7 +1250,16 @@ spiperf.Begin();
 						CilMetadataTokenInfo metaType = box.metadatas[otyp];
 						if( metaType.nativeTypeIsStackType )
 						{
-							stackBuffer[sp].Unbox( stackBuffer[sp].AsObject(), metaType.nativeTypeStackType );
+							object unboxTarget = stackBuffer[sp].AsObject();
+							if( unboxTarget is BoxedCilboxEnum bce )
+							{
+								stackBuffer[sp].type = metaType.nativeTypeStackType;
+								stackBuffer[sp].l = bce.value;
+							}
+							else
+							{
+								stackBuffer[sp].Unbox( unboxTarget, metaType.nativeTypeStackType );
+							}
 						}
 						else
 						{
@@ -1681,6 +1695,8 @@ spiperf.End();
 		public String declaringTypeName;
 		//public String ToString() { return Name; }
 
+		public CilboxEnum cilboxEnum;
+
 		public delegate StackElement DelegateOverride( CilMetadataTokenInfo ths, ArraySegment<StackElement> stackBufferIn, ArraySegment<StackElement> parametersIn );
 		public object opaque;
 		public DelegateOverride shim = null;
@@ -1703,6 +1719,7 @@ spiperf.End();
 		public Dictionary< String, int > classes;
 		public CilboxClass [] classesList;
 		public CilMetadataTokenInfo [] metadatas;
+		public Dictionary<string, CilboxEnum> cilboxEnums;
 		public String assemblyData;
 		private bool initialized = false;
 
@@ -1768,6 +1785,26 @@ spiperf.End();
 				classesList[clsid] = cls;
 				classes[(String)v.Key] = clsid;
 				clsid++;
+			}
+
+			cilboxEnums = new Dictionary<string, CilboxEnum>();
+			Serializee enumsSer;
+			if (assemblyRoot.TryGetValue("enums", out enumsSer))
+			{
+				foreach (var kv in enumsSer.AsMap())
+				{
+					var enumProps = kv.Value.AsMap();
+					CilboxEnum ce = new CilboxEnum();
+					ce.enumName = kv.Key;
+					ce.underlyingType = StackElement.StackTypeFromType(usage.GetNativeTypeFromSerializee(enumProps["ut"]));
+					ce.valueToName = new Dictionary<long, string>();
+					foreach (var entry in enumProps["values"].AsArray())
+					{
+						var e = entry.AsMap();
+						ce.valueToName[Convert.ToInt64(e["v"].AsString())] = e["n"].AsString();
+					}
+					cilboxEnums[kv.Key] = ce;
+				}
 			}
 
 			clsid = 0;
@@ -1868,6 +1905,14 @@ spiperf.End();
 						t.nativeTypeIsStackType = true;
 						t.nativeTypeStackType = seType;
 						t.Name = t.nativeType.ToString();
+
+						// Link to CilboxEnum if this was a cilboxable enum serialized by underlying type.
+						string origName = typ.AsMap()["n"].AsString();
+						if (cilboxEnums != null && cilboxEnums.TryGetValue(origName, out CilboxEnum cilboxEnumDef))
+						{
+							t.cilboxEnum = cilboxEnumDef;
+							t.Name = origName;
+						}
 					}
 					else if( t.nativeType != null )
 					{
@@ -1877,22 +1922,6 @@ spiperf.End();
 					else
 					{
 						Dictionary< String, Serializee > typMap = typ.AsMap();
-
-						// Check if this is an enum with a serialized underlying type.
-						Serializee utSer;
-						if( typMap.TryGetValue( "ut", out utSer ) )
-						{
-							t.nativeType = usage.GetNativeTypeFromSerializee( utSer );
-							StackType utSeType = StackElement.StackTypeFromType( t.nativeType );
-							if( utSeType < StackType.Object )
-							{
-								t.nativeTypeIsStackType = true;
-								t.nativeTypeStackType = utSeType;
-								t.Name = typMap["n"].AsString();
-								t.isValid = true;
-								break;
-							}
-						}
 
 						// Maybe it's a type inside our cilbox?
 						t.isValid = false;
@@ -2211,6 +2240,8 @@ spiperf.End();
 				{
 					if( !CilboxUtil.HasCilboxableAttribute( type ) )
 						continue;
+					if( type.IsEnum )
+						continue;
 
 					// Cilbox is not in use... But do ALL cilboxes if no scene is loaded.
 					if( TypesInUseInScene != null && !TypesInUseInScene.Contains( type ) ) continue;
@@ -2521,6 +2552,8 @@ spiperf.End();
 				{
 					if( !CilboxUtil.HasCilboxableAttribute( type ) )
 						continue;
+					if( type.IsEnum )
+						continue;
 
 					ProfilerMarker perfType = new ProfilerMarker(type.ToString()); perfType.Begin();
 
@@ -2567,9 +2600,34 @@ spiperf.End();
 
 			perf.End(); perf = new ProfilerMarker( "Assembling" ); perf.Begin();
 
+			Dictionary< String, Serializee > enumsDict = new Dictionary< String, Serializee >();
+			foreach( System.Reflection.Assembly proxyAssembly in assys )
+			{
+				foreach (Type type in proxyAssembly.GetTypes())
+				{
+					if (!type.IsEnum || !CilboxUtil.HasCilboxableAttribute(type))
+						continue;
+					Dictionary< String, Serializee > enumProps = new Dictionary< String, Serializee >();
+					enumProps["ut"] = CilboxUtil.GetSerializeeFromNativeType(type.GetEnumUnderlyingType());
+					string[] names = Enum.GetNames(type);
+					Array values = Enum.GetValues(type);
+					Serializee[] entries = new Serializee[names.Length];
+					for (int i = 0; i < names.Length; i++)
+					{
+						Dictionary< String, Serializee > entry = new Dictionary< String, Serializee >();
+						entry["n"] = new Serializee(names[i]);
+						entry["v"] = new Serializee(Convert.ToInt64(values.GetValue(i)).ToString());
+						entries[i] = new Serializee(entry);
+					}
+					enumProps["values"] = new Serializee(entries);
+					enumsDict[type.FullName] = new Serializee(enumProps);
+				}
+			}
+
 			Dictionary< String, Serializee > assemblyRoot = new Dictionary< String, Serializee >();
 			assemblyRoot["classes"] = new Serializee( classes );
 			assemblyRoot["metadata"] = new Serializee( assemblyMetadata );
+			assemblyRoot["enums"] = new Serializee( enumsDict );
 			Serializee assemblySerializee = new Serializee( assemblyRoot );
 
 			perf.End(); perf = new ProfilerMarker( "Serializing" ); perf.Begin();
