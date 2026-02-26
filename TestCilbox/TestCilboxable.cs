@@ -22,12 +22,13 @@ namespace TestCilbox
 		public int[] intArr = new int[] { 1, 2, 3 };
 		public TestCilboxBehaviour3[] myBehaviour3Arr;
 		public MyEnum myEnumField = MyEnum.Value2;
+		public TestEnum testEnumField = TestEnum.SecondValue;
 
 		public enum MyEnum
 		{
 			Value1,
 			Value2,
-			Value3,
+			Value3 = 30,
 		}
 
 		public TestCilboxBehaviour() { }
@@ -270,13 +271,56 @@ namespace TestCilbox
 			Vector3 checkThis = new Vector3(1, 2, 3);
 			Validator.Set("Vector3CheckThis", checkThis.x == checkThis[0] && checkThis.y == checkThis[1] && checkThis.z == checkThis[2] ? "OK" : "Fail" );
 
-			Debug.Log("My Enum: " + (myEnumField == MyEnum.Value2) );
-			Debug.Log("My Enum: " + (myEnumField == MyEnum.Value3) );
-			Debug.Log("My Enum: " + (nameof(MyEnum.Value1)) );
-			Debug.Log("My Enum: " + myEnumField );
-			Debug.Log("My Enum: " + myEnumField.ToString() );
-			// LogMyEnum(MyEnum.Value1);
-			LogTestEnum(TestEnum.SecondValue);
+			Validator.Set("MyEnum.Value1", MyEnum.Value1.ToString() );
+			Validator.Set("MyEnum.Value2", MyEnum.Value2.ToString() );
+			Validator.Set("MyEnum.Value3", MyEnum.Value3.ToString() );
+			Validator.Set("(int)MyEnum.Value1", ((int)MyEnum.Value1).ToString() );
+			Validator.Set("(int)MyEnum.Value2", ((int)MyEnum.Value2).ToString() );
+			Validator.Set("(int)MyEnum.Value3", ((int)MyEnum.Value3).ToString() );
+			Validator.Set("MyEnum Field", myEnumField.ToString() );
+			Validator.Set("(int)MyEnum Field", ((int)myEnumField).ToString() );
+			Validator.Set("MyEnum Field == Value1", (myEnumField == MyEnum.Value1).ToString() );
+			Validator.Set("MyEnum Field == Value2", (myEnumField == MyEnum.Value2).ToString() );
+			Validator.Set("MyEnum Field == Value3", (myEnumField == MyEnum.Value3).ToString() );
+			Validator.Set("(int)MyEnum Field == Value1", ((int)myEnumField == (int)MyEnum.Value1).ToString() );
+			Validator.Set("(int)MyEnum Field == Value2", ((int)myEnumField == (int)MyEnum.Value2).ToString() );
+			Validator.Set("(int)MyEnum Field == Value3", ((int)myEnumField == (int)MyEnum.Value3).ToString() );
+
+			Validator.Set("TestEnum.FirstValue", TestEnum.FirstValue.ToString() );
+			Validator.Set("TestEnum.SecondValue", TestEnum.SecondValue.ToString() );
+			Validator.Set("TestEnum.ThirdValue", TestEnum.ThirdValue.ToString() );
+			Validator.Set("(int)TestEnum.FirstValue", ((int)TestEnum.FirstValue).ToString() );
+			Validator.Set("(int)TestEnum.SecondValue", ((int)TestEnum.SecondValue).ToString() );
+			Validator.Set("(int)TestEnum.ThirdValue", ((int)TestEnum.ThirdValue).ToString() );
+			Validator.Set("TestEnum Field", testEnumField.ToString() );
+			Validator.Set("(int)TestEnum Field", ((int)testEnumField).ToString() );
+			Validator.Set("TestEnum Field == FirstValue", (testEnumField == TestEnum.FirstValue).ToString() );
+			Validator.Set("TestEnum Field == SecondValue", (testEnumField == TestEnum.SecondValue).ToString() );
+			Validator.Set("TestEnum Field == ThirdValue", (testEnumField == TestEnum.ThirdValue).ToString() );
+			Validator.Set("(int)TestEnum Field == FirstValue", ((int)testEnumField == (int)TestEnum.FirstValue).ToString() );
+			Validator.Set("(int)TestEnum Field == SecondValue", ((int)testEnumField == (int)TestEnum.SecondValue).ToString() );
+			Validator.Set("(int)TestEnum Field == ThirdValue", ((int)testEnumField == (int)TestEnum.ThirdValue).ToString() );
+			Validator.Set("TestEnumNativeEqualsFirstValue", TestUtil.TestEnumNativeEquals(testEnumField, TestEnum.FirstValue).ToString() );
+			Validator.Set("TestEnumNativeEqualsSecondValue", TestUtil.TestEnumNativeEquals(testEnumField, TestEnum.SecondValue).ToString() );
+			Validator.Set("TestEnumNativeEqualsThirdValue", TestUtil.TestEnumNativeEquals(testEnumField, TestEnum.ThirdValue).ToString() );
+
+			MyEnumMethod(MyEnum.Value1);
+			MyEnumMethod(myEnumField);
+			TestEnumMethod(TestEnum.FirstValue);
+			TestEnumMethod(testEnumField);
+
+			MyEnum[] myEnumArr = new MyEnum[] { MyEnum.Value1, MyEnum.Value2, MyEnum.Value3 };
+			for (int j = 0; j < myEnumArr.Length; j++) {
+				Validator.Set("MyEnum Array " + j, myEnumArr[j].ToString() );
+				Validator.Set("MyEnum Array int value " + j, ((int)myEnumArr[j]).ToString() );
+			}
+
+			TestEnum[] enumArr = new TestEnum[] { TestEnum.FirstValue, TestEnum.SecondValue, TestEnum.ThirdValue };
+			for (int j = 0; j < enumArr.Length; j++)
+			{
+				Validator.Set("TestEnum Array " + j, enumArr[j].ToString() );
+				Validator.Set("TestEnum Array int value " + j, ((int)enumArr[j]).ToString() );
+			}
 
 			behaviour2.Behaviour2Test();
 		}
@@ -409,18 +453,16 @@ namespace TestCilbox
 			Validator.Set("WriteCilboxable", value.pubsettee.ToString() );
 		}
 
-		// public void LogMyEnum(MyEnum e)
-		// {
-		// 	Debug.Log("Enum value: " + e);
-		// 	Debug.Log("Enum name: " + Enum.GetName(typeof(MyEnum), e) );
-		// }
-
-		public void LogTestEnum(TestEnum e)
+		public void MyEnumMethod(MyEnum e)
 		{
-			Debug.Log("TestEnum value: " + e);
-			Debug.Log("TestEnum value: " + (e == TestEnum.FirstValue));
-			Debug.Log("TestEnum value: " + (e == TestEnum.SecondValue));
-			// Debug.Log("TestEnum name: " + Enum.GetName(typeof(TestEnum), e) );
+			Validator.AddCount("MyEnumMethod");
+			Validator.Set("MyEnumMethod_" + Validator.GetCount("MyEnumMethod"), e.ToString() );
+		}
+
+		public void TestEnumMethod(TestEnum e)
+		{
+			Validator.AddCount("TestEnumMethod");
+			Validator.Set("TestEnumMethod_" + Validator.GetCount("TestEnumMethod"), e.ToString() );
 		}
 	}
 

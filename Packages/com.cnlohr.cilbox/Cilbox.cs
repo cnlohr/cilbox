@@ -20,7 +20,6 @@ using System.Threading.Tasks;
 
 
 // To add [Cilboxable] to your classes that you want exported.
-[AttributeUsage(AttributeTargets.All, Inherited = true)]
 public class CilboxableAttribute : Attribute { }
 public class CilboxTarget : Attribute { }
 
@@ -223,6 +222,7 @@ namespace Cilbox
 			int sp = -1;
 			bool cont = true;
 			int pc = 0;
+			CilMetadataTokenInfo constrainedMeta = null;
 			try
 			{
 				do
@@ -434,6 +434,10 @@ spiperf.Begin();
 								{
 									callthis = seorig.DereferenceNativeHandle(box);
 								}
+								else if( constrainedMeta != null && se.type < StackType.Object )
+								{
+									callthis = se.CoerceToObject( constrainedMeta.nativeType );
+								}
 								else if( t.IsValueType && se.type < StackType.Object )
 								{
 									// Try to coerce types.
@@ -443,6 +447,7 @@ spiperf.Begin();
 								{
 									callthis = se.o;
 								}
+								constrainedMeta = null;
 
 								if (callthis == null)
 								{
@@ -1092,7 +1097,11 @@ spiperf.Begin();
 					case 0x8C: // box (This pulls off a type)
 					{
 						uint otyp = BytecodeAsU32( ref pc );
-						stackBuffer[sp].LoadObject( stackBuffer[sp].AsObject() );//(metaType.nativeType)stackBuffer[sp-1].AsObject();
+						CilMetadataTokenInfo meta = box.metadatas[otyp];
+						if( meta.nativeType != null && meta.nativeType.IsEnum )
+							stackBuffer[sp].LoadObject( Enum.ToObject(meta.nativeType, stackBuffer[sp].l) );
+						else
+							stackBuffer[sp].LoadObject( stackBuffer[sp].AsObject() );
 						break;
 					}
 					case 0x8d: // newarr <etype>
@@ -1105,7 +1114,10 @@ spiperf.Begin();
 						if( arrMeta.nativeTypeIsCilboxProxy )
 							stackBuffer[sp].LoadObject( new object[size] );
 						else
-							stackBuffer[sp].LoadObject( Array.CreateInstance( arrMeta.nativeType, size ) );
+						{
+							Type elemType = arrMeta.nativeType.IsEnum ? Enum.GetUnderlyingType( arrMeta.nativeType ) : arrMeta.nativeType;
+							stackBuffer[sp].LoadObject( Array.CreateInstance( elemType, size ) );
+						}
 						break;
 					}
 					case 0x8e: // ldlen
@@ -1168,12 +1180,44 @@ spiperf.Begin();
 						stackBuffer[++sp].LoadObject( a.GetValue(index) );
 						break;
 					}
+					case 0x9b: // stelem.i
+					{
+						long val = stackBuffer[sp--].l;
+						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
+						int index = stackBuffer[sp--].i;
+						((Array)(stackBuffer[sp--].o)).SetValue( (IntPtr)val, index );
+						break;
+					}
 					case 0x9c: // stelem.i1
 					{
 						SByte val = (SByte)stackBuffer[sp--].i;
 						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
 						int index = stackBuffer[sp--].i;
 						((Array)(stackBuffer[sp--].o)).SetValue( (byte)val, index );
+						break;
+					}
+					case 0x9d: // stelem.i2
+					{
+						short val = (short)stackBuffer[sp--].i;
+						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
+						int index = stackBuffer[sp--].i;
+						((Array)(stackBuffer[sp--].o)).SetValue( val, index );
+						break;
+					}
+					case 0x9e: // stelem.i4
+					{
+						int val = stackBuffer[sp--].i;
+						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
+						int index = stackBuffer[sp--].i;
+						((Array)(stackBuffer[sp--].o)).SetValue( val, index );
+						break;
+					}
+					case 0x9f: // stelem.i8
+					{
+						long val = stackBuffer[sp--].l;
+						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
+						int index = stackBuffer[sp--].i;
+						((Array)(stackBuffer[sp--].o)).SetValue( val, index );
 						break;
 					}
 					case 0xa0: // stelem.r4
@@ -1183,6 +1227,15 @@ spiperf.Begin();
 						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
 						int index = stackBuffer[sp--].i;
 						float [] array = (float[])stackBuffer[sp--].AsObject();
+						array[index] = val;
+						break;
+					}
+					case 0xa1: // stelem.r8
+					{
+						double val = stackBuffer[sp--].d;
+						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
+						int index = stackBuffer[sp--].i;
+						double [] array = (double[])stackBuffer[sp--].AsObject();
 						array[index] = val;
 						break;
 					}
@@ -1332,8 +1385,7 @@ spiperf.Begin();
 							stackBuffer[++sp].LoadObject( box.classesList[dt.interpretiveMethodClass].methods[dt.interpretiveMethod] );
 							break;
 						case 0x16: // constrained.
-							// handled by reflection so discard the type token
-							BytecodeAsU32( ref pc );
+							constrainedMeta = box.metadatas[BytecodeAsU32( ref pc )];
 							break;
 						default:
 							throw new CilboxInterpreterRuntimeException($"Opcode 0xfe 0x{b.ToString("X2")} unimplemented", parentClass.className, methodName, pc);
@@ -1560,10 +1612,7 @@ spiperf.End();
 			{
 				Dictionary< String, Serializee > field = staticFields[k].AsMap();
 				String fieldName = staticFieldNames[id] = field["name"].AsString();
-				Type t = box.usage.GetNativeTypeFromSerializee( field["type"] );
-				if( t != null && t.IsEnum )
-					t = Enum.GetUnderlyingType( t );
-				staticFieldTypes[id] = t;
+				Type t = staticFieldTypes[id] = box.usage.GetNativeTypeFromSerializee( field["type"] );
 
 				//staticFieldIDs[id] = Cilbox.FindInternalMetadataID( className, 4, fieldName );
 				this.staticFields[id] = CilboxUtil.DeserializeDataForProxyField( t, "" );
@@ -1580,10 +1629,7 @@ spiperf.End();
 			{
 				Dictionary< String, Serializee > field = instanceFields[k].AsMap();
 				String fieldName = instanceFieldNames[id] = field["name"].AsString();
-				Type ft = box.usage.GetNativeTypeFromSerializee( field["type"] );
-				if( ft != null && ft.IsEnum )
-					ft = Enum.GetUnderlyingType( ft );
-				instanceFieldTypes[id] = ft;
+				instanceFieldTypes[id] = box.usage.GetNativeTypeFromSerializee( field["type"] );
 				id++;
 			}
 

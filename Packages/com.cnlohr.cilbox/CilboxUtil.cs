@@ -82,7 +82,10 @@ namespace Cilbox
 			case float t8: l = 0; f = t8;	type = StackType.Float; break;
 			case double t9: d = t9;	type = StackType.Double; break;
 			case bool ta0: l = ta0 ? 1 : 0; type = StackType.Boolean; break;
-			default: this.o = o; type = StackType.Object; break;
+			default:
+				if (o != null && o.GetType().IsEnum) { l = Convert.ToInt64(o); type = StackTypeFromType(Enum.GetUnderlyingType(o.GetType())); }
+				else { this.o = o; type = StackType.Object; }
+				break;
 			}
 			return this;
 		}
@@ -91,21 +94,7 @@ namespace Cilbox
 		{
 			StackElement ret = new StackElement();
 			ret.l = 0; ret.o = null;
-			switch( o )
-			{
-			case sbyte t0: ret.l = t0;	ret.type = StackType.Sbyte; break;
-			case byte  t1: ret.e = t1;	ret.type = StackType.Byte; break;
-			case short t2: ret.l = t2;	ret.type = StackType.Short; break;
-			case ushort t3: ret.e = t3;	ret.type = StackType.Ushort; break;
-			case int t4: ret.l = t4;	ret.type = StackType.Int; break;
-			case uint t5: ret.e = t5;	ret.type = StackType.Uint; break;
-			case long t6: ret.l = t6;	ret.type = StackType.Long; break;
-			case ulong t7: ret.e = t7;	ret.type = StackType.Ulong; break;
-			case float t8: ret.f = t8;	ret.type = StackType.Float; break;
-			case double t9: ret.d = t9;	ret.type = StackType.Double; break;
-			case bool ta0: ret.l = ta0 ? 1 : 0; ret.type = StackType.Boolean; break;
-			default: ret.o = o; ret.type = StackType.Object; break;
-			}
+			ret.Load(o);
 			return ret;
 		}
 
@@ -178,6 +167,21 @@ namespace Cilbox
 		{
 			StackType rt = StackTypeFromType( t );
 
+			if( t.IsEnum && type < StackType.Object )
+			{
+				switch( type )
+				{
+					case StackType.Sbyte: return Enum.ToObject( t, (sbyte)i );
+					case StackType.Byte:  return Enum.ToObject( t, (byte)u );
+					case StackType.Short: return Enum.ToObject( t, (short)i );
+					case StackType.Ushort:return Enum.ToObject( t, (ushort)u );
+					case StackType.Int:   return Enum.ToObject( t, (int)i );
+					case StackType.Uint:  return Enum.ToObject( t, (uint)u );
+					case StackType.Long:  return Enum.ToObject( t, (long)e );
+					case StackType.Ulong: return Enum.ToObject( t, (ulong)u );
+				}
+			}
+
 			if( type < StackType.Float )
 			{
 				switch( rt )
@@ -194,21 +198,6 @@ namespace Cilbox
 				case StackType.Double:  return (double)e;
 				case StackType.Boolean: return e != 0;
 				default:
-					if( t.IsEnum )
-					{
-						switch( type )
-						{
-							case StackType.Sbyte: return Enum.ToObject( t, (sbyte)i );
-							case StackType.Byte:  return Enum.ToObject( t, (byte)u );
-							case StackType.Short: return Enum.ToObject( t, (short)i );
-							case StackType.Ushort:return Enum.ToObject( t, (ushort)u );
-							case StackType.Int:   return Enum.ToObject( t, (int)i );
-							case StackType.Uint:  return Enum.ToObject( t, (uint)u );
-							case StackType.Long:  return Enum.ToObject( t, (long)e );
-							case StackType.Ulong: return Enum.ToObject( t, (ulong)u );
-						}
-					}
-					else
 					{
 						switch( type )
 						{
@@ -266,7 +255,7 @@ namespace Cilbox
 				return Convert.ChangeType( o, t );
 			}
 
-			throw new Exception( "Erorr invalid type conversion from " + type + " to " + t );
+			throw new Exception( "Error invalid type conversion from " + type + " to " + t );
 		}
 
 		public object DereferenceAddress()
