@@ -2,7 +2,7 @@
     "name": "AsmDef",
     "rootNamespace": "",
     "references": [
-        "GUID:a2b22397d5e3094f49884a53aa9a6ab4"
+        "Cilbox"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
