@@ -1141,14 +1141,17 @@ spiperf.Begin();
 					case 0x90: case 0x91: case 0x92: case 0x93: case 0x94: // ldelem
 					case 0x95: case 0x96: case 0x97: case 0x98: case 0x99:
 					{
-						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
 						int index = stackBuffer[sp--].i;
-						if (index < 0 || index >= ((Array)(stackBuffer[sp].o)).Length)
+						if (stackBuffer[sp].o == null)
+						{
+							interpretedThrow(pc - 1, new NullReferenceException());
+							break;
+						}
+						if (index < 0 || index >= ((Array)stackBuffer[sp].o).Length)
 						{
 							interpretedThrow(pc - 1, new IndexOutOfRangeException());
 							break;
 						}
-//						Array a = ((Array)(stackBuffer[sp].o));
 						switch( b - 0x90 )
 						{
 						// Does this way work universally?  Can we assume the compiler knows what it's doing?
@@ -1160,7 +1163,7 @@ spiperf.Begin();
 						case 4: stackBuffer[sp].LoadInt( (int)(((int[])stackBuffer[sp].o)[index]) ); break; // ldelem.i4
 						case 5: stackBuffer[sp].LoadUint( (uint)(((uint[])stackBuffer[sp].o)[index]) ); break; // ldelem.u4
 						case 6: stackBuffer[sp].LoadUlong( (ulong)(((ulong[])stackBuffer[sp].o)[index]) ); break; // ldelem.u8 / ldelem.i8
-						case 7: stackBuffer[sp].LoadInt( (int)(((int[])stackBuffer[sp].o)[index]) ); break; // ldelem.i
+						case 7: stackBuffer[sp].LoadNint( (nint)(((nint[])stackBuffer[sp].o)[index]) ); break; // ldelem.i
 						case 8: stackBuffer[sp].LoadFloat( (float)(((float[])stackBuffer[sp].o)[index]) ); break; // ldelem.r4
 						case 9: stackBuffer[sp].LoadDouble( (double)(((double[])stackBuffer[sp].o)[index]) ); break; // ldelem.r8
 
@@ -1169,9 +1172,14 @@ spiperf.Begin();
 					}
 					case 0x9a: // Ldelem_Ref
 					{
-						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
 						int index = stackBuffer[sp--].i;
-						Array a = ((Array)(stackBuffer[sp--].o));
+						StackElement arrSE = stackBuffer[sp--];
+						if (arrSE.o == null)
+						{
+							interpretedThrow(pc - 1, new NullReferenceException());
+							break;
+						}
+						Array a = (Array)(arrSE.o);
 						if (index < 0 || index >= a.Length)
 						{
 							interpretedThrow(pc - 1, new IndexOutOfRangeException());
@@ -1180,83 +1188,55 @@ spiperf.Begin();
 						stackBuffer[++sp].LoadObject( a.GetValue(index) );
 						break;
 					}
-					case 0x9b: // stelem.i
+					case 0x9b: case 0x9c: case 0x9d: case 0x9e: case 0x9f: // stelem
+					case 0xa0: case 0xa1: case 0xa2:
 					{
-						long val = stackBuffer[sp--].l;
-						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
+						StackElement valSE = stackBuffer[sp--];
 						int index = stackBuffer[sp--].i;
-						((Array)(stackBuffer[sp--].o)).SetValue( (IntPtr)val, index );
+						StackElement arrSE = stackBuffer[sp--];
+						if (arrSE.o == null)
+						{
+							interpretedThrow(pc - 1, new NullReferenceException());
+							break;
+						}
+						Array asArr = (Array)(arrSE.o);
+						if (index < 0 || index >= asArr.Length)
+						{
+							interpretedThrow(pc - 1, new IndexOutOfRangeException());
+							break;
+						}
+						switch( b - 0x9b )
+						{
+						case 0: asArr.SetValue( (nint)valSE.l, index ); break; // stelem.i
+						case 1: asArr.SetValue( (byte)(SByte)valSE.i, index ); break; // stelem.i1
+						case 2: asArr.SetValue( (short)valSE.i, index ); break; // stelem.i2
+						case 3: asArr.SetValue( valSE.i, index ); break; // stelem.i4
+						case 4: asArr.SetValue( valSE.l, index ); break; // stelem.i8
+						case 5: ((float[])arrSE.AsObject())[index] = valSE.f; break; // stelem.r4
+						case 6: ((double[])arrSE.AsObject())[index] = valSE.d; break; // stelem.r8
+						case 7: ((object[])arrSE.AsObject())[index] = valSE.AsObject(); break; // stelem.ref
+						}
 						break;
 					}
-					case 0x9c: // stelem.i1
-					{
-						SByte val = (SByte)stackBuffer[sp--].i;
-						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
-						int index = stackBuffer[sp--].i;
-						((Array)(stackBuffer[sp--].o)).SetValue( (byte)val, index );
-						break;
-					}
-					case 0x9d: // stelem.i2
-					{
-						short val = (short)stackBuffer[sp--].i;
-						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
-						int index = stackBuffer[sp--].i;
-						((Array)(stackBuffer[sp--].o)).SetValue( val, index );
-						break;
-					}
-					case 0x9e: // stelem.i4
-					{
-						int val = stackBuffer[sp--].i;
-						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
-						int index = stackBuffer[sp--].i;
-						((Array)(stackBuffer[sp--].o)).SetValue( val, index );
-						break;
-					}
-					case 0x9f: // stelem.i8
-					{
-						long val = stackBuffer[sp--].l;
-						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
-						int index = stackBuffer[sp--].i;
-						((Array)(stackBuffer[sp--].o)).SetValue( val, index );
-						break;
-					}
-					case 0xa0: // stelem.r4
-					{
-						float val;
-						val = stackBuffer[sp--].f;
-						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
-						int index = stackBuffer[sp--].i;
-						float [] array = (float[])stackBuffer[sp--].AsObject();
-						array[index] = val;
-						break;
-					}
-					case 0xa1: // stelem.r8
-					{
-						double val = stackBuffer[sp--].d;
-						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
-						int index = stackBuffer[sp--].i;
-						double [] array = (double[])stackBuffer[sp--].AsObject();
-						array[index] = val;
-						break;
-					}
-					case 0xa2: // stelem.ref
-					{
-						object val = stackBuffer[sp--].AsObject();
-						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type", parentClass.className, methodName, pc);
-						int index = stackBuffer[sp--].i;
-						object [] array = (object[])stackBuffer[sp--].AsObject();
-						array[index] = val;
-						break;
-					}
-					case 0xa4: // stelem
+					case 0xa4: // stelem <typeTok>
 					{
 						uint otyp = BytecodeAsU32( ref pc );
-						object val = stackBuffer[sp--].AsObject();
-						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type", parentClass.className, methodName, pc);
+						StackElement valSE = stackBuffer[sp--];
 						int index = stackBuffer[sp--].i;
-						object [] array = (object[])stackBuffer[sp--].AsObject();
+						StackElement arrSE = stackBuffer[sp--];
+						if (arrSE.o == null)
+						{
+							interpretedThrow(pc - 1, new NullReferenceException());
+							break;
+						}
+						object [] array = (object[])arrSE.AsObject();
+						if (index < 0 || index >= array.Length)
+						{
+							interpretedThrow(pc - 1, new IndexOutOfRangeException());
+							break;
+						}
 						Type t = box.metadatas[otyp].nativeType;
-						array[index] = Convert.ChangeType( val, t );  // This shouldn't be type changing.s
+						array[index] = Convert.ChangeType( valSE.AsObject(), t );  // This shouldn't be type changing.s
 						break;
 					}
 					case 0xA5: // unbox.any

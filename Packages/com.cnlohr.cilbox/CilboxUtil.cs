@@ -47,6 +47,7 @@ namespace Cilbox
 		[FieldOffset(8)]public double d;
 		[FieldOffset(8)]public readonly int i;
 		[FieldOffset(8)]public readonly uint u;
+		[FieldOffset(8)]public readonly nint n;
 		[FieldOffset(8)]public long l;
 		[FieldOffset(8)]public ulong e;
 		[FieldOffset(16)]public object o;
@@ -105,6 +106,7 @@ namespace Cilbox
 		public StackElement LoadShort( short s ) { this.l = s; type = StackType.Short; return this; }
 		public StackElement LoadUshort( ushort u ) { this.e = u; type = StackType.Ushort; return this; }
 		public StackElement LoadInt( int i ) { this.l = i; type = StackType.Int; return this; }
+		public StackElement LoadNint( nint n ) { this.l = n; type = StackType.Int; return this; }
 		public StackElement LoadUint( uint u ) { this.e = u; type = StackType.Uint; return this; }
 		public StackElement LoadLong( long l ) { this.l = l; type = StackType.Long; return this; }
 		public StackElement LoadUlong( ulong e ) { this.e = e; type = StackType.Ulong; return this; }
