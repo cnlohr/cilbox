@@ -84,7 +84,7 @@ namespace Cilbox
 			case double t9: d = t9;	type = StackType.Double; break;
 			case bool ta0: l = ta0 ? 1 : 0; type = StackType.Boolean; break;
 			default:
-				if (o != null && o.GetType().IsEnum) { l = Convert.ToInt64(o); type = StackTypeFromType(Enum.GetUnderlyingType(o.GetType())); }
+				if (o != null && o.GetType().IsEnum) { l = Convert.ToInt64(o); type = StackTypeFromType(o.GetType().GetEnumUnderlyingType()); }
 				else { this.o = o; type = StackType.Object; }
 				break;
 			}

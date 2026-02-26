@@ -118,10 +118,10 @@ namespace Cilbox
 
 			StackType st;
 
-			// Serialize enum as underlying type
+			// Serialize enum field as underlying type
 			if( fv.GetType().IsEnum )
 			{
-				object underlying = Convert.ChangeType( fv, Enum.GetUnderlyingType( fv.GetType() ) );
+				object underlying = Convert.ChangeType( fv, fv.GetType().GetEnumUnderlyingType() );
 				if( StackElement.TypeToStackType.TryGetValue( underlying.GetType().ToString(), out st ) && st < StackType.Object )
 				{
 					instanceFields["d"] = new Serializee(underlying.ToString());
