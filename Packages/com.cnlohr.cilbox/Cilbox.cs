@@ -1621,7 +1621,6 @@ spiperf.End();
 		public MetaTokenType type;
 		public bool isValid;
 		public int fieldIndex; // Only used for fields of cilbox objects.
-		public Type fieldExpectsToBeOnObjectOfType; // The object type
 		public bool isFieldWhiteListed = false;
 		public FieldInfo nativeField; // For whitelisted fields on non-cilbox objects.
 
@@ -1780,7 +1779,7 @@ spiperf.End();
 						t.isFieldWhiteListed = true;
 
 						Serializee typ = st["dt"];
-						Type ty = t.fieldExpectsToBeOnObjectOfType = usage.GetNativeTypeFromSerializee( typ );
+						Type ty = usage.GetNativeTypeFromSerializee( typ );
 						if( ty == null )
 						{
 							throw new CilboxException( $"Could not get allowed type for checking field, {t.declaringTypeName} in {v.Key}." );
