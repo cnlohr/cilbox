@@ -23,7 +23,6 @@ namespace TestCilbox
 		public TestCilboxBehaviour3[] myBehaviour3Arr;
 		public MyEnum myEnumField = MyEnum.Value2;
 
-		[Cilboxable]
 		public enum MyEnum
 		{
 			Value1,
@@ -276,6 +275,8 @@ namespace TestCilbox
 			Debug.Log("My Enum: " + (nameof(MyEnum.Value1)) );
 			Debug.Log("My Enum: " + myEnumField );
 			Debug.Log("My Enum: " + myEnumField.ToString() );
+			// LogMyEnum(MyEnum.Value1);
+			LogTestEnum(TestEnum.SecondValue);
 
 			behaviour2.Behaviour2Test();
 		}
@@ -408,9 +409,18 @@ namespace TestCilbox
 			Validator.Set("WriteCilboxable", value.pubsettee.ToString() );
 		}
 
-		public void LogEnum(MyEnum e)
+		// public void LogMyEnum(MyEnum e)
+		// {
+		// 	Debug.Log("Enum value: " + e);
+		// 	Debug.Log("Enum name: " + Enum.GetName(typeof(MyEnum), e) );
+		// }
+
+		public void LogTestEnum(TestEnum e)
 		{
-			Debug.Log("Enum value: " + e);
+			Debug.Log("TestEnum value: " + e);
+			Debug.Log("TestEnum value: " + (e == TestEnum.FirstValue));
+			Debug.Log("TestEnum value: " + (e == TestEnum.SecondValue));
+			// Debug.Log("TestEnum name: " + Enum.GetName(typeof(TestEnum), e) );
 		}
 	}
 

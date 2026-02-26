@@ -1009,14 +1009,24 @@ namespace Cilbox
 					// Skip null objects.
 					if (m == null)
 						continue;
-					object[] attribs = m.GetType().GetCustomAttributes(typeof(CilboxableAttribute), true);
-					// Not a proxiable script.
-					if (attribs == null || attribs.Length <= 0)
+					if( !HasCilboxableAttribute( m.GetType() ) )
 						continue;
 					ret.Add(m);
 				}
 			}
 			return ret.ToArray();
+		}
+
+		// Checks if the type is nested within a type with the CilboxableAttribute.
+		public static bool HasCilboxableAttribute( Type t )
+		{
+			while( t != null )
+			{
+				if( t.GetCustomAttributes(typeof(CilboxableAttribute), true).Length > 0 )
+					return true;
+				t = t.DeclaringType;
+			}
+			return false;
 		}
 
 		// This does not check any rules, so it can be static.
@@ -1061,7 +1071,7 @@ namespace Cilbox
 			else
 			{
 				ret["n"] = new Serializee( t.FullName );
-				if( t.IsEnum && t.GetCustomAttributes(typeof(CilboxableAttribute), true).Length > 0 )
+				if( t.IsEnum && HasCilboxableAttribute(t) )
 					ret["ut"] = GetSerializeeFromNativeType( t.GetEnumUnderlyingType() );
 			}
 			return new Serializee( ret );

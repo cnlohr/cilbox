@@ -20,6 +20,7 @@ using System.Threading.Tasks;
 
 
 // To add [Cilboxable] to your classes that you want exported.
+[AttributeUsage(AttributeTargets.All, Inherited = true)]
 public class CilboxableAttribute : Attribute { }
 public class CilboxTarget : Attribute { }
 
@@ -1683,6 +1684,7 @@ spiperf.End();
 
 		public bool showFunctionProfiling;
 		public bool exportDebuggingData;
+		public bool verboseLogging = false;
 		public CilboxUsage usage;
 
 		public String disabledReason = "";
@@ -2181,10 +2183,7 @@ spiperf.End();
 
 				foreach (Type type in proxyAssembly.GetTypes())
 				{
-					if( type.GetCustomAttributes(typeof(CilboxableAttribute), true).Length <= 0 )
-						continue;
-
-					if( type.IsEnum )
+					if( !CilboxUtil.HasCilboxableAttribute( type ) )
 						continue;
 
 					// Cilbox is not in use... But do ALL cilboxes if no scene is loaded.
@@ -2494,10 +2493,7 @@ spiperf.End();
 
 				foreach (Type type in proxyAssembly.GetTypes())
 				{
-					if( type.GetCustomAttributes(typeof(CilboxableAttribute), true).Length <= 0 )
-						continue;
-
-					if( type.IsEnum )
+					if( !CilboxUtil.HasCilboxableAttribute( type ) )
 						continue;
 
 					ProfilerMarker perfType = new ProfilerMarker(type.ToString()); perfType.Begin();
@@ -2677,9 +2673,7 @@ spiperf.End();
 					// Skip null objects.
 					if (m == null)
 						continue;
-					object[] attribs = m.GetType().GetCustomAttributes(typeof(CilboxableAttribute), true);
-					// Not a proxiable script.
-					if (attribs == null || attribs.Length <= 0)
+					if( !CilboxUtil.HasCilboxableAttribute( m.GetType() ) )
 						continue;
 
 					CilboxProxy p = g.AddComponent<CilboxProxy>();

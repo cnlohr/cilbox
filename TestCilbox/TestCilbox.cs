@@ -18,7 +18,11 @@ namespace TestCilbox
 			"Cilbox.CilboxPublicUtils",
 			"TestCilbox.DisposeTester",
 			"TestCilbox.Validator",
+			"TestCilbox.TestEnum",
 			"TestCilbox.TestUtil",
+			"System.Type",
+			"System.RuntimeTypeHandle",
+			"System.Enum",
 			"System.Math",
 			"System.Array",
 			"System.Boolean",
@@ -195,6 +199,13 @@ namespace TestCilbox
 				}
 			}
 		}
+	}
+
+
+	public enum TestEnum
+	{
+		FirstValue = 1,
+		SecondValue = 2,
 	}
 
 
