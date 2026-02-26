@@ -211,12 +211,6 @@ namespace TestCilbox
 	{
 		public static void Increment(ref float val) { val += 1.0f; }
 
-		public static bool EnumTest(TestEnum enumVail)
-		{
-			Debug.Log($"EnumTest {enumVail.ToString()} {(int)enumVail} {TestEnum.SecondValue.ToString()} {(int)TestEnum.SecondValue}");
-			return enumVail == TestEnum.SecondValue;
-		}
-
 		public static bool TestEnumNativeEquals(TestEnum a, TestEnum b)
 		{
 			return a == b;
@@ -435,6 +429,10 @@ namespace TestCilbox
 			Validator.Validate("TestEnum Array int value 1", "1");
 			Validator.Validate("TestEnum Array 2", "ThirdValue");
 			Validator.Validate("TestEnum Array int value 2", "30");
+
+			// Boxing enums
+			Validator.Validate("Boxed MyEnum", "Value2");
+			Validator.Validate("Boxed TestEnum", "SecondValue");
 
 			return -1 * Validator.NumValidationErrors();
 		}

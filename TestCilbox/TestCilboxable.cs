@@ -322,6 +322,14 @@ namespace TestCilbox
 				Validator.Set("TestEnum Array int value " + j, ((int)enumArr[j]).ToString() );
 			}
 
+			object boxedMyEnum = MyEnum.Value2;
+			MyEnum castMyEnum = (MyEnum)boxedMyEnum;
+			Validator.Set("Boxed MyEnum", castMyEnum.ToString() );
+
+			object boxedTestEnum = testEnumField;
+			TestEnum castTestEnum = (TestEnum)boxedTestEnum;
+			Validator.Set("Boxed TestEnum", castTestEnum.ToString() );
+
 			behaviour2.Behaviour2Test();
 		}
 

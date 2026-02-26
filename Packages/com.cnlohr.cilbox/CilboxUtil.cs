@@ -130,6 +130,13 @@ namespace Cilbox
 
 		public void Unbox( object i, StackType st )
 		{
+			if (i is BoxedCilboxEnum bce)
+			{
+				type = bce.enumDef.underlyingType;
+				this.l = bce.value;
+				return;
+			}
+
 			type = st;
 			switch( st )
 			{
@@ -364,36 +371,6 @@ namespace Cilbox
 				_ => StackType.Object
 			};
 		}
-	}
-
-	public class CilboxEnum
-	{
-		public string enumName;
-		public StackType underlyingType;
-		public Dictionary<long, string> valueToName;
-
-		public string GetName(long value)
-		{
-			if (valueToName.TryGetValue(value, out string name))
-				return name;
-			return value.ToString();
-		}
-	}
-
-	public class BoxedCilboxEnum
-	{
-		public CilboxEnum enumDef;
-		public long value;
-
-		public BoxedCilboxEnum(CilboxEnum enumDef, long value)
-		{
-			this.enumDef = enumDef;
-			this.value = value;
-		}
-
-		public override string ToString() => enumDef.GetName(value);
-		public override bool Equals(object obj) => obj is BoxedCilboxEnum other && enumDef == other.enumDef && value == other.value;
-		public override int GetHashCode() => value.GetHashCode();
 	}
 
 	///////////////////////////////////////////////////////////////////////////
@@ -1043,6 +1020,9 @@ namespace Cilbox
 		}
 
 		// Checks if the type is nested within a type with the CilboxableAttribute.
+		// Example: [Cilboxable]
+		//			class A {
+		//				class B { // this class should be [Cilboxable] because it is nested within Cilboxable class A
 		public static bool HasCilboxableAttribute( Type t )
 		{
 			while( t != null )

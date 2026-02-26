@@ -437,7 +437,7 @@ spiperf.Begin();
 								else if( constrainedMeta != null && se.type < StackType.Object )
 								{
 									if( constrainedMeta.cilboxEnum != null )
-										callthis = new BoxedCilboxEnum(constrainedMeta.cilboxEnum, se.l);
+										callthis = constrainedMeta.cilboxEnum.BoxValue( se.l );
 									else
 										callthis = se.CoerceToObject( constrainedMeta.nativeType );
 								}
@@ -1102,7 +1102,7 @@ spiperf.Begin();
 						uint otyp = BytecodeAsU32( ref pc );
 						CilMetadataTokenInfo meta = box.metadatas[otyp];
 						if( meta.cilboxEnum != null )
-							stackBuffer[sp].LoadObject( new BoxedCilboxEnum(meta.cilboxEnum, stackBuffer[sp].l) );
+							stackBuffer[sp].LoadObject( meta.cilboxEnum.BoxValue( stackBuffer[sp].l ) );
 						else if( meta.nativeType != null && meta.nativeType.IsEnum )
 							stackBuffer[sp].LoadObject( Enum.ToObject(meta.nativeType, stackBuffer[sp].l) );
 						else
@@ -1120,6 +1120,8 @@ spiperf.Begin();
 							stackBuffer[sp].LoadObject( new object[size] );
 						else
 						{
+							// If it's a native enum, it will try to create an array of the enum type.
+							// We want to force it to create an array of the underlying type (enum stack elements are always stored as their underlying type)
 							Type elemType = arrMeta.nativeType.IsEnum ? Enum.GetUnderlyingType( arrMeta.nativeType ) : arrMeta.nativeType;
 							stackBuffer[sp].LoadObject( Array.CreateInstance( elemType, size ) );
 						}
@@ -1250,16 +1252,7 @@ spiperf.Begin();
 						CilMetadataTokenInfo metaType = box.metadatas[otyp];
 						if( metaType.nativeTypeIsStackType )
 						{
-							object unboxTarget = stackBuffer[sp].AsObject();
-							if( unboxTarget is BoxedCilboxEnum bce )
-							{
-								stackBuffer[sp].type = metaType.nativeTypeStackType;
-								stackBuffer[sp].l = bce.value;
-							}
-							else
-							{
-								stackBuffer[sp].Unbox( unboxTarget, metaType.nativeTypeStackType );
-							}
+							stackBuffer[sp].Unbox( stackBuffer[sp].AsObject(), metaType.nativeTypeStackType );
 						}
 						else
 						{
@@ -1660,6 +1653,41 @@ spiperf.End();
 
 			return true;
 		}
+	}
+
+	public class CilboxEnum
+	{
+		public string enumName;
+		public StackType underlyingType;
+		public Dictionary<long, string> valueToName;
+
+		public string GetName(long value)
+		{
+			if (valueToName.TryGetValue(value, out string name))
+				return name;
+			return value.ToString();
+		}
+
+		public BoxedCilboxEnum BoxValue(long value)
+		{
+			return new BoxedCilboxEnum(this, value);
+		}
+	}
+
+	public class BoxedCilboxEnum
+	{
+		public CilboxEnum enumDef;
+		public long value;
+
+		public BoxedCilboxEnum(CilboxEnum enumDef, long value)
+		{
+			this.enumDef = enumDef;
+			this.value = value;
+		}
+
+		public override string ToString() => enumDef.GetName(value);
+		public override bool Equals(object obj) => obj is BoxedCilboxEnum other && enumDef == other.enumDef && value == other.value;
+		public override int GetHashCode() => value.GetHashCode();
 	}
 
 	public class CilMetadataTokenInfo

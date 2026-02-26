@@ -333,6 +333,8 @@ namespace Cilbox
 
 
 			proxyWasSetup = true;
+			if (verboseLogging)
+				Debug.Log( $"RuntimeProxyLoad complete for class {className}" );
 		}
 
 
