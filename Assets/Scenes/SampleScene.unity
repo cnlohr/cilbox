@@ -236,14 +236,14 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 410087039}
   m_Enabled: 1
-  serializedVersion: 11
+  serializedVersion: 12
   m_Type: 1
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 2
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
-  m_CookieSize: 10
+  m_CookieSize2D: {x: 10, y: 10}
   m_Shadows:
     m_Type: 0
     m_Resolution: -1
@@ -463,6 +463,7 @@ MeshRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
+  m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
 --- !u!33 &1053457879
 MeshFilter:
@@ -519,12 +520,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46e3b92425ded5c16a17567cfa667283, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  datafloat:
-  - 5
-  - 6
-  - 7
-  - 8
-  sTTest: EFGH
 --- !u!65 &1371380834
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -593,6 +588,7 @@ MeshRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
+  m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
 --- !u!33 &1371380836
 MeshFilter:
@@ -1690,6 +1686,7 @@ MeshRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
+  m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
 --- !u!114 &7333561002906449704
 MonoBehaviour:
@@ -1716,6 +1713,7 @@ MonoBehaviour:
   - {fileID: 574431225399919124}
   - {fileID: 0}
   - {fileID: 0}
+  testVector: {x: 1, y: 0, z: 9}
 --- !u!222 &7361587781675441159
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -1940,6 +1938,7 @@ MeshRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
+  m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
 --- !u!114 &9202973255374515308
 MonoBehaviour:
@@ -1960,6 +1959,7 @@ MonoBehaviour:
   buttonControl2: {fileID: 4548913130746211005}
   inputField: {fileID: 6618307039938799520}
   gameObjectTest: {fileID: 3408261244642880602}
+  gameObjectTestEmptyDoNotPopulate: {fileID: 0}
   testScript2: {fileID: 7333561002906449704}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

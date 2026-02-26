@@ -205,6 +205,13 @@ namespace Cilbox
 			for( int i = 0; i < fieldsObjects.Count; i++ )
 			{
 				UnityEngine.Object o = fieldsObjects[i];
+				if (o == null)
+				{
+					// This is hit when serialized data is expected but the object is null
+					// This can happen when a referenced object is missing by the time the scene is built/loaded but was present for serialization
+					Debug.LogWarning("[CilboxProxy] Null reference found in script " + className + " for field ID " + cls.instanceFieldNames[i]);
+					continue;
+				}
 				Type t = o.GetType();
 				if( t == typeof( CilboxProxy ) )
 				{
@@ -344,8 +351,26 @@ namespace Cilbox
 						Int32.TryParse( seAL.AsString(), out aLen ) )
 					{
 						Type t = box.usage.GetNativeTypeFromSerializee( seAT );
+						bool isCilboxElementType = false;
 
-						if( !box.CheckTypeAllowed( t.ToString() ) )
+						if (t == null)
+						{
+							// Check the array to see if it is Cilboxed
+							Dictionary<String, Serializee> atMap = seAT.AsMap();
+							String elementTypeName = atMap["n"].AsString();
+							if (box.classes.ContainsKey(elementTypeName))
+							{
+								t = typeof(CilboxProxy);
+								isCilboxElementType = true;
+							}
+							else
+							{
+								oOut = null;
+								return true;
+							}
+						}
+
+						if( !isCilboxElementType && !box.CheckTypeAllowed( t.ToString() ) )
 						{
 							proxyWasSetup = false;
 							throw new Exception( "Contraband ARRAY found in script {className} { cls.instanceFieldNames[i] }" );

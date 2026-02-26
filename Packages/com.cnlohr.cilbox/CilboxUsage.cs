@@ -152,7 +152,7 @@ namespace Cilbox
 			{
 				Component c;
 				ret.Load( ((GameObject)o).TryGetComponent(t, out c) );
-				parameters[1].DereferenceLoad( c );
+				parameters[1].DereferenceLoadAddress( c );
 			}
 			return ret;
 		}
@@ -177,7 +177,7 @@ namespace Cilbox
 					if( p.className == compName && parameters[1].type == StackType.Address )
 					{
 						ret.Load( true );
-						parameters[1].DereferenceLoad( p );
+						parameters[1].DereferenceLoadAddress( p );
 						break;
 					}
 				}
@@ -282,6 +282,12 @@ namespace Cilbox
 				typeName = typeof(byte[]).FullName;
 			}
 
+			// Perform check by removing "&" from the end of ref types
+			// This happens when the type is a reference to a specific type
+			// But for security purposes, we just want to check the base type
+			//  i.e.  System.byte& ===> System.byte  /  &
+			String refSuffix = ""; // store the ref suffix ("&") to add back on after the check
+			if( typeName.EndsWith('&') ) { refSuffix = "&"; typeName = typeName[..^1]; }
 			// Perform check without array[]
 			//  i.e.  System.byte[][] ===> System.byte  /  [][]
 			String [] vTypeNameNoArray = typeName.Split( "[" );
@@ -289,7 +295,7 @@ namespace Cilbox
 			String arrayEnding = typeName.Substring( typeNameNoArray.Length );
 			typeNameNoArray = CheckTypeSecurity( typeNameNoArray  );
 			if( typeNameNoArray == null ) return null;
-			return typeNameNoArray + arrayEnding;
+			return typeNameNoArray + arrayEnding + refSuffix;
 		}
 
 		Type CheckTypeSecurityRecursive( Type t )
@@ -297,6 +303,11 @@ namespace Cilbox
 			TypeInfo typeInfo = t.GetTypeInfo();
 			if( typeInfo == null ) return null;
 			String typeName = typeInfo.ToString();
+			// Perform check by removing "&" from the end of ref types
+			// This happens when the type is a reference to a specific type
+			// But for security purposes, we just want to check the base type
+			//  i.e.  System.byte& ===> System.byte
+			if( typeName.EndsWith('&') ) typeName = typeName[..^1];
 			String [] vTypeNameNoArray = typeName.Split( "[" );
 			typeName = ( vTypeNameNoArray.Length > 0 ) ? vTypeNameNoArray[0] : typeName;
 			String [] vTypeNameNoGenerics = typeName.Split( "`" );
@@ -314,12 +325,29 @@ namespace Cilbox
 		// INTERNAL CHECKING ///////////////////////////////////////////////////////////////
 		////////////////////////////////////////////////////////////////////////////////////
 
+		// Strip array suffixes and nested type suffixes to check if the base type is Cilboxable
+		public bool IsCilboxInternalType( String typeName )
+		{
+			if( box.classes.ContainsKey( typeName ) ) return true;
+
+			// Strip array suffix: "Foo.Bar[]" or "Foo.Bar[][]" -> "Foo.Bar"
+			int bracket = typeName.IndexOf( '[' );
+			String baseName = bracket >= 0 ? typeName.Substring( 0, bracket ) : typeName;
+
+			// Strip "&" for ref types: "Foo.Bar&" -> "Foo.Bar"
+			if( baseName.EndsWith('&') ) baseName = baseName.Substring( 0, baseName.Length - 1 );
+
+			if( box.classes.ContainsKey( baseName ) ) return true;
+
+			return false;
+		}
+
 		public Type GetNativeTypeFromSerializee( Serializee s )
 		{
 			Dictionary< String, Serializee > ses = s.AsMap();
 			String typeName = ses["n"].AsString();
 			String assemblyName = ses["a"].AsString();
-			if( box.classes.ContainsKey( typeName ) ) return null;
+			if( IsCilboxInternalType( typeName ) ) return null;
 			typeName = CheckReplaceTypeNotRecursive( typeName );
 			if( typeName == null ) return null;
 
@@ -368,7 +396,7 @@ namespace Cilbox
 		{
 			Dictionary< String, Serializee > ses = s.AsMap();
 			String typeName = ses["n"].AsString();
-			if( box.classes.ContainsKey( typeName ) ) return typeName;
+			if( IsCilboxInternalType( typeName ) ) return typeName;
 			typeName = CheckReplaceTypeNotRecursive( typeName );
 			if( typeName == null ) return null;
 
@@ -452,9 +480,17 @@ namespace Cilbox
 							}
 						}
 
-						if (match) { return closed; }
+						if (match)
+						{
+							return closed;
+						}
 					}
-					catch { continue; }
+					catch
+					{
+						// Continue checking the rest of the methods to see if there is another match
+						// (maybe there could be one with the same signature but wrong constraints that would cause MakeGenericMethod to fail)
+						continue;
+					}
 				}
 			}
 
@@ -467,25 +503,36 @@ namespace Cilbox
 				{
 					if( type.Name == declaringType.Name )
 					{
-						MethodBase m = type.GetMethod(
-							name,
-							genericArguments.Length,
-							BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static,
-							null,
-							CallingConventions.Any,
-							parameters,
-							null );
-						if( m != null )
+						try
 						{
-							Debug.Log(type.Name + " == " + declaringType.Name + " == " + proxyAssembly.GetName().Name + " >> " + m.Name);
-							return m;
+							// I don't think there is any case where this would be needed for a type with a constructor.
+							MethodBase m = type.GetMethod(
+								name,
+								genericArguments.Length,
+								BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static,
+								null,
+								CallingConventions.Any,
+								parameters,
+								null );
+							if( m != null )
+							{
+								Debug.Log(type.Name + " == " + declaringType.Name + " == " + proxyAssembly.GetName().Name + " >> " + m.Name);
+								return m;
+							}
+						}
+						catch (Exception e)
+						{
+							Debug.LogWarning(e.ToString());
+							Debug.LogWarning("Failed to find method " + name + " on type " + type.FullName + " with parameters " + string.Join(", ", (object[])parameters) + " and generic arguments " + string.Join(", ", (object[])genericArguments) + " in assembly " + proxyAssembly.GetName().Name);
+							// Continue searching the rest of the assemblies to see if there is another match
+							continue;
 						}
 
-						// I don't think there is any case where this would be needed for a type with a constructor.
 					}
 				}
 			}
 
+			// If we reach here, no appropriate method was found.
 			return null;
 		}
 
