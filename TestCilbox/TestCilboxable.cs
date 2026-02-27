@@ -58,6 +58,8 @@ namespace TestCilbox
 			Validator.Set( "public instance field", ipublicinstance.ToString() );
 			Validator.Set( "private static field", iprivatestatic.ToString() );
 			Validator.Set( "public static field", ipublicstatic.ToString() );
+			iprivatestatic *= 2;
+			Validator.Set( "private static field x2", iprivatestatic.ToString() );
 
 			RecursiveTest(8);
 			Validator.Set( "recursive function", recursive_test_counter.ToString() );
@@ -329,6 +331,15 @@ namespace TestCilbox
 			object boxedTestEnum = testEnumField;
 			TestEnum castTestEnum = (TestEnum)boxedTestEnum;
 			Validator.Set("Boxed TestEnum", castTestEnum.ToString() );
+
+			Validator.Set("NativeStaticFloat", TestUtil.StaticFloat.ToString());
+			TestUtil.StaticFloat *= 2;
+			Validator.Set("NativeStaticFloat x2", TestUtil.StaticFloat.ToString());
+
+			ReadFloat(ref TestUtil.StaticFloat);
+			WriteFloat(ref TestUtil.StaticFloat, 99.0f);
+			Validator.Set("NativeStaticFloat ref written", TestUtil.StaticFloat.ToString());
+			ReadInt(ref iprivatestatic);
 
 			behaviour2.Behaviour2Test();
 		}

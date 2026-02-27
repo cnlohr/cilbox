@@ -1081,20 +1081,56 @@ spiperf.Begin();
 					case 0x7e: // ldsfld
 					{
 						uint bc = BytecodeAsU32( ref pc );
-						stackBuffer[++sp].Load( parentClass.staticFields[box.metadatas[bc].fieldIndex] );
+						CilMetadataTokenInfo ldsm = box.metadatas[bc];
+						if (!ldsm.fieldIsStatic)
+						{
+							throw new CilboxInterpreterRuntimeException($"Field {ldsm.Name} on type {ldsm?.nativeType?.FullName} is not static and can not be accessed with ldsfld", parentClass.className, methodName, pc);
+						}
+						if( ldsm.isFieldWhiteListed && ldsm.nativeField != null )
+						{
+							stackBuffer[++sp].Load( ldsm.nativeField.GetValue( null ) );
+						}
+						else
+						{
+							stackBuffer[++sp].Load( parentClass.staticFields[ldsm.fieldIndex] );
+						}
 						break;
 					}
 					case 0x7f: // ldsflda
 					{
 						uint bc = BytecodeAsU32( ref pc );
-						stackBuffer[++sp] = StackElement.CreateAddressReference( (Array)(parentClass.staticFields), (uint)box.metadatas[bc].fieldIndex );
+						CilMetadataTokenInfo ldsam = box.metadatas[bc];
+						if (!ldsam.fieldIsStatic)
+						{
+							throw new CilboxInterpreterRuntimeException($"Field {ldsam.Name} on type {ldsam?.nativeType?.FullName} is not static and can not be accessed with ldsfld", parentClass.className, methodName, pc);
+						}
+						if( ldsam.isFieldWhiteListed && ldsam.nativeField != null )
+						{
+							stackBuffer[++sp] = StackElement.CreateNativeHandleReference( null, bc );
+						}
+						else
+						{
+							stackBuffer[++sp] = StackElement.CreateAddressReference( (Array)(parentClass.staticFields), (uint)ldsam.fieldIndex );
+						}
 						break;
 					}
 					case 0x80: // stsfld
 					{
 						uint bc = BytecodeAsU32( ref pc );
 						object obj = stackBuffer[sp--].AsObject();
-						parentClass.staticFields[box.metadatas[bc].fieldIndex] = obj;
+						CilMetadataTokenInfo stsm = box.metadatas[bc];
+						if (!stsm.fieldIsStatic)
+						{
+							throw new CilboxInterpreterRuntimeException($"Field {stsm.Name} on type {stsm?.nativeType?.FullName} is not static and can not be accessed with ldsfld", parentClass.className, methodName, pc);
+						}
+						if( stsm.isFieldWhiteListed && stsm.nativeField != null )
+						{
+							stsm.nativeField.SetValue( null, obj );
+						}
+						else
+						{
+							parentClass.staticFields[stsm.fieldIndex] = obj;
+						}
 						break;
 					}
 					case 0x8C: // box (This pulls off a type)

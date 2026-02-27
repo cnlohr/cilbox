@@ -7,6 +7,7 @@ using System.Collections.Specialized;
 using System.Collections;
 using System.Runtime.InteropServices;
 using System.Reflection;
+using System.Threading;
 
 
 namespace TestCilbox
@@ -84,6 +85,7 @@ namespace TestCilbox
 			"UnityEngine.Vector3.x",
 			"UnityEngine.Vector3.y",
 			"UnityEngine.Vector3.z",
+			"TestCilbox.TestUtil.StaticFloat",
 		};
 
 		static public HashSet<String> GetWhiteListTypes() { return whiteListType; }
@@ -209,6 +211,8 @@ namespace TestCilbox
 
 	public class TestUtil
 	{
+		public static float StaticFloat = 5.0f;
+
 		public static void Increment(ref float val) { val += 1.0f; }
 
 		public static bool TestEnumNativeEquals(TestEnum a, TestEnum b)
@@ -256,6 +260,7 @@ namespace TestCilbox
 				Validator.Validate( "private instance filed", "555");
 				Validator.Validate( "public instance field", "556" );
 				Validator.Validate( "private static field", "557" );
+				Validator.Validate( "private static field x2", "1114" );
 				Validator.Validate( "public static field", "558" );
 
 				Validator.Validate( "Method Called On Peer", "OK" );
@@ -433,6 +438,13 @@ namespace TestCilbox
 			// Boxing enums
 			Validator.Validate("Boxed MyEnum", "Value2");
 			Validator.Validate("Boxed TestEnum", "SecondValue");
+
+			Validator.Validate("NativeStaticFloat", "5");
+			Validator.Validate("NativeStaticFloat x2", "10");
+			Validator.Validate("ReadFloat_2", "10");
+			Validator.Validate("WriteFloat_2", "99");
+			Validator.Validate("NativeStaticFloat ref written", "99");
+			Validator.Validate("ReadInt_2", "1114");
 
 			return -1 * Validator.NumValidationErrors();
 		}
