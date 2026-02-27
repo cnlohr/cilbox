@@ -404,8 +404,20 @@ spiperf.Begin();
 								object o = se.AsObject(box);
 								Type t = pa[numFields-ik-1].ParameterType;
 
+								if( t.IsByRef )
+								{
+									// out parameters can be uninintialized, so we have to initialize them first
+									Type elementType = t.GetElementType();
+									if( o != null && !elementType.IsAssignableFrom(o.GetType()) )
+									{
+										if( elementType.IsValueType )
+											o = Activator.CreateInstance(elementType);
+										else
+											o = null;
+									}
+								}
 								// XXX TODO: Copy mechanism below from ResolveToStackElement and Coerce
-								if( se.type < StackType.Object )
+								else if( se.type < StackType.Object )
 								{
 									if( o != null && t.IsValueType && o.GetType() != t )
 									{

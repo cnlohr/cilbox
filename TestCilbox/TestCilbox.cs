@@ -219,6 +219,16 @@ namespace TestCilbox
 		{
 			return a == b;
 		}
+
+		public static void GetOutVec3(out Vector3 v)
+		{
+			v = new Vector3(12, 8, 0);
+		}
+
+		public static void GetOutInt(out int i)
+		{
+			i = 42;
+		}
 	}
 
 
@@ -445,6 +455,12 @@ namespace TestCilbox
 			Validator.Validate("WriteFloat_2", "99");
 			Validator.Validate("NativeStaticFloat ref written", "99");
 			Validator.Validate("ReadInt_2", "1114");
+
+			Validator.Validate("NativeOutVec3", "(12, 8, 0)");
+			Validator.Validate("CilOutVec3", "(1, 2, 3)");
+			Validator.Validate("NativeOutInt", "42");
+			Validator.Validate("CilOutInt", "22");
+			Validator.Validate("NativeOutVec3AlreadyInit", "(12, 8, 0)");
 
 			return -1 * Validator.NumValidationErrors();
 		}

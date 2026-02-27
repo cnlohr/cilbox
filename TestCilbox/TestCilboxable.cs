@@ -341,6 +341,18 @@ namespace TestCilbox
 			Validator.Set("NativeStaticFloat ref written", TestUtil.StaticFloat.ToString());
 			ReadInt(ref iprivatestatic);
 
+			TestUtil.GetOutVec3(out Vector3 outVec);
+			Validator.Set("NativeOutVec3", outVec.ToString() );
+			TestOutVec3(out Vector3 outVec2);
+			Validator.Set("CilOutVec3", outVec2.ToString() );
+			TestUtil.GetOutInt(out int outInt);
+			Validator.Set("NativeOutInt", outInt.ToString() );
+			TestOutInt(out int outInt2);
+			Validator.Set("CilOutInt", outInt2.ToString() );
+			Vector3 alreadyInit = new Vector3(5, 5, 5);
+			TestUtil.GetOutVec3(out alreadyInit);
+			Validator.Set("NativeOutVec3AlreadyInit", alreadyInit.ToString() );
+
 			behaviour2.Behaviour2Test();
 		}
 
@@ -482,6 +494,16 @@ namespace TestCilbox
 		{
 			Validator.AddCount("TestEnumMethod");
 			Validator.Set("TestEnumMethod_" + Validator.GetCount("TestEnumMethod"), e.ToString() );
+		}
+
+		public void TestOutVec3(out Vector3 vec)
+		{
+			vec = new Vector3(1, 2, 3);
+		}
+
+		public void TestOutInt(out int i)
+		{
+			i = 22;
 		}
 	}
 
