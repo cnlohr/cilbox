@@ -16,6 +16,8 @@ namespace Cilbox
 	{
 		public StackElement [] fields;
 		public List< UnityEngine.Object > fieldsObjects;  // This is generally only held during saving and loading, not in use.
+		public List<bool> objFieldHadReference; // track if our null is supposed to be null
+		public List<int> objFieldMIID; // serialized for convenience, so we can tell the user which field had contraband or failed
 
 		public CilboxClass cls;
 		public Cilbox box;
@@ -44,6 +46,8 @@ namespace Cilbox
 			cls = box.GetClass( className );
 
 			fieldsObjects = new List< UnityEngine.Object >();
+			objFieldHadReference = new List<bool>();
+			objFieldMIID = new List<int>();
 			FieldInfo[] fi = mToSteal.GetType().GetFields( BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance );
 
 			List< Serializee > lstObjects = new List< Serializee >();
@@ -134,12 +138,16 @@ namespace Cilbox
 				// This is a cilboxable thing.
 				instanceFields["fo"] = new Serializee(fieldsObjects.Count.ToString());
 				fieldsObjects.Add( refToProxyMap[(MonoBehaviour)fv] );
+				objFieldHadReference.Add( fv.ToString() != "null" ); // fv can't be really null, so it's "null"
+				objFieldMIID.Add(matchingInstanceNameID);
 				instanceFields["t"] = new Serializee("cba");
 			}
 			else if( fv is UnityEngine.Object )
 			{
 				instanceFields["fo"] = new Serializee(fieldsObjects.Count.ToString());
 				fieldsObjects.Add( (UnityEngine.Object)fv );
+				objFieldHadReference.Add( fv.ToString() != "null" ); // fv can't be really null, so it's "null"
+				objFieldMIID.Add(matchingInstanceNameID);
 				instanceFields["t"] = new Serializee("obj");
 			}
 			else if( fv is string )
@@ -223,9 +231,7 @@ namespace Cilbox
 				UnityEngine.Object o = fieldsObjects[i];
 				if (o == null)
 				{
-					// This is hit when serialized data is expected but the object is null
-					// This can happen when a referenced object is missing by the time the scene is built/loaded but was present for serialization
-					Debug.LogWarning("[CilboxProxy] Null reference found in script " + className + " for field ID " + cls.instanceFieldNames[i]);
+					// If it's null, there's nothing to safety-check.
 					continue;
 				}
 				Type t = o.GetType();
@@ -236,9 +242,10 @@ namespace Cilbox
 				else if( !box.CheckTypeAllowed( o.GetType().ToString() ) )
 				{
 					String className;
-					if( cls != null && cls.instanceFieldNames != null && cls.instanceFieldNames.Length > i )
+					if( cls != null && cls.instanceFieldNames != null && cls.instanceFieldNames.Length > i &&
+					    objFieldMIID != null && objFieldMIID.Count == fieldsObjects.Count )
 					{
-						className = cls.instanceFieldNames[i];
+						className = cls.instanceFieldNames[objFieldMIID[i]];
 					}
 					else
 					{
@@ -356,6 +363,12 @@ namespace Cilbox
 						iFO < fieldsObjects.Count )
 					{
 						UnityEngine.Object o = fieldsObjects[iFO];
+						if (objFieldHadReference != null && objFieldHadReference.Count == fieldsObjects.Count && !objFieldHadReference[iFO])
+						{
+							oOut = null;
+							return true;
+						}
+
 						//Debug.Log( $"LOADING FIELD: {i} with {o}" );
 						if( o )
 						{
