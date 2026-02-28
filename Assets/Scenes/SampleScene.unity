@@ -520,6 +520,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46e3b92425ded5c16a17567cfa667283, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  datafloat:
+  - 0.125
+  - 0.25
+  - 0.5
+  - 1
+  sTTest: ABCD
 --- !u!65 &1371380834
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -937,7 +943,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_FontData:
-    m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
+    m_Font: {fileID: 12800000, guid: 28ec0580ef59aca4dad009e21bf8924a, type: 3}
     m_FontSize: 16
     m_FontStyle: 0
     m_BestFit: 0
@@ -1411,12 +1417,12 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_FontData:
-    m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
-    m_FontSize: 18
+    m_Font: {fileID: 12800000, guid: 28ec0580ef59aca4dad009e21bf8924a, type: 3}
+    m_FontSize: 28
     m_FontStyle: 0
     m_BestFit: 0
     m_MinSize: 1
-    m_MaxSize: 58
+    m_MaxSize: 80
     m_Alignment: 1
     m_AlignByGeometry: 0
     m_RichText: 1
@@ -1798,12 +1804,12 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_FontData:
-    m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
+    m_Font: {fileID: 12800000, guid: 28ec0580ef59aca4dad009e21bf8924a, type: 3}
     m_FontSize: 16
     m_FontStyle: 0
     m_BestFit: 0
-    m_MinSize: 1
-    m_MaxSize: 58
+    m_MinSize: 0
+    m_MaxSize: 83
     m_Alignment: 4
     m_AlignByGeometry: 0
     m_RichText: 1
@@ -1882,6 +1888,7 @@ MonoBehaviour:
   assemblyData: \
   showFunctionProfiling: 0
   exportDebuggingData: 1
+  verboseLogging: 0
   disabledReason: 
   disabled: 0
   timeoutLengthUs: 500000
