@@ -7,6 +7,7 @@ using System.Collections.Specialized;
 using System.Collections;
 using System.Runtime.InteropServices;
 using System.Reflection;
+using System.Threading;
 
 
 namespace TestCilbox
@@ -18,6 +19,7 @@ namespace TestCilbox
 			"Cilbox.CilboxPublicUtils",
 			"TestCilbox.DisposeTester",
 			"TestCilbox.Validator",
+			"TestCilbox.TestEnum",
 			"TestCilbox.TestUtil",
 			"System.Math",
 			"System.Array",
@@ -83,6 +85,7 @@ namespace TestCilbox
 			"UnityEngine.Vector3.x",
 			"UnityEngine.Vector3.y",
 			"UnityEngine.Vector3.z",
+			"TestCilbox.TestUtil.StaticFloat",
 		};
 
 		static public HashSet<String> GetWhiteListTypes() { return whiteListType; }
@@ -198,9 +201,34 @@ namespace TestCilbox
 	}
 
 
+	public enum TestEnum
+	{
+		FirstValue,
+		SecondValue,
+		ThirdValue = 30,
+	}
+
+
 	public class TestUtil
 	{
+		public static float StaticFloat = 5.0f;
+
 		public static void Increment(ref float val) { val += 1.0f; }
+
+		public static bool TestEnumNativeEquals(TestEnum a, TestEnum b)
+		{
+			return a == b;
+		}
+
+		public static void GetOutVec3(out Vector3 v)
+		{
+			v = new Vector3(12, 8, 0);
+		}
+
+		public static void GetOutInt(out int i)
+		{
+			i = 42;
+		}
 	}
 
 
@@ -242,6 +270,7 @@ namespace TestCilbox
 				Validator.Validate( "private instance filed", "555");
 				Validator.Validate( "public instance field", "556" );
 				Validator.Validate( "private static field", "557" );
+				Validator.Validate( "private static field x2", "1114" );
 				Validator.Validate( "public static field", "558" );
 
 				Validator.Validate( "Method Called On Peer", "OK" );
@@ -352,6 +381,86 @@ namespace TestCilbox
 			Validator.Validate("NativeRefMethodCall", "11");
 
 			Validator.Validate("Vector3CheckThis", "OK");
+
+			// MyEnum (Cilboxable enum) constants and field tests
+			Validator.Validate("MyEnum.Value1", "Value1");
+			Validator.Validate("MyEnum.Value2", "Value2");
+			Validator.Validate("MyEnum.Value3", "Value3");
+			Validator.Validate("(int)MyEnum.Value1", "0");
+			Validator.Validate("(int)MyEnum.Value2", "1");
+			Validator.Validate("(int)MyEnum.Value3", "30");
+			Validator.Validate("MyEnum Field", "Value2");
+			Validator.Validate("(int)MyEnum Field", "1");
+			Validator.Validate("MyEnum Field == Value1", "False");
+			Validator.Validate("MyEnum Field == Value2", "True");
+			Validator.Validate("MyEnum Field == Value3", "False");
+			Validator.Validate("(int)MyEnum Field == Value1", "False");
+			Validator.Validate("(int)MyEnum Field == Value2", "True");
+			Validator.Validate("(int)MyEnum Field == Value3", "False");
+
+			// TestEnum (non-Cilboxable enum) constants and field tests
+			Validator.Validate("TestEnum.FirstValue", "FirstValue");
+			Validator.Validate("TestEnum.SecondValue", "SecondValue");
+			Validator.Validate("TestEnum.ThirdValue", "ThirdValue");
+			Validator.Validate("(int)TestEnum.FirstValue", "0");
+			Validator.Validate("(int)TestEnum.SecondValue", "1");
+			Validator.Validate("(int)TestEnum.ThirdValue", "30");
+			Validator.Validate("TestEnum Field", "SecondValue");
+			Validator.Validate("(int)TestEnum Field", "1");
+			Validator.Validate("TestEnum Field == FirstValue", "False");
+			Validator.Validate("TestEnum Field == SecondValue", "True");
+			Validator.Validate("TestEnum Field == ThirdValue", "False");
+			Validator.Validate("(int)TestEnum Field == FirstValue", "False");
+			Validator.Validate("(int)TestEnum Field == SecondValue", "True");
+			Validator.Validate("(int)TestEnum Field == ThirdValue", "False");
+
+			// Native method calls with enum parameters
+			Validator.Validate("TestEnumNativeEqualsFirstValue", "False");
+			Validator.Validate("TestEnumNativeEqualsSecondValue", "True");
+			Validator.Validate("TestEnumNativeEqualsThirdValue", "False");
+
+			// Enum method calls (MyEnum is Cilboxable)
+			Validator.ValidateCount("MyEnumMethod", 2);
+			Validator.Validate("MyEnumMethod_1", "Value1");
+			Validator.Validate("MyEnumMethod_2", "Value2");
+
+			// Enum method calls (TestEnum is non-Cilboxable, ToString shows enum name)
+			Validator.ValidateCount("TestEnumMethod", 2);
+			Validator.Validate("TestEnumMethod_1", "FirstValue");
+			Validator.Validate("TestEnumMethod_2", "SecondValue");
+
+			// MyEnum array (Cilboxable)
+			Validator.Validate("MyEnum Array 0", "Value1");
+			Validator.Validate("MyEnum Array int value 0", "0");
+			Validator.Validate("MyEnum Array 1", "Value2");
+			Validator.Validate("MyEnum Array int value 1", "1");
+			Validator.Validate("MyEnum Array 2", "Value3");
+			Validator.Validate("MyEnum Array int value 2", "30");
+
+			// TestEnum array (non-Cilboxable, ToString shows enum name)
+			Validator.Validate("TestEnum Array 0", "FirstValue");
+			Validator.Validate("TestEnum Array int value 0", "0");
+			Validator.Validate("TestEnum Array 1", "SecondValue");
+			Validator.Validate("TestEnum Array int value 1", "1");
+			Validator.Validate("TestEnum Array 2", "ThirdValue");
+			Validator.Validate("TestEnum Array int value 2", "30");
+
+			// Boxing enums
+			Validator.Validate("Boxed MyEnum", "Value2");
+			Validator.Validate("Boxed TestEnum", "SecondValue");
+
+			Validator.Validate("NativeStaticFloat", "5");
+			Validator.Validate("NativeStaticFloat x2", "10");
+			Validator.Validate("ReadFloat_2", "10");
+			Validator.Validate("WriteFloat_2", "99");
+			Validator.Validate("NativeStaticFloat ref written", "99");
+			Validator.Validate("ReadInt_2", "1114");
+
+			Validator.Validate("NativeOutVec3", "(12, 8, 0)");
+			Validator.Validate("CilOutVec3", "(1, 2, 3)");
+			Validator.Validate("NativeOutInt", "42");
+			Validator.Validate("CilOutInt", "22");
+			Validator.Validate("NativeOutVec3AlreadyInit", "(12, 8, 0)");
 
 			return -1 * Validator.NumValidationErrors();
 		}

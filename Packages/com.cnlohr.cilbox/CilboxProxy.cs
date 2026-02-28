@@ -26,10 +26,6 @@ namespace Cilbox
 		public String initialLoadPath;
 
 		private bool proxyWasSetup = false;
-		private bool ShouldDebugLog()
-		{
-			return box != null && box.exportDebuggingData;
-		}
 
 		private void ProxyDebugLog( string message )
 		{
@@ -82,7 +78,7 @@ namespace Cilbox
 				lstObjects.Add( e );
 			}
 
-			serializedObjectData = 
+			serializedObjectData =
 				Convert.ToBase64String(new Serializee(lstObjects.ToArray()).DumpAsMemory().ToArray());
 
 			buildTimeGuid = Guid.NewGuid().ToString();
@@ -107,7 +103,7 @@ namespace Cilbox
 				return new Serializee(instanceFields);
 			}
 
-			object[] attribs = fv.GetType().GetCustomAttributes(typeof(CilboxableAttribute), true);
+			bool hasCilboxable = CilboxUtil.HasCilboxableAttribute( fv.GetType() );
 
 
 			if( fName != null )
@@ -122,8 +118,18 @@ namespace Cilbox
 
 			StackType st;
 
+			// Serialize enum field as underlying type
+			if( fv.GetType().IsEnum )
+			{
+				object underlying = Convert.ChangeType( fv, fv.GetType().GetEnumUnderlyingType() );
+				if( StackElement.TypeToStackType.TryGetValue( underlying.GetType().ToString(), out st ) && st < StackType.Object )
+				{
+					instanceFields["d"] = new Serializee(underlying.ToString());
+					instanceFields["t"] = new Serializee("e" + st);
+				}
+			}
 			// Not a proxiable script.
-			if (attribs != null && attribs.Length > 0)
+			else if (hasCilboxable)
 			{
 				// This is a cilboxable thing.
 				instanceFields["fo"] = new Serializee(fieldsObjects.Count.ToString());
@@ -189,6 +195,7 @@ namespace Cilbox
 			if( proxyWasSetup ) return;
 			if (box == null) return;
 			box.BoxInitialize(); // In case it is not yet initialized.
+			bool verboseLogging = box.verboseLogging;
 
 #if UNITY_EDITOR
 			new ProfilerMarker( "Initialize " + className ).Auto();
@@ -279,7 +286,7 @@ namespace Cilbox
 				if( st < StackType.Object )
 				{
 					fields[i].type = st;
-					if (ShouldDebugLog())
+					if (verboseLogging)
 						ProxyDebugLog( $"Default field init {cls.instanceFieldNames[i]} <- default({fieldType})" );
 				}
 				else if( fieldType.IsValueType )
@@ -289,8 +296,7 @@ namespace Cilbox
 						// We clean the fieldtype before https://github.com/cnlohr/cilbox/blob/fc608341d293186e0aacf519ea9f0beb43d42cee/Packages/com.cnlohr.cilbox/Cilbox.cs#L1389C40-L1389C67
 						object defaultValue = Activator.CreateInstance( fieldType );
 						fields[i].LoadObject( defaultValue );
-						if (ShouldDebugLog())
-							if (ShouldDebugLog())
+						if (verboseLogging)
 							ProxyDebugLog( $"Default field init {cls.instanceFieldNames[i]} <- default({fieldType}) [boxed]" );
 					}
 					catch( Exception e )
@@ -302,9 +308,7 @@ namespace Cilbox
 				else
 				{
 					fields[i].LoadObject( null );
-					if (ShouldDebugLog())
-						ProxyDebugLog( $"Default field init {cls.instanceFieldNames[i]} <- null" );
-					if (ShouldDebugLog())
+					if (verboseLogging)
 						ProxyDebugLog( $"Default field init {cls.instanceFieldNames[i]} <- null" );
 				}
 			}
@@ -329,7 +333,8 @@ namespace Cilbox
 
 
 			proxyWasSetup = true;
-			Debug.Log( $"RuntimeProxyLoad complete for class {className}" );
+			if (verboseLogging)
+				Debug.Log( $"RuntimeProxyLoad complete for class {className}" );
 		}
 
 
@@ -347,7 +352,7 @@ namespace Cilbox
 					Serializee seFO;
 					int iFO;
 					if( dict.TryGetValue( "fo", out seFO ) &&
-						Int32.TryParse( seFO.AsString(), out iFO ) && 
+						Int32.TryParse( seFO.AsString(), out iFO ) &&
 						iFO < fieldsObjects.Count )
 					{
 						UnityEngine.Object o = fieldsObjects[iFO];
@@ -376,8 +381,8 @@ namespace Cilbox
 					Serializee seT, seAT, seAL, seAD;
 					int aLen;
 					if( dict.TryGetValue( "t", out seT ) &&
-						dict.TryGetValue( "at", out seAT ) && 
-						dict.TryGetValue( "al", out seAL ) && 
+						dict.TryGetValue( "at", out seAT ) &&
+						dict.TryGetValue( "al", out seAL ) &&
 						dict.TryGetValue( "ad", out seAD ) &&
 						Int32.TryParse( seAL.AsString(), out aLen ) )
 					{

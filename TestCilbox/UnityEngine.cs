@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 
 [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
@@ -172,6 +173,11 @@ namespace UnityEngine
 					_ => throw new IndexOutOfRangeException("Invalid Vector3 index!")
 				};
 			}
+		}
+
+		public override string ToString()
+		{
+			return $"({x}, {y}, {z})";
 		}
 	}
 

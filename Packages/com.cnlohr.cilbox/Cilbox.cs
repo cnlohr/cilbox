@@ -222,6 +222,7 @@ namespace Cilbox
 			int sp = -1;
 			bool cont = true;
 			int pc = 0;
+			CilMetadataTokenInfo constrainedMeta = null;
 			try
 			{
 				do
@@ -403,8 +404,20 @@ spiperf.Begin();
 								object o = se.AsObject(box);
 								Type t = pa[numFields-ik-1].ParameterType;
 
+								if( t.IsByRef )
+								{
+									// out parameters can be uninintialized, so we have to initialize them first
+									Type elementType = t.GetElementType();
+									if( o != null && !elementType.IsAssignableFrom(o.GetType()) )
+									{
+										if( elementType.IsValueType )
+											o = Activator.CreateInstance(elementType);
+										else
+											o = null;
+									}
+								}
 								// XXX TODO: Copy mechanism below from ResolveToStackElement and Coerce
-								if( se.type < StackType.Object )
+								else if( se.type < StackType.Object )
 								{
 									if( o != null && t.IsValueType && o.GetType() != t )
 									{
@@ -433,6 +446,13 @@ spiperf.Begin();
 								{
 									callthis = seorig.DereferenceNativeHandle(box);
 								}
+								else if( constrainedMeta != null && se.type < StackType.Object )
+								{
+									if( constrainedMeta.cilboxEnum != null )
+										callthis = constrainedMeta.cilboxEnum.BoxValue( se.l );
+									else
+										callthis = se.CoerceToObject( constrainedMeta.nativeType );
+								}
 								else if( t.IsValueType && se.type < StackType.Object )
 								{
 									// Try to coerce types.
@@ -442,6 +462,7 @@ spiperf.Begin();
 								{
 									callthis = se.o;
 								}
+								constrainedMeta = null;
 
 								if (callthis == null)
 								{
@@ -450,7 +471,7 @@ spiperf.Begin();
 								}
 
 								iko = st.Invoke( callthis, callpar );
-								if( seorig.type == StackType.Address )
+								if( seorig.type == StackType.Address  && callthis is not BoxedCilboxEnum ) // enums are immutable
 								{
 									seorig.DereferenceLoadAddress( callthis );
 								}
@@ -1072,26 +1093,68 @@ spiperf.Begin();
 					case 0x7e: // ldsfld
 					{
 						uint bc = BytecodeAsU32( ref pc );
-						stackBuffer[++sp].Load( parentClass.staticFields[box.metadatas[bc].fieldIndex] );
+						CilMetadataTokenInfo ldsm = box.metadatas[bc];
+						if (!ldsm.fieldIsStatic)
+						{
+							throw new CilboxInterpreterRuntimeException($"Field {ldsm.Name} on type {ldsm?.nativeType?.FullName} is not static and can not be accessed with ldsfld", parentClass.className, methodName, pc);
+						}
+						if( ldsm.isFieldWhiteListed && ldsm.nativeField != null )
+						{
+							stackBuffer[++sp].Load( ldsm.nativeField.GetValue( null ) );
+						}
+						else
+						{
+							stackBuffer[++sp].Load( parentClass.staticFields[ldsm.fieldIndex] );
+						}
 						break;
 					}
 					case 0x7f: // ldsflda
 					{
 						uint bc = BytecodeAsU32( ref pc );
-						stackBuffer[++sp] = StackElement.CreateAddressReference( (Array)(parentClass.staticFields), (uint)box.metadatas[bc].fieldIndex );
+						CilMetadataTokenInfo ldsam = box.metadatas[bc];
+						if (!ldsam.fieldIsStatic)
+						{
+							throw new CilboxInterpreterRuntimeException($"Field {ldsam.Name} on type {ldsam?.nativeType?.FullName} is not static and can not be accessed with ldsfld", parentClass.className, methodName, pc);
+						}
+						if( ldsam.isFieldWhiteListed && ldsam.nativeField != null )
+						{
+							stackBuffer[++sp] = StackElement.CreateNativeHandleReference( null, bc );
+						}
+						else
+						{
+							stackBuffer[++sp] = StackElement.CreateAddressReference( (Array)(parentClass.staticFields), (uint)ldsam.fieldIndex );
+						}
 						break;
 					}
 					case 0x80: // stsfld
 					{
 						uint bc = BytecodeAsU32( ref pc );
 						object obj = stackBuffer[sp--].AsObject();
-						parentClass.staticFields[box.metadatas[bc].fieldIndex] = obj;
+						CilMetadataTokenInfo stsm = box.metadatas[bc];
+						if (!stsm.fieldIsStatic)
+						{
+							throw new CilboxInterpreterRuntimeException($"Field {stsm.Name} on type {stsm?.nativeType?.FullName} is not static and can not be accessed with ldsfld", parentClass.className, methodName, pc);
+						}
+						if( stsm.isFieldWhiteListed && stsm.nativeField != null )
+						{
+							stsm.nativeField.SetValue( null, obj );
+						}
+						else
+						{
+							parentClass.staticFields[stsm.fieldIndex] = obj;
+						}
 						break;
 					}
 					case 0x8C: // box (This pulls off a type)
 					{
 						uint otyp = BytecodeAsU32( ref pc );
-						stackBuffer[sp].LoadObject( stackBuffer[sp].AsObject() );//(metaType.nativeType)stackBuffer[sp-1].AsObject();
+						CilMetadataTokenInfo meta = box.metadatas[otyp];
+						if( meta.cilboxEnum != null )
+							stackBuffer[sp].LoadObject( meta.cilboxEnum.BoxValue( stackBuffer[sp].l ) );
+						else if( meta.nativeType != null && meta.nativeType.IsEnum )
+							stackBuffer[sp].LoadObject( Enum.ToObject(meta.nativeType, stackBuffer[sp].l) );
+						else
+							stackBuffer[sp].LoadObject( stackBuffer[sp].AsObject() );
 						break;
 					}
 					case 0x8d: // newarr <etype>
@@ -1104,7 +1167,12 @@ spiperf.Begin();
 						if( arrMeta.nativeTypeIsCilboxProxy )
 							stackBuffer[sp].LoadObject( new object[size] );
 						else
-							stackBuffer[sp].LoadObject( Array.CreateInstance( arrMeta.nativeType, size ) );
+						{
+							// If it's a native enum, it will try to create an array of the enum type.
+							// We want to force it to create an array of the underlying type (enum stack elements are always stored as their underlying type)
+							Type elemType = arrMeta.nativeType.IsEnum ? Enum.GetUnderlyingType( arrMeta.nativeType ) : arrMeta.nativeType;
+							stackBuffer[sp].LoadObject( Array.CreateInstance( elemType, size ) );
+						}
 						break;
 					}
 					case 0x8e: // ldlen
@@ -1128,14 +1196,17 @@ spiperf.Begin();
 					case 0x90: case 0x91: case 0x92: case 0x93: case 0x94: // ldelem
 					case 0x95: case 0x96: case 0x97: case 0x98: case 0x99:
 					{
-						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
 						int index = stackBuffer[sp--].i;
-						if (index < 0 || index >= ((Array)(stackBuffer[sp].o)).Length)
+						if (stackBuffer[sp].o == null)
+						{
+							interpretedThrow(pc - 1, new NullReferenceException());
+							break;
+						}
+						if (index < 0 || index >= ((Array)stackBuffer[sp].o).Length)
 						{
 							interpretedThrow(pc - 1, new IndexOutOfRangeException());
 							break;
 						}
-//						Array a = ((Array)(stackBuffer[sp].o));
 						switch( b - 0x90 )
 						{
 						// Does this way work universally?  Can we assume the compiler knows what it's doing?
@@ -1147,7 +1218,7 @@ spiperf.Begin();
 						case 4: stackBuffer[sp].LoadInt( (int)(((int[])stackBuffer[sp].o)[index]) ); break; // ldelem.i4
 						case 5: stackBuffer[sp].LoadUint( (uint)(((uint[])stackBuffer[sp].o)[index]) ); break; // ldelem.u4
 						case 6: stackBuffer[sp].LoadUlong( (ulong)(((ulong[])stackBuffer[sp].o)[index]) ); break; // ldelem.u8 / ldelem.i8
-						case 7: stackBuffer[sp].LoadInt( (int)(((int[])stackBuffer[sp].o)[index]) ); break; // ldelem.i
+						case 7: stackBuffer[sp].LoadNint( (nint)(((nint[])stackBuffer[sp].o)[index]) ); break; // ldelem.i
 						case 8: stackBuffer[sp].LoadFloat( (float)(((float[])stackBuffer[sp].o)[index]) ); break; // ldelem.r4
 						case 9: stackBuffer[sp].LoadDouble( (double)(((double[])stackBuffer[sp].o)[index]) ); break; // ldelem.r8
 
@@ -1156,9 +1227,14 @@ spiperf.Begin();
 					}
 					case 0x9a: // Ldelem_Ref
 					{
-						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
 						int index = stackBuffer[sp--].i;
-						Array a = ((Array)(stackBuffer[sp--].o));
+						StackElement arrSE = stackBuffer[sp--];
+						if (arrSE.o == null)
+						{
+							interpretedThrow(pc - 1, new NullReferenceException());
+							break;
+						}
+						Array a = (Array)(arrSE.o);
 						if (index < 0 || index >= a.Length)
 						{
 							interpretedThrow(pc - 1, new IndexOutOfRangeException());
@@ -1167,42 +1243,55 @@ spiperf.Begin();
 						stackBuffer[++sp].LoadObject( a.GetValue(index) );
 						break;
 					}
-					case 0x9c: // stelem.i1
+					case 0x9b: case 0x9c: case 0x9d: case 0x9e: case 0x9f: // stelem
+					case 0xa0: case 0xa1: case 0xa2:
 					{
-						SByte val = (SByte)stackBuffer[sp--].i;
-						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
+						StackElement valSE = stackBuffer[sp--];
 						int index = stackBuffer[sp--].i;
-						((Array)(stackBuffer[sp--].o)).SetValue( (byte)val, index );
+						StackElement arrSE = stackBuffer[sp--];
+						if (arrSE.o == null)
+						{
+							interpretedThrow(pc - 1, new NullReferenceException());
+							break;
+						}
+						Array asArr = (Array)(arrSE.o);
+						if (index < 0 || index >= asArr.Length)
+						{
+							interpretedThrow(pc - 1, new IndexOutOfRangeException());
+							break;
+						}
+						switch( b - 0x9b )
+						{
+						case 0: asArr.SetValue( (nint)valSE.l, index ); break; // stelem.i
+						case 1: asArr.SetValue( (byte)(SByte)valSE.i, index ); break; // stelem.i1
+						case 2: asArr.SetValue( (short)valSE.i, index ); break; // stelem.i2
+						case 3: asArr.SetValue( valSE.i, index ); break; // stelem.i4
+						case 4: asArr.SetValue( valSE.l, index ); break; // stelem.i8
+						case 5: ((float[])arrSE.AsObject())[index] = valSE.f; break; // stelem.r4
+						case 6: ((double[])arrSE.AsObject())[index] = valSE.d; break; // stelem.r8
+						case 7: ((object[])arrSE.AsObject())[index] = valSE.AsObject(); break; // stelem.ref
+						}
 						break;
 					}
-					case 0xa0: // stelem.r4
-					{
-						float val;
-						val = stackBuffer[sp--].f;
-						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type" + stackBuffer[sp].type + " " + stackBuffer[sp].o, parentClass.className, methodName, pc);
-						int index = stackBuffer[sp--].i;
-						float [] array = (float[])stackBuffer[sp--].AsObject();
-						array[index] = val;
-						break;
-					}
-					case 0xa2: // stelem.ref
-					{
-						object val = stackBuffer[sp--].AsObject();
-						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type", parentClass.className, methodName, pc);
-						int index = stackBuffer[sp--].i;
-						object [] array = (object[])stackBuffer[sp--].AsObject();
-						array[index] = val;
-						break;
-					}
-					case 0xa4: // stelem
+					case 0xa4: // stelem <typeTok>
 					{
 						uint otyp = BytecodeAsU32( ref pc );
-						object val = stackBuffer[sp--].AsObject();
-						if( stackBuffer[sp].type > StackType.Uint ) throw new CilboxInterpreterRuntimeException("Invalid index type", parentClass.className, methodName, pc);
+						StackElement valSE = stackBuffer[sp--];
 						int index = stackBuffer[sp--].i;
-						object [] array = (object[])stackBuffer[sp--].AsObject();
+						StackElement arrSE = stackBuffer[sp--];
+						if (arrSE.o == null)
+						{
+							interpretedThrow(pc - 1, new NullReferenceException());
+							break;
+						}
+						object [] array = (object[])arrSE.AsObject();
+						if (index < 0 || index >= array.Length)
+						{
+							interpretedThrow(pc - 1, new IndexOutOfRangeException());
+							break;
+						}
 						Type t = box.metadatas[otyp].nativeType;
-						array[index] = Convert.ChangeType( val, t );  // This shouldn't be type changing.s
+						array[index] = Convert.ChangeType( valSE.AsObject(), t );  // This shouldn't be type changing.s
 						break;
 					}
 					case 0xA5: // unbox.any
@@ -1331,8 +1420,7 @@ spiperf.Begin();
 							stackBuffer[++sp].LoadObject( box.classesList[dt.interpretiveMethodClass].methods[dt.interpretiveMethod] );
 							break;
 						case 0x16: // constrained.
-							// handled by reflection so discard the type token
-							BytecodeAsU32( ref pc );
+							constrainedMeta = box.metadatas[BytecodeAsU32( ref pc )];
 							break;
 						default:
 							throw new CilboxInterpreterRuntimeException($"Opcode 0xfe 0x{b.ToString("X2")} unimplemented", parentClass.className, methodName, pc);
@@ -1615,6 +1703,41 @@ spiperf.End();
 		}
 	}
 
+	public class CilboxEnum
+	{
+		public string enumName;
+		public StackType underlyingType;
+		public Dictionary<long, string> valueToName;
+
+		public string GetName(long value)
+		{
+			if (valueToName.TryGetValue(value, out string name))
+				return name;
+			return value.ToString();
+		}
+
+		public BoxedCilboxEnum BoxValue(long value)
+		{
+			return new BoxedCilboxEnum(this, value);
+		}
+	}
+
+	public class BoxedCilboxEnum
+	{
+		public CilboxEnum enumDef;
+		public long value;
+
+		public BoxedCilboxEnum(CilboxEnum enumDef, long value)
+		{
+			this.enumDef = enumDef;
+			this.value = value;
+		}
+
+		public override string ToString() => enumDef.GetName(value);
+		public override bool Equals(object obj) => obj is BoxedCilboxEnum other && enumDef == other.enumDef && value == other.value;
+		public override int GetHashCode() => value.GetHashCode();
+	}
+
 	public class CilMetadataTokenInfo
 	{
 		public CilMetadataTokenInfo( MetaTokenType type ) { this.type = type; }
@@ -1648,6 +1771,8 @@ spiperf.End();
 		public String declaringTypeName;
 		//public String ToString() { return Name; }
 
+		public CilboxEnum cilboxEnum;
+
 		public delegate StackElement DelegateOverride( CilMetadataTokenInfo ths, ArraySegment<StackElement> stackBufferIn, ArraySegment<StackElement> parametersIn );
 		public object opaque;
 		public DelegateOverride shim = null;
@@ -1670,6 +1795,7 @@ spiperf.End();
 		public Dictionary< String, int > classes;
 		public CilboxClass [] classesList;
 		public CilMetadataTokenInfo [] metadatas;
+		public Dictionary<string, CilboxEnum> cilboxEnums;
 		public String assemblyData;
 		private bool initialized = false;
 
@@ -1677,6 +1803,7 @@ spiperf.End();
 
 		public bool showFunctionProfiling;
 		public bool exportDebuggingData;
+		public bool verboseLogging = false;
 		public CilboxUsage usage;
 
 		public String disabledReason = "";
@@ -1734,6 +1861,26 @@ spiperf.End();
 				classesList[clsid] = cls;
 				classes[(String)v.Key] = clsid;
 				clsid++;
+			}
+
+			cilboxEnums = new Dictionary<string, CilboxEnum>();
+			Serializee enumsSer;
+			if (assemblyRoot.TryGetValue("enums", out enumsSer))
+			{
+				foreach (var kv in enumsSer.AsMap())
+				{
+					var enumProps = kv.Value.AsMap();
+					CilboxEnum ce = new CilboxEnum();
+					ce.enumName = kv.Key;
+					ce.underlyingType = StackElement.StackTypeFromType(usage.GetNativeTypeFromSerializee(enumProps["ut"]));
+					ce.valueToName = new Dictionary<long, string>();
+					foreach (var entry in enumProps["values"].AsArray())
+					{
+						var e = entry.AsMap();
+						ce.valueToName[Convert.ToInt64(e["v"].AsString())] = e["n"].AsString();
+					}
+					cilboxEnums[kv.Key] = ce;
+				}
 			}
 
 			clsid = 0;
@@ -1834,6 +1981,14 @@ spiperf.End();
 						t.nativeTypeIsStackType = true;
 						t.nativeTypeStackType = seType;
 						t.Name = t.nativeType.ToString();
+
+						// Link to CilboxEnum if this was a cilboxable enum serialized by underlying type.
+						string origName = typ.AsMap()["n"].AsString();
+						if (cilboxEnums != null && cilboxEnums.TryGetValue(origName, out CilboxEnum cilboxEnumDef))
+						{
+							t.cilboxEnum = cilboxEnumDef;
+							t.Name = origName;
+						}
 					}
 					else if( t.nativeType != null )
 					{
@@ -1842,11 +1997,13 @@ spiperf.End();
 					}
 					else
 					{
+						Dictionary< String, Serializee > typMap = typ.AsMap();
+
 						// Maybe it's a type inside our cilbox?
 						t.isValid = false;
 						foreach( CilboxClass c in classesList )
 						{
-							if( c.className == typ.AsMap()["n"].AsString() )
+							if( c.className == typMap["n"].AsString() )
 							{
 								t.Name = c.className;
 								t.nativeTypeIsCilboxProxy = true;
@@ -1855,7 +2012,7 @@ spiperf.End();
 						}
 
 						if( !t.isValid )
-							Debug.LogError( $"Error: Could not find type: {typ.AsMap()["n"].AsString()}" );
+							Debug.LogError( $"Error: Could not find type: {typMap["n"].AsString()}" );
 					}
 					break;
 				}
@@ -2157,7 +2314,9 @@ spiperf.End();
 
 				foreach (Type type in proxyAssembly.GetTypes())
 				{
-					if( type.GetCustomAttributes(typeof(CilboxableAttribute), true).Length <= 0 )
+					if( !CilboxUtil.HasCilboxableAttribute( type ) )
+						continue;
+					if( type.IsEnum )
 						continue;
 
 					// Cilbox is not in use... But do ALL cilboxes if no scene is loaded.
@@ -2467,7 +2626,9 @@ spiperf.End();
 
 				foreach (Type type in proxyAssembly.GetTypes())
 				{
-					if( type.GetCustomAttributes(typeof(CilboxableAttribute), true).Length <= 0 )
+					if( !CilboxUtil.HasCilboxableAttribute( type ) )
+						continue;
+					if( type.IsEnum )
 						continue;
 
 					ProfilerMarker perfType = new ProfilerMarker(type.ToString()); perfType.Begin();
@@ -2515,9 +2676,34 @@ spiperf.End();
 
 			perf.End(); perf = new ProfilerMarker( "Assembling" ); perf.Begin();
 
+			Dictionary< String, Serializee > enumsDict = new Dictionary< String, Serializee >();
+			foreach( System.Reflection.Assembly proxyAssembly in assys )
+			{
+				foreach (Type type in proxyAssembly.GetTypes())
+				{
+					if (!type.IsEnum || !CilboxUtil.HasCilboxableAttribute(type))
+						continue;
+					Dictionary< String, Serializee > enumProps = new Dictionary< String, Serializee >();
+					enumProps["ut"] = CilboxUtil.GetSerializeeFromNativeType(type.GetEnumUnderlyingType());
+					string[] names = Enum.GetNames(type);
+					Array values = Enum.GetValues(type);
+					Serializee[] entries = new Serializee[names.Length];
+					for (int i = 0; i < names.Length; i++)
+					{
+						Dictionary< String, Serializee > entry = new Dictionary< String, Serializee >();
+						entry["n"] = new Serializee(names[i]);
+						entry["v"] = new Serializee(Convert.ToInt64(values.GetValue(i)).ToString());
+						entries[i] = new Serializee(entry);
+					}
+					enumProps["values"] = new Serializee(entries);
+					enumsDict[type.FullName] = new Serializee(enumProps);
+				}
+			}
+
 			Dictionary< String, Serializee > assemblyRoot = new Dictionary< String, Serializee >();
 			assemblyRoot["classes"] = new Serializee( classes );
 			assemblyRoot["metadata"] = new Serializee( assemblyMetadata );
+			assemblyRoot["enums"] = new Serializee( enumsDict );
 			Serializee assemblySerializee = new Serializee( assemblyRoot );
 
 			perf.End(); perf = new ProfilerMarker( "Serializing" ); perf.Begin();
@@ -2647,9 +2833,7 @@ spiperf.End();
 					// Skip null objects.
 					if (m == null)
 						continue;
-					object[] attribs = m.GetType().GetCustomAttributes(typeof(CilboxableAttribute), true);
-					// Not a proxiable script.
-					if (attribs == null || attribs.Length <= 0)
+					if( !CilboxUtil.HasCilboxableAttribute( m.GetType() ) )
 						continue;
 
 					CilboxProxy p = g.AddComponent<CilboxProxy>();

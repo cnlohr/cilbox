@@ -87,7 +87,7 @@ namespace Cilbox
 
 			return m;
 		disallowed:
-			Debug.LogError( $"Privelege failed {declaringType}.{name}" );
+			Debug.LogError( $"Privilege failed {declaringType}.{name}" );
 			return null;
 		}
 
@@ -329,6 +329,7 @@ namespace Cilbox
 		public bool IsCilboxInternalType( String typeName )
 		{
 			if( box.classes.ContainsKey( typeName ) ) return true;
+			if( box.cilboxEnums != null && box.cilboxEnums.ContainsKey( typeName ) ) return true;
 
 			// Strip array suffix: "Foo.Bar[]" or "Foo.Bar[][]" -> "Foo.Bar"
 			int bracket = typeName.IndexOf( '[' );
@@ -338,6 +339,7 @@ namespace Cilbox
 			if( baseName.EndsWith('&') ) baseName = baseName.Substring( 0, baseName.Length - 1 );
 
 			if( box.classes.ContainsKey( baseName ) ) return true;
+			if( box.cilboxEnums != null && box.cilboxEnums.ContainsKey( baseName ) ) return true;
 
 			return false;
 		}
@@ -345,6 +347,8 @@ namespace Cilbox
 		public Type GetNativeTypeFromSerializee( Serializee s )
 		{
 			Dictionary< String, Serializee > ses = s.AsMap();
+			Serializee utSer;
+			if( ses.TryGetValue( "ut", out utSer ) ) return GetNativeTypeFromSerializee( utSer );
 			String typeName = ses["n"].AsString();
 			String assemblyName = ses["a"].AsString();
 			if( IsCilboxInternalType( typeName ) ) return null;
@@ -395,6 +399,8 @@ namespace Cilbox
 		public String GetNativeTypeNameFromSerializee( Serializee s )
 		{
 			Dictionary< String, Serializee > ses = s.AsMap();
+			Serializee utSer;
+			if( ses.TryGetValue( "ut", out utSer ) ) return GetNativeTypeNameFromSerializee( utSer );
 			String typeName = ses["n"].AsString();
 			if( IsCilboxInternalType( typeName ) ) return typeName;
 			typeName = CheckReplaceTypeNotRecursive( typeName );
