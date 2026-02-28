@@ -135,12 +135,14 @@ namespace Cilbox
 				instanceFields["fo"] = new Serializee(fieldsObjects.Count.ToString());
 				fieldsObjects.Add( refToProxyMap[(MonoBehaviour)fv] );
 				instanceFields["t"] = new Serializee("cba");
+				instanceFields["or"] = new Serializee(fv.ToString());
 			}
 			else if( fv is UnityEngine.Object )
 			{
 				instanceFields["fo"] = new Serializee(fieldsObjects.Count.ToString());
 				fieldsObjects.Add( (UnityEngine.Object)fv );
 				instanceFields["t"] = new Serializee("obj");
+				instanceFields["or"] = new Serializee(fv.ToString());
 			}
 			else if( fv is string )
 			{
@@ -223,9 +225,7 @@ namespace Cilbox
 				UnityEngine.Object o = fieldsObjects[i];
 				if (o == null)
 				{
-					// This is hit when serialized data is expected but the object is null
-					// This can happen when a referenced object is missing by the time the scene is built/loaded but was present for serialization
-					Debug.LogWarning("[CilboxProxy] Null reference found in script " + className + " for field ID " + cls.instanceFieldNames[i]);
+					// If it's null, there's nothing to safety-check.
 					continue;
 				}
 				Type t = o.GetType();
@@ -235,16 +235,7 @@ namespace Cilbox
 				}
 				else if( !box.CheckTypeAllowed( o.GetType().ToString() ) )
 				{
-					String className;
-					if( cls != null && cls.instanceFieldNames != null && cls.instanceFieldNames.Length > i )
-					{
-						className = cls.instanceFieldNames[i];
-					}
-					else
-					{
-						className = "Unknown";
-					}
-					Debug.LogWarning( $"Contraband found in script {className} field ID {i} {className} {o.GetType()}" );
+					Debug.LogWarning( $"Contraband found in script {className} field ID {i}: {o.GetType()}" );
 					fieldsObjects[i] = null;
 				}
 			}
@@ -355,7 +346,18 @@ namespace Cilbox
 						Int32.TryParse( seFO.AsString(), out iFO ) &&
 						iFO < fieldsObjects.Count )
 					{
+						if (dict.TryGetValue("or", out var seOr))
+						{
+							if (seOr.AsString() == "null")
+							{
+								// This field was null when serialized, so just return null
+								oOut = null;
+								return true;
+							}
+						}
+
 						UnityEngine.Object o = fieldsObjects[iFO];
+
 						//Debug.Log( $"LOADING FIELD: {i} with {o}" );
 						if( o )
 						{
