@@ -80,10 +80,10 @@ namespace Cilbox
 
 			// Check all parameters for type safety.
 			foreach( Type t in parameters )
-				if( CheckTypeSecurityRecursive( t ) == null ) goto disallowed;
+				if( !CheckTypeSecurityRecursive( t ) ) goto disallowed;
 			foreach( Type t in genericArguments )
-				if( CheckTypeSecurityRecursive( t ) == null ) goto disallowed;
-			if( m is MethodInfo && CheckTypeSecurityRecursive( ((MethodInfo)m).ReturnType ) == null ) goto disallowed;
+				if( !CheckTypeSecurityRecursive( t ) ) goto disallowed;
+			if( m is MethodInfo && !CheckTypeSecurityRecursive( ((MethodInfo)m).ReturnType ) ) goto disallowed;
 
 			return m;
 		disallowed:
@@ -298,10 +298,10 @@ namespace Cilbox
 			return typeNameNoArray + arrayEnding + refSuffix;
 		}
 
-		Type CheckTypeSecurityRecursive( Type t )
+		public bool CheckTypeSecurityRecursive( Type t )
 		{
 			TypeInfo typeInfo = t.GetTypeInfo();
-			if( typeInfo == null ) return null;
+			if( typeInfo == null ) return false;
 			String typeName = typeInfo.ToString();
 			// Perform check by removing "&" from the end of ref types
 			// This happens when the type is a reference to a specific type
@@ -313,12 +313,12 @@ namespace Cilbox
 			String [] vTypeNameNoGenerics = typeName.Split( "`" );
 			typeName = ( vTypeNameNoGenerics.Length > 0 ) ? vTypeNameNoGenerics[0] : typeName;
 
-			if( CheckTypeSecurity( typeName ) == null ) return null;
+			if( CheckTypeSecurity( typeName ) == null ) return false;
 			foreach( Type tt in typeInfo.GenericTypeArguments )
 			{
-				if( CheckTypeSecurityRecursive( tt ) == null ) return null;
+				if( !CheckTypeSecurityRecursive( tt ) ) return false;
 			}
-			return t;
+			return true;
 		}
 
 		////////////////////////////////////////////////////////////////////////////////////
