@@ -1940,7 +1940,7 @@ spiperf.End();
 							throw new CilboxException( $"Could not find field for object type {t.declaringTypeName}.{t.Name} in {v.Key}." );
 						}
 
-						if( !CheckTypeAllowed( f.FieldType.ToString() ) )
+						if( !usage.CheckTypeSecurityRecursive( f.FieldType ) )
 						{
 							throw new CilboxException( $"Field for {t.declaringTypeName}.{t.Name} in {v.Key} of type {f.FieldType.ToString()} not allowed." );
 						}
