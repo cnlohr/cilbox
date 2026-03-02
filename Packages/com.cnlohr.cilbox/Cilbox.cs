@@ -2353,7 +2353,7 @@ spiperf.End();
 		public void OnProcessScene( UnityEngine.SceneManagement.Scene scene, UnityEditor.Build.Reporting.BuildReport report)
 		{
 			//Debug.Log( "IProcessSceneWithReport" );
-			CilboxScenePostprocessor.OnPostprocessScene();
+			CilboxScenePostprocessor.OnPostprocessScene(scene);
 		}
 	}
 
@@ -2362,7 +2362,8 @@ spiperf.End();
 		public int callbackOrder { get { return 0; } }
 		public void OnPreprocessBuild(UnityEditor.Build.Reporting.BuildReport report)
 		{
-			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing();
+			UnityEngine.SceneManagement.Scene activeScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing(activeScene);
 
 			if( allBehavioursThatNeedCilboxing.Length == 0 )
 				return;
@@ -2382,12 +2383,12 @@ spiperf.End();
 	}
 	public class CilboxScenePostprocessor {
 		//[PostProcessSceneAttribute (2)] This is actually called by IProcessSceneWithReport
-		public static void OnPostprocessScene() {
+		public static void OnPostprocessScene(UnityEngine.SceneManagement.Scene scene) {
 
 			ProfilerMarker perf = new ProfilerMarker("Initial Setup"); perf.Begin();
 			UnityEngine.SceneManagement.Scene scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
 
-			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing();
+			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing(scene);
 
 			Debug.Log( $"Postprocessing scene. Cilbox scripts to do: {allBehavioursThatNeedCilboxing.Length}" );
 			if( allBehavioursThatNeedCilboxing.Length == 0 ) return;

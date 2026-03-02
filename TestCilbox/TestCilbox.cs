@@ -8,6 +8,7 @@ using System.Collections;
 using System.Runtime.InteropServices;
 using System.Reflection;
 using System.Threading;
+using UnityEngine.SceneManagement;
 
 
 namespace TestCilbox
@@ -319,9 +320,11 @@ namespace TestCilbox
 			}
 
 			GameObject go = new GameObject("MyObjectToProxy");
+			SceneManager.GetActiveScene().AddRootGameObject( go );
 			TestCilboxBehaviour b = go.CreateComponent<TestCilboxBehaviour>();
 
 			GameObject go2 = new GameObject("MyObjectToProxy2");
+			SceneManager.GetActiveScene().AddRootGameObject( go2 );
 			TestCilboxBehaviour2 b2 = go.CreateComponent<TestCilboxBehaviour2>();
 
 			b.behaviour2 = b2;
@@ -344,7 +347,7 @@ namespace TestCilbox
 
 			// let the CI take its time running Start()
 			cb.timeoutLengthUs = 200000; // 200ms
-			Cilbox.CilboxScenePostprocessor.OnPostprocessScene();
+			Cilbox.CilboxScenePostprocessor.OnPostprocessScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene() );
 			Application.CallBeforeRender();
 
 			Thread.Sleep(50); // Give assembly time to write out.
