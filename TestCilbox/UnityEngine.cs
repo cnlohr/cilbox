@@ -125,11 +125,17 @@ namespace UnityEngine
 
 		public class SceneManager
 		{
-			public static Scene GetActiveScene() { return null; }
+			public static Scene GetActiveScene() { return Scene.EmptyScene; }
 		}
 		public class Scene
 		{
-			public GameObject[] GetRootGameObjects() { return new GameObject[0]; }
+			public static Scene EmptyScene = new Scene();
+			private GameObject[] rootGameObjects = new GameObject[0];
+			public void AddRootGameObject( GameObject gos ) { rootGameObjects.Append( gos ); }
+			public GameObject[] GetRootGameObjects() { return rootGameObjects; }
+			public bool isDirty { get; set; }
+			public bool IsValid () { return true; }
+			public bool isLoaded = true;
 		}
 	}
 
@@ -193,6 +199,7 @@ namespace UnityEngine
 	{
 		public Vector3 position;
 		public GameObject parent = null;
+		public GameObject gameObject = null;
 	}
 
 	public class Component
@@ -207,7 +214,7 @@ namespace UnityEngine
 		public HideFlags hideFlags;
 		public Transform transform = new Transform();
 
-		public MonoBehaviour[] GetComponentsInChildren<T>( bool something ) { return new MonoBehaviour[0]; }
+		public T[] GetComponentsInChildren<T>( bool something ) { return new T[0]; }
 
 		public GameObject gameObject = null;
 
