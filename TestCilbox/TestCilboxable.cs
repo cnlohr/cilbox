@@ -527,7 +527,7 @@ namespace TestCilbox
 	}
 
 	[Cilboxable]
-	public class TestCilboxBehaviour3 : MonoBehaviour
+	public class TestCilboxBehaviour3
 	{
 		public TestCilboxBehaviour3(int value) {this.number = value;}
 		public int number = 123;
