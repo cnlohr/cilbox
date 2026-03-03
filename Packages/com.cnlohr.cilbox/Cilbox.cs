@@ -2930,21 +2930,21 @@ spiperf.End();
 
 							ParameterInfo [] parameters = m.GetParameters();
 
-								Serializee [] parameterList = new Serializee[parameters.Length];
-								for( int i = 0; i < parameters.Length; i++ )
-								{
-									Dictionary< String, Serializee > tpi = new Dictionary< String, Serializee >();
+							Serializee [] parameterList = new Serializee[parameters.Length];
+							for( int i = 0; i < parameters.Length; i++ )
+							{
+								Dictionary< String, Serializee > tpi = new Dictionary< String, Serializee >();
 								tpi["name"] = new Serializee( parameters[i].Name );
 								tpi["dt"] = CilboxUtil.GetSerializeeFromNativeType( parameters[i].ParameterType );
 								parameterList[i] = new Serializee( tpi );
-								}
-								MethodProps["parameters"] = new Serializee( parameterList );
-								MethodProps["maxStack"] = new Serializee( mb.MaxStackSize.ToString() );
-								bool isCtor = m.IsConstructor;
-								MethodProps["isVoid"] = new Serializee( (m is MethodInfo)?(((MethodInfo)m).ReturnType == typeof(void) ? "1" : "0" ): (isCtor ? "1" : "0") );
-								MethodProps["isCtor"] = new Serializee( isCtor ? "1" : "0" );
-								MethodProps["isStatic"] = new Serializee( m.IsStatic ? "1" : "0" );
-								MethodProps["fullSignature"] = new Serializee( m.ToString() );
+							}
+							MethodProps["parameters"] = new Serializee( parameterList );
+							MethodProps["maxStack"] = new Serializee( mb.MaxStackSize.ToString() );
+							bool isCtor = m.IsConstructor;
+							MethodProps["isVoid"] = new Serializee( (m is MethodInfo)?(((MethodInfo)m).ReturnType == typeof(void) ? "1" : "0" ): (isCtor ? "1" : "0") );
+							MethodProps["isCtor"] = new Serializee( isCtor ? "1" : "0" );
+							MethodProps["isStatic"] = new Serializee( m.IsStatic ? "1" : "0" );
+							MethodProps["fullSignature"] = new Serializee( m.ToString() );
 
 							methods[methodName] = new Serializee( MethodProps );
 							perfMethod.End();
