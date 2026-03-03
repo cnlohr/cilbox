@@ -390,7 +390,40 @@ spiperf.Begin();
 
 								if( ctorAsNewObj )
 								{
-									CilboxHeapInstance newObj = CreateInternalHeapInstance( targetClass );
+									CilboxHeapInstance newObj = new CilboxHeapInstance();
+									newObj.className = targetClass.className;
+									newObj.cls = targetClass;
+									newObj.fields = new StackElement[targetClass.instanceFieldNames.Length];
+									for( int i = 0; i < targetClass.instanceFieldNames.Length; i++ )
+									{
+										Type fieldType = targetClass.instanceFieldTypes[i];
+										if( fieldType == null )
+										{
+											newObj.fields[i].LoadObject( null );
+											continue;
+										}
+
+										StackType fieldStackType = StackElement.StackTypeFromType( fieldType );
+										if( fieldStackType < StackType.Object )
+										{
+											newObj.fields[i].type = fieldStackType;
+										}
+										else if( fieldType.IsValueType )
+										{
+											try
+											{
+												newObj.fields[i].LoadObject( Activator.CreateInstance( fieldType ) );
+											}
+											catch
+											{
+												newObj.fields[i].LoadObject( null );
+											}
+										}
+										else
+										{
+											newObj.fields[i].LoadObject( null );
+										}
+									}
 									stackBuffer[nextParameterStart].LoadObject( newObj );
 									targetMethod.InterpretInner( stackBufferIn.Slice( nextStackHead ), stackBufferIn.Slice( nextParameterStart, numParams + staticOffset ) );
 									stackBuffer[++sp].LoadObject( newObj );
@@ -474,7 +507,8 @@ spiperf.Begin();
 										break;
 									}
 
-									if( !IsNativeCtorCallNoOp( ctor ) )
+									Type ctorDeclaringType = ctor.DeclaringType;
+									if( ctorDeclaringType == null || ( ctorDeclaringType != typeof(object) && ctorDeclaringType != typeof(MonoBehaviour) ) )
 									{
 										throw new CilboxInterpreterRuntimeException(
 											$"Unsupported native constructor call on existing instance: {ctor.DeclaringType?.FullName}",
@@ -1667,51 +1701,6 @@ spiperf.End();
 			return TryGetInternalObjectData( candidate, out string candidateClassName, out _ ) && candidateClassName == className;
 		}
 
-		private static bool IsNativeCtorCallNoOp( ConstructorInfo ctor )
-		{
-			Type declaringType = ctor.DeclaringType;
-			if( declaringType == null ) return false;
-			return declaringType == typeof(object) || declaringType == typeof(MonoBehaviour);
-		}
-
-		private CilboxHeapInstance CreateInternalHeapInstance( CilboxClass cls )
-		{
-			CilboxHeapInstance heap = new CilboxHeapInstance();
-			heap.className = cls.className;
-			heap.cls = cls;
-			heap.fields = new StackElement[cls.instanceFieldNames.Length];
-			for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
-			{
-				Type fieldType = cls.instanceFieldTypes[i];
-				if( fieldType == null )
-				{
-					heap.fields[i].LoadObject( null );
-					continue;
-				}
-
-				StackType st = StackElement.StackTypeFromType( fieldType );
-				if( st < StackType.Object )
-				{
-					heap.fields[i].type = st;
-				}
-				else if( fieldType.IsValueType )
-				{
-					try
-					{
-						heap.fields[i].LoadObject( Activator.CreateInstance( fieldType ) );
-					}
-					catch
-					{
-						heap.fields[i].LoadObject( null );
-					}
-				}
-				else
-				{
-					heap.fields[i].LoadObject( null );
-				}
-			}
-			return heap;
-		}
 
 		uint BytecodeAs16( ref int i )
 		{
