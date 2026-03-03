@@ -320,11 +320,9 @@ namespace TestCilbox
 			}
 
 			GameObject go = new GameObject("MyObjectToProxy");
-			SceneManager.GetActiveScene().AddRootGameObject( go );
 			TestCilboxBehaviour b = go.CreateComponent<TestCilboxBehaviour>();
 
 			GameObject go2 = new GameObject("MyObjectToProxy2");
-			SceneManager.GetActiveScene().AddRootGameObject( go2 );
 			TestCilboxBehaviour2 b2 = go.CreateComponent<TestCilboxBehaviour2>();
 
 			b.behaviour2 = b2;

@@ -1008,34 +1008,23 @@ namespace Cilbox
 		///////////////////////////////////////////////////////////////////////////
 		//  REFLECTION HELPERS  ///////////////////////////////////////////////////
 		///////////////////////////////////////////////////////////////////////////
-		public static MonoBehaviour [] GetAllBehavioursThatNeedCilboxing(UnityEngine.SceneManagement.Scene scene)
+		public static MonoBehaviour [] GetAllBehavioursThatNeedCilboxing()
 		{
 			List<MonoBehaviour> ret = new List<MonoBehaviour>();
-			if( !scene.IsValid() || !scene.isLoaded )
-				return ret.ToArray();
 
-			GameObject[] rootObjects = scene.GetRootGameObjects();
-			foreach (GameObject root in rootObjects)
+			object[] objToCheck = GameObject.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+			foreach (object o in objToCheck)
 			{
-				if( root == null )
-					continue;
-
-				Transform[] transforms = root.GetComponentsInChildren<Transform>(true);
-				foreach( Transform tr in transforms )
+				GameObject g = (GameObject) o;
+				MonoBehaviour [] scripts = g.GetComponents<MonoBehaviour>();
+				foreach (MonoBehaviour m in scripts )
 				{
-					if( tr == null )
+					// Skip null objects.
+					if (m == null)
 						continue;
-
-					MonoBehaviour [] scripts = tr.gameObject.GetComponents<MonoBehaviour>();
-					foreach (MonoBehaviour m in scripts )
-					{
-						// Skip null objects.
-						if (m == null)
-							continue;
-						if( !HasCilboxableAttribute( m.GetType() ) )
-							continue;
-						ret.Add(m);
-					}
+					if( !HasCilboxableAttribute( m.GetType() ) )
+						continue;
+					ret.Add(m);
 				}
 			}
 			return ret.ToArray();
