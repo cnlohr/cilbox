@@ -354,7 +354,14 @@ namespace TestCilbox
 			Validator.Set("NativeOutVec3AlreadyInit", alreadyInit.ToString() );
 
 			behaviour2.Behaviour2Test();
-		}
+			myBehaviour3Arr = new TestCilboxBehaviour3[] { new TestCilboxBehaviour3(123), new TestCilboxBehaviour3(456)};
+			Validator.Set("myBehaviour3Arr Length", myBehaviour3Arr.Length.ToString());
+			Validator.Set("myBehaviour3Arr 0", myBehaviour3Arr[0].number.ToString());
+			Validator.Set("myBehaviour3Arr 1", myBehaviour3Arr[1].number.ToString());
+			myBehaviour3Arr[1].number = 789;
+			Validator.Set("myBehaviour3Arr 1 changed", myBehaviour3Arr[1].number.ToString());
+				
+			}
 
 		public void Update()
 		{
@@ -522,6 +529,8 @@ namespace TestCilbox
 	[Cilboxable]
 	public class TestCilboxBehaviour3 : MonoBehaviour
 	{
+		public TestCilboxBehaviour3(int value) {this.number = value;}
+		public int number = 123;
 	}
 }
 
