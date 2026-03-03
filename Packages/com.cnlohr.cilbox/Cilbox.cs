@@ -2252,12 +2252,248 @@ spiperf.End();
 				UnityEngine.SceneManagement.SceneManager.GetActiveScene() );
 			UnityEditor.SceneManagement.EditorSceneManager.SaveScene( UnityEngine.SceneManagement.SceneManager.GetActiveScene() );
 		}
-	}
-	public class CilboxScenePostprocessor {
-		//[PostProcessSceneAttribute (2)] This is actually called by IProcessSceneWithReport
-		public static void OnPostprocessScene() {
+		}
+		public class CilboxScenePostprocessor {
+			private static void AddTypeReferenceRecursive(Type referencedType, Action<Type> addType)
+			{
+				if( referencedType == null )
+					return;
+				if( referencedType.IsByRef || referencedType.IsPointer || referencedType.IsArray )
+				{
+					AddTypeReferenceRecursive(referencedType.GetElementType(), addType);
+					return;
+				}
+				if( referencedType.IsGenericParameter )
+					return;
+
+				addType(referencedType);
+
+				if( referencedType.IsGenericType )
+				{
+					Type typeDefinition = referencedType.GetGenericTypeDefinition();
+					if( typeDefinition != null )
+						addType(typeDefinition);
+
+					Type[] genericArguments = referencedType.GetGenericArguments();
+					for( int i = 0; i < genericArguments.Length; i++ )
+						AddTypeReferenceRecursive(genericArguments[i], addType);
+				}
+			}
+
+			private static void AddMethodSignatureReferences(MethodBase method, Action<Type> addType)
+			{
+				MethodInfo asMethod = method as MethodInfo;
+				if( asMethod != null )
+					AddTypeReferenceRecursive(asMethod.ReturnType, addType);
+
+				ParameterInfo [] parameters = method.GetParameters();
+				for( int i = 0; i < parameters.Length; i++ )
+					AddTypeReferenceRecursive(parameters[i].ParameterType, addType);
+
+				if( method.IsGenericMethod )
+				{
+					Type[] genericArguments = method.GetGenericArguments();
+					for( int i = 0; i < genericArguments.Length; i++ )
+					{
+						Type[] constraints = genericArguments[i].GetGenericParameterConstraints();
+						for( int c = 0; c < constraints.Length; c++ )
+							AddTypeReferenceRecursive(constraints[c], addType);
+					}
+				}
+			}
+
+			private static void AddMemberReference(MemberInfo member, Action<Type> addType)
+			{
+				Type asType = member as Type;
+				if( asType != null )
+				{
+					AddTypeReferenceRecursive(asType, addType);
+					return;
+				}
+
+				FieldInfo asField = member as FieldInfo;
+				if( asField != null )
+				{
+					AddTypeReferenceRecursive(asField.DeclaringType, addType);
+					AddTypeReferenceRecursive(asField.FieldType, addType);
+					return;
+				}
+
+				MethodBase asMethod = member as MethodBase;
+				if( asMethod != null )
+				{
+					AddTypeReferenceRecursive(asMethod.DeclaringType, addType);
+					AddMethodSignatureReferences(asMethod, addType);
+				}
+			}
+
+			private static void AddMethodBodyReferences(MethodBase method, Action<Type> addType)
+			{
+				MethodBody body = method.GetMethodBody();
+				if( body == null )
+					return;
+
+				byte[] byteCode = body.GetILAsByteArray();
+				if( byteCode == null )
+					return;
+
+				Module module = method.Module;
+				int i = 0;
+				while( i < byteCode.Length )
+				{
+					CilboxUtil.OpCodes.OpCode oc;
+					try
+					{
+						oc = CilboxUtil.OpCodes.ReadOpCode( byteCode, ref i );
+					}
+					catch
+					{
+						break;
+					}
+
+					CilboxUtil.OpCodes.OperandType operandType = oc.OperandType;
+					int opLen = CilboxUtil.OpCodes.OperandLength[(int)operandType];
+					if( opLen <= 0 )
+						continue;
+
+					uint operand = (uint)CilboxUtil.BytecodePullLiteral( byteCode, ref i, opLen );
+					if( operandType == CilboxUtil.OpCodes.OperandType.InlineSwitch )
+					{
+						i += (int)operand * 4;
+						continue;
+					}
+
+					try
+					{
+						if( operandType == CilboxUtil.OpCodes.OperandType.InlineType )
+						{
+							AddTypeReferenceRecursive(module.ResolveType((int)operand), addType);
+						}
+						else if( operandType == CilboxUtil.OpCodes.OperandType.InlineField )
+						{
+							FieldInfo field = module.ResolveField((int)operand);
+							if( field != null )
+							{
+								AddTypeReferenceRecursive(field.DeclaringType, addType);
+								AddTypeReferenceRecursive(field.FieldType, addType);
+							}
+						}
+						else if( operandType == CilboxUtil.OpCodes.OperandType.InlineMethod )
+						{
+							MethodBase referencedMethod = module.ResolveMethod((int)operand);
+							if( referencedMethod != null )
+							{
+								AddTypeReferenceRecursive(referencedMethod.DeclaringType, addType);
+								AddMethodSignatureReferences(referencedMethod, addType);
+							}
+						}
+						else if( operandType == CilboxUtil.OpCodes.OperandType.InlineTok )
+						{
+							MemberInfo member = module.ResolveMember((int)operand);
+							if( member != null )
+								AddMemberReference(member, addType);
+						}
+					}
+					catch
+					{
+						// Ignore unresolved external tokens while building the reachable type set.
+					}
+				}
+			}
+
+			private static HashSet<Type> BuildTypesToProcess(UnityEngine.SceneManagement.Scene scene, Assembly[] assys)
+			{
+				HashSet<Type> allCilboxableTypes = new HashSet<Type>();
+				foreach( Assembly assembly in assys )
+				{
+					foreach( Type type in assembly.GetTypes() )
+					{
+						if( !CilboxUtil.HasCilboxableAttribute(type) || type.IsEnum )
+							continue;
+						allCilboxableTypes.Add(type);
+					}
+				}
+
+				// No scene loaded means we keep previous behavior and include everything.
+				if( scene == null )
+					return allCilboxableTypes;
+
+				HashSet<Type> typesToProcess = new HashSet<Type>();
+				Queue<Type> pendingTypes = new Queue<Type>();
+
+				GameObject[] rootObjects = scene.GetRootGameObjects();
+				foreach( GameObject root in rootObjects )
+				{
+					Array components = root.GetComponentsInChildren<MonoBehaviour>(true);
+					foreach( object componentObject in components )
+					{
+						MonoBehaviour component = componentObject as MonoBehaviour;
+						if( component == null )
+							continue;
+						Type componentType = component.GetType();
+						if( allCilboxableTypes.Contains(componentType) && typesToProcess.Add(componentType) )
+							pendingTypes.Enqueue(componentType);
+					}
+				}
+
+				Action<Type> addReferencedType = (Type referencedType) =>
+				{
+					if( referencedType == null )
+						return;
+					if( allCilboxableTypes.Contains(referencedType) && typesToProcess.Add(referencedType) )
+						pendingTypes.Enqueue(referencedType);
+				};
+
+				BindingFlags declaredBindingFlags = BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+				while( pendingTypes.Count > 0 )
+				{
+					Type type = pendingTypes.Dequeue();
+
+					AddTypeReferenceRecursive(type.BaseType, addReferencedType);
+					Type[] interfaces = type.GetInterfaces();
+					for( int ii = 0; ii < interfaces.Length; ii++ )
+						AddTypeReferenceRecursive(interfaces[ii], addReferencedType);
+
+					FieldInfo[] fields = type.GetFields(declaredBindingFlags);
+					for( int fi = 0; fi < fields.Length; fi++ )
+						AddTypeReferenceRecursive(fields[fi].FieldType, addReferencedType);
+
+					PropertyInfo[] properties = type.GetProperties(declaredBindingFlags);
+					for( int pi = 0; pi < properties.Length; pi++ )
+					{
+						AddTypeReferenceRecursive(properties[pi].PropertyType, addReferencedType);
+						ParameterInfo[] indexParameters = properties[pi].GetIndexParameters();
+						for( int ip = 0; ip < indexParameters.Length; ip++ )
+							AddTypeReferenceRecursive(indexParameters[ip].ParameterType, addReferencedType);
+					}
+
+					EventInfo[] events = type.GetEvents(declaredBindingFlags);
+					for( int ei = 0; ei < events.Length; ei++ )
+						AddTypeReferenceRecursive(events[ei].EventHandlerType, addReferencedType);
+
+					MethodBase[] constructors = type.GetConstructors(declaredBindingFlags);
+					for( int ci = 0; ci < constructors.Length; ci++ )
+					{
+						AddMethodSignatureReferences(constructors[ci], addReferencedType);
+						AddMethodBodyReferences(constructors[ci], addReferencedType);
+					}
+
+					MethodInfo[] methods = type.GetMethods(declaredBindingFlags);
+					for( int mi = 0; mi < methods.Length; mi++ )
+					{
+						AddMethodSignatureReferences(methods[mi], addReferencedType);
+						AddMethodBodyReferences(methods[mi], addReferencedType);
+					}
+				}
+
+				return typesToProcess;
+			}
+
+			//[PostProcessSceneAttribute (2)] This is actually called by IProcessSceneWithReport
+			public static void OnPostprocessScene() {
 
 			ProfilerMarker perf = new ProfilerMarker("Initial Setup"); perf.Begin();
+			UnityEngine.SceneManagement.Scene scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
 
 			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing();
 
@@ -2276,41 +2512,21 @@ spiperf.End();
 
 			perf.End(); perf = new ProfilerMarker( "Main Getting Types" ); perf.Begin();
 
-			// Make sure the cilbox script is in use in the scene.
-			HashSet<System.Type> TypesInUseInScene = null;
+				System.Reflection.Assembly [] assys = AppDomain.CurrentDomain.GetAssemblies();
+				HashSet<Type> typesToProcess = BuildTypesToProcess(scene, assys);
 
-			UnityEngine.SceneManagement.Scene activeScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
-
-			if( activeScene != null )
-			{
-				TypesInUseInScene = new HashSet<System.Type>();
-				GameObject[] rootObjects = activeScene.GetRootGameObjects();
-				foreach (GameObject root in rootObjects)
+				if( scene == null )
 				{
-					MonoBehaviour[] components = root.GetComponentsInChildren<MonoBehaviour>(true);
-
-					foreach (MonoBehaviour component in components)
-					{
-						if( component != null )
-						{
-							Type t = component.GetType();
-							if( !TypesInUseInScene.Contains( t ) )
-							{
-								TypesInUseInScene.Add( t);
-							}
-						}
-					}
+					Debug.LogWarning( "No scene loaded. Converting ALL Cilboxable scripts." );
 				}
-			}
-			else
-			{
-				Debug.LogWarning( "No scene loaded. Converting ALL Cilboxable scripts." );
-			}
+				else
+				{
+					Debug.Log( $"Cilbox types selected for processing (including references): {typesToProcess.Count}" );
+				}
 
-			System.Reflection.Assembly [] assys = AppDomain.CurrentDomain.GetAssemblies();
-			foreach( System.Reflection.Assembly proxyAssembly in assys )
-			{
-				assemblyMetadataReverseOriginal.Clear();
+				foreach( System.Reflection.Assembly proxyAssembly in assys )
+				{
+					assemblyMetadataReverseOriginal.Clear();
 
 				foreach (Type type in proxyAssembly.GetTypes())
 				{
@@ -2319,8 +2535,7 @@ spiperf.End();
 					if( type.IsEnum )
 						continue;
 
-					// Cilbox is not in use... But do ALL cilboxes if no scene is loaded.
-					if( TypesInUseInScene != null && !TypesInUseInScene.Contains( type ) ) continue;
+						if( !typesToProcess.Contains( type ) ) continue;
 
 					ProfilerMarker perfType = new ProfilerMarker(type.ToString()); perfType.Begin();
 
@@ -2624,14 +2839,16 @@ spiperf.End();
 				// Now that we've iterated through all classes, and collected all possible uses of field IDs,
 				// go through the classes again, collecting the fields themselves.
 
-				foreach (Type type in proxyAssembly.GetTypes())
-				{
-					if( !CilboxUtil.HasCilboxableAttribute( type ) )
-						continue;
-					if( type.IsEnum )
-						continue;
+					foreach (Type type in proxyAssembly.GetTypes())
+					{
+						if( !CilboxUtil.HasCilboxableAttribute( type ) )
+							continue;
+						if( type.IsEnum )
+							continue;
+						if( !typesToProcess.Contains( type ) )
+							continue;
 
-					ProfilerMarker perfType = new ProfilerMarker(type.ToString()); perfType.Begin();
+						ProfilerMarker perfType = new ProfilerMarker(type.ToString()); perfType.Begin();
 
 					Dictionary< String, Serializee > classProps = new Dictionary< String, Serializee >();
 
@@ -2877,4 +3094,3 @@ spiperf.End();
 		OnDisable,
 	}
 }
-
