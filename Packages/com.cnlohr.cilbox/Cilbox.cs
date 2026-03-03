@@ -2259,7 +2259,7 @@ spiperf.End();
 
 			ProfilerMarker perf = new ProfilerMarker("Initial Setup"); perf.Begin();
 
-			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing(scene);
+			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing();
 
 			Debug.Log( $"Postprocessing scene. Cilbox scripts to do: {allBehavioursThatNeedCilboxing.Length}" );
 			if( allBehavioursThatNeedCilboxing.Length == 0 ) return;
@@ -2287,10 +2287,10 @@ spiperf.End();
 				GameObject[] rootObjects = activeScene.GetRootGameObjects();
 				foreach (GameObject root in rootObjects)
 				{
-					MonoBehaviour[] components = root.GetComponentsInChildren<MonoBehaviour>(true);
-
-					foreach (MonoBehaviour component in components)
+					Array components = root.GetComponentsInChildren<MonoBehaviour>(true);
+					foreach( object componentObject in components )
 					{
+						MonoBehaviour component = componentObject as MonoBehaviour;
 						if( component != null )
 						{
 							Type t = component.GetType();
@@ -2877,4 +2877,3 @@ spiperf.End();
 		OnDisable,
 	}
 }
-
