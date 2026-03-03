@@ -1002,9 +1002,9 @@ spiperf.Begin();
 						break;
 					}
 					case 0x7d: // stfld
-						{
-							uint bc = BytecodeAsU32( ref pc );
-							StackElement se = stackBuffer[sp--];
+					{
+						uint bc = BytecodeAsU32( ref pc );
+						StackElement se = stackBuffer[sp--];
 						object opths = stackBuffer[sp--].AsObject(box);
 						if (opths == null)
 						{
@@ -2653,8 +2653,8 @@ spiperf.End();
 						continue;
 					if( type.IsEnum )
 						continue;
-
-						if( !typesToProcess.Contains( type ) ) continue;
+					if( !typesToProcess.Contains( type ) ) 
+						continue;
 
 					ProfilerMarker perfType = new ProfilerMarker(type.ToString()); perfType.Begin();
 
@@ -2960,16 +2960,16 @@ spiperf.End();
 				// Now that we've iterated through all classes, and collected all possible uses of field IDs,
 				// go through the classes again, collecting the fields themselves.
 
-					foreach (Type type in proxyAssembly.GetTypes())
-					{
-						if( !CilboxUtil.HasCilboxableAttribute( type ) )
-							continue;
-						if( type.IsEnum )
-							continue;
-						if( !typesToProcess.Contains( type ) )
-							continue;
+				foreach (Type type in proxyAssembly.GetTypes())
+				{
+					if( !CilboxUtil.HasCilboxableAttribute( type ) )
+						continue;
+					if( type.IsEnum )
+						continue;
+					if( !typesToProcess.Contains( type ) )
+						continue;
 
-						ProfilerMarker perfType = new ProfilerMarker(type.ToString()); perfType.Begin();
+					ProfilerMarker perfType = new ProfilerMarker(type.ToString()); perfType.Begin();
 
 					Dictionary< String, Serializee > classProps = new Dictionary< String, Serializee >();
 
