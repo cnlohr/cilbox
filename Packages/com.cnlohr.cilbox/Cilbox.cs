@@ -2235,8 +2235,7 @@ spiperf.End();
 		public int callbackOrder { get { return 0; } }
 		public void OnPreprocessBuild(UnityEditor.Build.Reporting.BuildReport report)
 		{
-			UnityEngine.SceneManagement.Scene activeScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
-			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing(activeScene);
+			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing();
 
 			if( allBehavioursThatNeedCilboxing.Length == 0 )
 				return;
