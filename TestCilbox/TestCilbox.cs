@@ -462,9 +462,13 @@ namespace TestCilbox
 			Validator.Validate("NativeOutInt", "42");
 			Validator.Validate("CilOutInt", "22");
 			Validator.Validate("NativeOutVec3AlreadyInit", "(12, 8, 0)");
+			Validator.Validate("myBehaviour3Arr Length", "2");
+			Validator.Validate("myBehaviour3Arr 0", "123");
+			Validator.Validate("myBehaviour3Arr 1", "456");
+			Validator.Validate("myBehaviour3Arr 1 changed", "789");
 
 			return -1 * Validator.NumValidationErrors();
+			}
 		}
-	}
 }
 
