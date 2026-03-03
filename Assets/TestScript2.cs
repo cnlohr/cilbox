@@ -17,6 +17,8 @@ public class TestScript2 : MonoBehaviour
 	public GameObject [] objs;
 
 	public Vector3 testVector = new Vector3();
+	private TestScript3 ts3 = new TestScript3();
+
 
 	void Start()
 	{
@@ -68,6 +70,10 @@ public class TestScript2 : MonoBehaviour
 		}
 
 		Debug.Log("testVector: [" + testVector.x + "," + testVector.y + "," + testVector.z + "]" );
+		if (ts3 == null)
+			Debug.LogError("ts3 should not be null");
+		else
+			ts3.PrintValue();
 	}
 
 	public void AnotherThing()
@@ -131,4 +137,11 @@ public class TestScript2 : MonoBehaviour
 
 	}
 
+}
+[Cilboxable]
+public class TestScript3
+{
+	private int testPublic;
+	public TestScript3(int value = 123) { testPublic = value; }
+	public void PrintValue() { Debug.Log( $"Value: {testPublic}" ); }
 }
