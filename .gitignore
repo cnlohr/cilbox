@@ -96,3 +96,6 @@ crashlytics-build.properties
 bakery_times.log
 
 Packages\manifest.json
+CilboxLog.txt
+TestCilbox/bin
+TestCilbox/obj
