@@ -169,6 +169,23 @@ namespace TestCilbox
 			numValidationErrors++;
 			return false;
 		}
+
+		public static bool ValidatePositiveLong( String key )
+		{
+			string val;
+			if( TestOutput.TryGetValue( key, out val ) &&
+				long.TryParse( val, out long parsed ) &&
+				parsed > 0 )
+			{
+				Console.WriteLine( $"✅ {key} = {parsed} (> 0)" );
+				return true;
+			}
+
+			Console.WriteLine( $"❌ {key} is unset or not > 0" );
+			bDidFail = true;
+			numValidationErrors++;
+			return false;
+		}
 	}
 
 
@@ -234,9 +251,72 @@ namespace TestCilbox
 
 	public class Program
 	{
-		public static int Main()
+		private const long PerfTimeoutUs = 120000000;
+
+		private static void InvokeProxyMethod(Cilbox.CilboxProxy proxy, string methodName)
+		{
+			proxy.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic, Type.EmptyTypes).Invoke(proxy, new object[0]);
+		}
+
+		private static void PrintPerfSummary()
+		{
+			string rootClass = PerfRootBehaviour.ClassName;
+			string peerClass = PerfPeerBehaviour.ClassName;
+			Console.WriteLine($"PERF class={rootClass} total_ms={Validator.Get($"Perf.{rootClass}.TotalMs")}");
+			Console.WriteLine($"PERF class={peerClass} total_ms={Validator.Get($"Perf.{peerClass}.TotalMs")}");
+
+			string[] taskKeys = new string[]
+			{
+				$"Perf.{rootClass}.RecursiveMs",
+				$"Perf.{rootClass}.FourierMs",
+				$"Perf.{rootClass}.TrigMs",
+				$"Perf.{rootClass}.MatrixMs",
+				$"Perf.{rootClass}.PeerCallsMs",
+			};
+			foreach( string key in taskKeys )
+			{
+				Console.WriteLine($"PERF metric={key} value={Validator.Get(key)}");
+			}
+		}
+
+		private static void RunPerfSuite(Cilbox.Cilbox cb, Cilbox.CilboxProxy perfRootProxy, Cilbox.CilboxProxy perfPeerProxy)
+		{
+			cb.disabled = false;
+			cb.timeoutLengthUs = PerfTimeoutUs;
+
+			Validator.Set("PerfRunStatus", "failed");
+			InvokeProxyMethod(perfPeerProxy, "Awake");
+			InvokeProxyMethod(perfPeerProxy, "Start");
+			InvokeProxyMethod(perfRootProxy, "Awake");
+			InvokeProxyMethod(perfRootProxy, "Start");
+			Validator.Set("PerfRunStatus", "complete");
+
+			string rootClass = PerfRootBehaviour.ClassName;
+			string peerClass = PerfPeerBehaviour.ClassName;
+			Validator.Validate("PerfRunStatus", "complete");
+			Validator.ValidatePositiveLong($"Perf.{rootClass}.RecursiveMs");
+			Validator.ValidatePositiveLong($"Perf.{rootClass}.FourierMs");
+			Validator.ValidatePositiveLong($"Perf.{rootClass}.TrigMs");
+			Validator.ValidatePositiveLong($"Perf.{rootClass}.MatrixMs");
+			Validator.ValidatePositiveLong($"Perf.{rootClass}.PeerCallsMs");
+			Validator.ValidatePositiveLong($"Perf.{rootClass}.TotalMs");
+			Validator.ValidatePositiveLong($"Perf.{peerClass}.TotalMs");
+
+			PrintPerfSummary();
+		}
+
+		public static int Main(string[] args)
 		{
 			Console.OutputEncoding = System.Text.Encoding.UTF8;
+			bool runPerf = false;
+			foreach( string arg in args )
+			{
+				if( arg == "--perf" )
+				{
+					runPerf = true;
+					break;
+				}
+			}
 
 			GameObject go = new GameObject("MyObjectToProxy");
 			TestCilboxBehaviour b = go.CreateComponent<TestCilboxBehaviour>();
@@ -246,6 +326,17 @@ namespace TestCilbox
 
 			b.behaviour2 = b2;
 			b2.pubsettee = 12345;
+
+			GameObject perfRootGo = null;
+			GameObject perfPeerGo = null;
+			if( runPerf )
+			{
+				perfRootGo = new GameObject("PerfRootToProxy");
+				perfPeerGo = new GameObject("PerfPeerToProxy");
+				PerfRootBehaviour perfRoot = perfRootGo.CreateComponent<PerfRootBehaviour>();
+				PerfPeerBehaviour perfPeer = perfPeerGo.CreateComponent<PerfPeerBehaviour>();
+				perfRoot.peer = perfPeer;
+			}
 
 			GameObject cbobj = new GameObject("BasicCilbox");
 			Cilbox.Cilbox cb = cbobj.AddComponent<CilboxTester>();
@@ -258,6 +349,13 @@ namespace TestCilbox
 			Thread.Sleep(50); // Give assembly time to write out.
 
 			Cilbox.CilboxProxy proxy = go.GetComponents<Cilbox.CilboxProxy>()[0];
+			Cilbox.CilboxProxy perfRootProxy = null;
+			Cilbox.CilboxProxy perfPeerProxy = null;
+			if( runPerf )
+			{
+				perfRootProxy = perfRootGo.GetComponents<Cilbox.CilboxProxy>()[0];
+				perfPeerProxy = perfPeerGo.GetComponents<Cilbox.CilboxProxy>()[0];
+			}
 
 			try
 			{
@@ -461,6 +559,11 @@ namespace TestCilbox
 			Validator.Validate("NativeOutInt", "42");
 			Validator.Validate("CilOutInt", "22");
 			Validator.Validate("NativeOutVec3AlreadyInit", "(12, 8, 0)");
+
+			if( runPerf )
+			{
+				RunPerfSuite(cb, perfRootProxy, perfPeerProxy);
+			}
 
 			return -1 * Validator.NumValidationErrors();
 		}
