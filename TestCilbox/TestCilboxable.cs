@@ -523,14 +523,24 @@ namespace TestCilbox
 	public class TestCilboxBehaviour3 : MonoBehaviour
 	{
 	}
-
+	[Cilboxable]
+	public class PerfUtility
+	{
+		public static long StopwatchToUs(System.Diagnostics.Stopwatch sw)
+		{
+			long us = (long)sw.Elapsed.TotalMicroseconds;
+			if (sw.ElapsedTicks > 0 && us == 0) us = 1;
+			return us;
+		}
+	}
 	[Cilboxable]
 	public class PerfPeerBehaviour : MonoBehaviour
 	{
 		public const string ClassName = "TestCilbox.PerfPeerBehaviour";
 		private const int InnerIterations = 64;
-		private long totalMs = 0;
+		private long totalUs = 0;
 		private System.Diagnostics.Stopwatch runningTimer;
+
 
 		public void BeginPerfTiming()
 		{
@@ -558,10 +568,10 @@ namespace TestCilbox
 			if (runningTimer != null)
 			{
 				runningTimer.Stop();
-				totalMs += runningTimer.ElapsedMilliseconds;
+				totalUs += PerfUtility.StopwatchToUs(runningTimer);
 				runningTimer = null;
 			}
-			Validator.Set($"Perf.{ClassName}.TotalMs", totalMs.ToString());
+			Validator.Set($"Perf.{ClassName}.TotalUs", totalUs.ToString());
 		}
 	}
 
@@ -584,19 +594,19 @@ namespace TestCilbox
 		{
 			System.Diagnostics.Stopwatch totalSw = System.Diagnostics.Stopwatch.StartNew();
 
-			long recursiveMs = RunRecursiveTask();
-			long dftMs = RunDftTask();
-			long trigMs = RunTrigTask();
-			long matrixMs = RunMatrixTask();
-			long peerMs = RunPeerTask();
+			long recursiveUs = RunRecursiveTask();
+			long dftUs = RunDftTask();
+			long trigUs = RunTrigTask();
+			long matrixUs = RunMatrixTask();
+			long peerUs = RunPeerTask();
 
 			totalSw.Stop();
-			Validator.Set($"Perf.{ClassName}.RecursiveMs", recursiveMs.ToString());
-			Validator.Set($"Perf.{ClassName}.FourierMs", dftMs.ToString());
-			Validator.Set($"Perf.{ClassName}.TrigMs", trigMs.ToString());
-			Validator.Set($"Perf.{ClassName}.MatrixMs", matrixMs.ToString());
-			Validator.Set($"Perf.{ClassName}.PeerCallsMs", peerMs.ToString());
-			Validator.Set($"Perf.{ClassName}.TotalMs", totalSw.ElapsedMilliseconds.ToString());
+			Validator.Set($"Perf.{ClassName}.RecursiveUs", recursiveUs.ToString());
+			Validator.Set($"Perf.{ClassName}.FourierUs", dftUs.ToString());
+			Validator.Set($"Perf.{ClassName}.TrigUs", trigUs.ToString());
+			Validator.Set($"Perf.{ClassName}.MatrixUs", matrixUs.ToString());
+			Validator.Set($"Perf.{ClassName}.PeerCallsUs", peerUs.ToString());
+			Validator.Set($"Perf.{ClassName}.TotalUs", PerfUtility.StopwatchToUs(totalSw).ToString());
 		}
 
 		private long RunRecursiveTask()
@@ -605,7 +615,7 @@ namespace TestCilbox
 			int recursiveResult = RecursivePerf(RecursiveDepth);
 			sw.Stop();
 			Validator.Set($"Perf.{ClassName}.RecursiveResult", recursiveResult.ToString());
-			return sw.ElapsedMilliseconds;
+			return PerfUtility.StopwatchToUs(sw);
 		}
 
 		private int RecursivePerf(int depth)
@@ -620,7 +630,7 @@ namespace TestCilbox
 			float checksum = RunDiscreteFourier(DftSize, DftRepeats);
 			sw.Stop();
 			Validator.Set($"Perf.{ClassName}.FourierChecksum", checksum.ToString());
-			return sw.ElapsedMilliseconds;
+			return PerfUtility.StopwatchToUs(sw);
 		}
 
 		private float RunDiscreteFourier(int sampleCount, int repeats)
@@ -674,7 +684,7 @@ namespace TestCilbox
 			}
 			sw.Stop();
 			Validator.Set($"Perf.{ClassName}.TrigAccum", trigAccum.ToString());
-			return sw.ElapsedMilliseconds;
+			return PerfUtility.StopwatchToUs(sw);
 		}
 
 		private long RunMatrixTask()
@@ -683,7 +693,7 @@ namespace TestCilbox
 			float checksum = MatrixMultiplyWork(MatrixSize, MatrixRepeats);
 			sw.Stop();
 			Validator.Set($"Perf.{ClassName}.MatrixChecksum", checksum.ToString());
-			return sw.ElapsedMilliseconds;
+			return PerfUtility.StopwatchToUs(sw);
 		}
 
 		private float MatrixMultiplyWork(int size, int repeats)
@@ -740,7 +750,7 @@ namespace TestCilbox
 			}
 			sw.Stop();
 			Validator.Set($"Perf.{ClassName}.PeerChecksum", value.ToString());
-			return sw.ElapsedMilliseconds;
+			return PerfUtility.StopwatchToUs(sw);
 		}
 	}
 }

@@ -262,16 +262,16 @@ namespace TestCilbox
 		{
 			string rootClass = PerfRootBehaviour.ClassName;
 			string peerClass = PerfPeerBehaviour.ClassName;
-			Console.WriteLine($"PERF class={rootClass} total_ms={Validator.Get($"Perf.{rootClass}.TotalMs")}");
-			Console.WriteLine($"PERF class={peerClass} total_ms={Validator.Get($"Perf.{peerClass}.TotalMs")}");
+			Console.WriteLine($"PERF class={rootClass} total_us={Validator.Get($"Perf.{rootClass}.TotalUs")}");
+			Console.WriteLine($"PERF class={peerClass} total_us={Validator.Get($"Perf.{peerClass}.TotalUs")}");
 
 			string[] taskKeys = new string[]
 			{
-				$"Perf.{rootClass}.RecursiveMs",
-				$"Perf.{rootClass}.FourierMs",
-				$"Perf.{rootClass}.TrigMs",
-				$"Perf.{rootClass}.MatrixMs",
-				$"Perf.{rootClass}.PeerCallsMs",
+				$"Perf.{rootClass}.RecursiveUs",
+				$"Perf.{rootClass}.FourierUs",
+				$"Perf.{rootClass}.TrigUs",
+				$"Perf.{rootClass}.MatrixUs",
+				$"Perf.{rootClass}.PeerCallsUs",
 			};
 			foreach( string key in taskKeys )
 			{
@@ -294,13 +294,13 @@ namespace TestCilbox
 			string rootClass = PerfRootBehaviour.ClassName;
 			string peerClass = PerfPeerBehaviour.ClassName;
 			Validator.Validate("PerfRunStatus", "complete");
-			Validator.ValidatePositiveLong($"Perf.{rootClass}.RecursiveMs");
-			Validator.ValidatePositiveLong($"Perf.{rootClass}.FourierMs");
-			Validator.ValidatePositiveLong($"Perf.{rootClass}.TrigMs");
-			Validator.ValidatePositiveLong($"Perf.{rootClass}.MatrixMs");
-			Validator.ValidatePositiveLong($"Perf.{rootClass}.PeerCallsMs");
-			Validator.ValidatePositiveLong($"Perf.{rootClass}.TotalMs");
-			Validator.ValidatePositiveLong($"Perf.{peerClass}.TotalMs");
+			Validator.ValidatePositiveLong($"Perf.{rootClass}.RecursiveUs");
+			Validator.ValidatePositiveLong($"Perf.{rootClass}.FourierUs");
+			Validator.ValidatePositiveLong($"Perf.{rootClass}.TrigUs");
+			Validator.ValidatePositiveLong($"Perf.{rootClass}.MatrixUs");
+			Validator.ValidatePositiveLong($"Perf.{rootClass}.PeerCallsUs");
+			Validator.ValidatePositiveLong($"Perf.{rootClass}.TotalUs");
+			Validator.ValidatePositiveLong($"Perf.{peerClass}.TotalUs");
 
 			PrintPerfSummary();
 		}
