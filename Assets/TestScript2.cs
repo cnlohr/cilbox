@@ -138,10 +138,12 @@ public class TestScript2 : MonoBehaviour
 	}
 
 }
+
 [Cilboxable]
 public class TestScript3
 {
 	private int testPublic;
 	public TestScript3(int value = 123) { testPublic = value; }
-	public void PrintValue() { Debug.Log( $"Value: {testPublic}" ); }
+	public void PrintValue() { Debug.Log( $"Non-Monobehaviour Class Instanciation Test: Value: {testPublic}" ); }
 }
+
