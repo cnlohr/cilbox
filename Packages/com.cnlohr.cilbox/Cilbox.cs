@@ -334,6 +334,7 @@ spiperf.Begin();
 					case 0x73: //newobj
 					case 0x6F: //callvirt
 					{
+						int currentInstruction = pc - 1;
 						uint bc = (b == 0x29) ? stackBuffer[sp--].u : BytecodeAsU32( ref pc );
 						object iko = null; // Returned value.
 						CilMetadataTokenInfo dt = box.metadatas[bc];
@@ -425,7 +426,14 @@ spiperf.Begin();
 										}
 									}
 									stackBuffer[nextParameterStart].LoadObject( newObj );
-									targetMethod.InterpretInner( stackBufferIn.Slice( nextStackHead ), stackBufferIn.Slice( nextParameterStart, numParams + staticOffset ) );
+									try
+									{
+										targetMethod.InterpretInner(stackBufferIn.Slice(nextStackHead), stackBufferIn.Slice(nextParameterStart, numParams + staticOffset));
+									}
+									catch (CilboxUnhandledInterpretedException e)
+									{
+										interpretedThrow(currentInstruction, e.Throwee);
+									}
 									stackBuffer[++sp].LoadObject( newObj );
 								}
 								else
@@ -433,10 +441,17 @@ spiperf.Begin();
 									if( !targetMethod.isStatic )
 										stackBuffer[nextParameterStart] = stackBuffer[sp--];
 
-									if( !isVoid && !ctorAsCall )
-										stackBuffer[++sp] = targetMethod.InterpretInner( stackBufferIn.Slice( nextStackHead ), stackBufferIn.Slice( nextParameterStart, numParams + staticOffset ) );
-									else
-										targetMethod.InterpretInner( stackBufferIn.Slice( nextStackHead ), stackBufferIn.Slice( nextParameterStart, numParams + staticOffset ) );
+									try
+									{
+										if (!isVoid && !ctorAsCall)
+											stackBuffer[++sp] = targetMethod.InterpretInner(stackBufferIn.Slice(nextStackHead), stackBufferIn.Slice(nextParameterStart, numParams + staticOffset));
+										else
+											targetMethod.InterpretInner(stackBufferIn.Slice(nextStackHead), stackBufferIn.Slice(nextParameterStart, numParams + staticOffset));
+									}
+									catch (CilboxUnhandledInterpretedException e)
+									{
+										interpretedThrow(currentInstruction, e.Throwee);
+									}
 								}
 
 								if( isJmp )
@@ -1518,6 +1533,11 @@ spiperf.End();
 				}
 				while( cont );
 			}
+			catch (CilboxUnhandledInterpretedException)
+			{
+				// don't break program flow for interpreted exceptions; we want to pass flow back to the outer call.
+				throw;
+			}
 			catch( Exception e )
 			{
 				string fullError = $"Breakwarn: {e.ToString()} Class: {parentClass.className}, Function: {methodName}, Bytecode: {pc}";
@@ -1547,8 +1567,7 @@ spiperf.End();
 				exceptionRegister = new StackElement() { type = StackType.Object, o = thrownObj };
 				if (!hasExceptionClauses)
 				{
-					// todo: figure out how to re-throw to outer interpreter.
-					throw new CilboxInterpreterRuntimeException("Exception thrown with no handlers: " + thrownObj.ToString(), parentClass.className, methodName, currentInstruction);
+					throw new CilboxUnhandledInterpretedException("Exception thrown with no handlers: " + thrownObj.ToString(), thrownObj, parentClass.className, methodName, currentInstruction);
 				}
 
 				CilboxExceptionHandlingClause found = null;
@@ -1583,15 +1602,15 @@ spiperf.End();
 							continue;
 						}
 					}
-						else if (c.CatchTypeName != null)
+					else if (c.CatchTypeName != null)
+					{
+						// Cilboxable type match
+						// todo: it isn't actually possible to throw a Cilboxable type (yet?)
+						if (!IsInternalObjectInstanceOf(thrownObj, c.CatchTypeName))
 						{
-							// Cilboxable type match
-							// todo: it isn't actually possible to throw a Cilboxable type (yet?)
-							if (!IsInternalObjectInstanceOf(thrownObj, c.CatchTypeName))
-							{
-								continue;
-							}
+							continue;
 						}
+					}
 					else
 					{
 						continue;
@@ -1603,8 +1622,7 @@ spiperf.End();
 
 				if (found == null)
 				{
-					// how do I handle this?
-					throw new CilboxInterpreterRuntimeException("No handlers matched exception: " + thrownObj.ToString(), parentClass.className, methodName, currentInstruction);
+					throw new CilboxUnhandledInterpretedException("No handlers matched exception: " + thrownObj.ToString(), thrownObj, parentClass.className, methodName, currentInstruction);
 				}
 
 				leaveRegionEnqueueFinallys(currentInstruction, found.HandlerOffset, true);
