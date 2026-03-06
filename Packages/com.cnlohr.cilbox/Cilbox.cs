@@ -2377,7 +2377,9 @@ spiperf.End();
 
 			Dictionary< String, Serializee > assemblyMetadata = new Dictionary< String, Serializee >();
 			Dictionary< uint, String > originalMetaToFriendlyName = new Dictionary< uint, String >();
-			Dictionary< int, uint> assemblyMetadataReverseOriginal = new Dictionary< int, uint >();
+			// This is used for remapping tokens in the bytecode to point to our own metadata.
+			// Since tokens are per-assembly, we need prevent collisions by keying per assembly as well.
+			Dictionary< (System.Reflection.Assembly, int), uint> assemblyMetadataReverseOriginal = new Dictionary< (System.Reflection.Assembly, int), uint >();
 
 			uint mdcount = 1; // token 0 is invalid.
 			int bytecodeLength = 0;
@@ -2529,7 +2531,7 @@ spiperf.End();
 											switch( operand>>24 )
 											{
 											case 0x04: // Special case handling for constant initializers.
-												if( !assemblyMetadataReverseOriginal.TryGetValue( (int)operand, out writebackToken ) )
+												if( !assemblyMetadataReverseOriginal.TryGetValue( (proxyAssembly, (int)operand), out writebackToken ) )
 												{
 													writebackToken = mdcount;
 													// Special <PrivateImplementationDetails>+__StaticArrayInitTypeSize=24 instance.
@@ -2549,7 +2551,7 @@ spiperf.End();
 												break;
 										/*
 											case 0x02: // Inline Token for Type (typically used with typeof())
-												if( !assemblyMetadataReverseOriginal.TryGetValue( (int)operand, out writebackToken ) )
+												if( !assemblyMetadataReverseOriginal.TryGetValue( (proxyAssembly, (int)operand), out writebackToken ) )
 												{
 													// TODO: Actually investigate this.  See if we really need it.
 													writebackToken = mdcount;
@@ -2573,7 +2575,7 @@ spiperf.End();
 										}
 										else if( ot == CilboxUtil.OpCodes.OperandType.InlineString )
 										{
-											if( !assemblyMetadataReverseOriginal.TryGetValue( (int)operand, out writebackToken ) )
+											if( !assemblyMetadataReverseOriginal.TryGetValue( (proxyAssembly, (int)operand), out writebackToken ) )
 											{
 												writebackToken = mdcount;
 												Dictionary< String, String > thisMeta = new Dictionary< String, String >();
@@ -2586,7 +2588,7 @@ spiperf.End();
 										}
 										else if( ot == CilboxUtil.OpCodes.OperandType.InlineMethod )
 										{
-											if( !assemblyMetadataReverseOriginal.TryGetValue( (int)operand, out writebackToken ) )
+											if( !assemblyMetadataReverseOriginal.TryGetValue( (proxyAssembly, (int)operand), out writebackToken ) )
 											{
 												writebackToken = mdcount;
 												MethodBase tmb = proxyAssembly.ManifestModule.ResolveMethod( (int)operand );
@@ -2638,7 +2640,7 @@ spiperf.End();
 										}
 										else if( ot == CilboxUtil.OpCodes.OperandType.InlineField )
 										{
-											if( !assemblyMetadataReverseOriginal.TryGetValue( (int)operand, out writebackToken ) )
+											if( !assemblyMetadataReverseOriginal.TryGetValue( (proxyAssembly, (int)operand), out writebackToken ) )
 											{
 												writebackToken = mdcount;
 												FieldInfo rf = proxyAssembly.ManifestModule.ResolveField( (int)operand );
@@ -2655,7 +2657,7 @@ spiperf.End();
 										}
 										else if( ot == CilboxUtil.OpCodes.OperandType.InlineType )
 										{
-											if( !assemblyMetadataReverseOriginal.TryGetValue( (int)operand, out writebackToken ) )
+											if( !assemblyMetadataReverseOriginal.TryGetValue( (proxyAssembly, (int)operand), out writebackToken ) )
 											{
 												writebackToken = mdcount;
 												Type ty = proxyAssembly.ManifestModule.ResolveType( (int)operand );
@@ -2672,7 +2674,7 @@ spiperf.End();
 										if( changeOperand )
 										{
 											i = backupi;
-											assemblyMetadataReverseOriginal[(int)operand] = writebackToken;
+											assemblyMetadataReverseOriginal[(proxyAssembly, (int)operand)] = writebackToken;
 											CilboxUtil.BytecodeReplaceLiteral( ref byteCode, ref i, opLen, writebackToken );
 										}
 										if( i >= byteCode.Length ) break;
@@ -2791,7 +2793,7 @@ spiperf.End();
 
 							// Fill in our metadata with a class-specific field ID, if this field ID was used in code anywhere.
 							uint mdid;
-							if( assemblyMetadataReverseOriginal.TryGetValue(f.MetadataToken, out mdid) )
+							if( assemblyMetadataReverseOriginal.TryGetValue((type.Assembly, f.MetadataToken), out mdid) )
 							{
 								Serializee sOpen = assemblyMetadata[mdid.ToString()];
 								Dictionary< String, Serializee > m = sOpen.AsMap();
