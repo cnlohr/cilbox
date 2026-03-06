@@ -582,5 +582,234 @@ namespace TestCilbox
 	{
 		public TestCilboxExceptConstructor() { throw new Exception("Constructor Exception"); }
 	}
-}
+	[Cilboxable]
+	public class PerfUtility
+	{
+		public static long StopwatchToUs(System.Diagnostics.Stopwatch sw)
+		{
+			long us = (long)sw.Elapsed.TotalMicroseconds;
+			if (sw.ElapsedTicks > 0 && us == 0) us = 1;
+			return us;
+		}
+	}
+	[Cilboxable]
+	public class PerfPeerBehaviour : MonoBehaviour
+	{
+		public const string ClassName = "TestCilbox.PerfPeerBehaviour";
+		private const int InnerIterations = 64;
+		private long totalUs = 0;
+		private System.Diagnostics.Stopwatch runningTimer;
 
+
+		public void BeginPerfTiming()
+		{
+			runningTimer = System.Diagnostics.Stopwatch.StartNew();
+		}
+
+		public float ComputeKernel(float seed, int rounds)
+		{
+			float value = seed;
+			for (int i = 0; i < rounds; i++)
+			{
+				float scaled = value + i * 0.03125f;
+				value = MathF.Sin(scaled) * 0.7f + MathF.Cos(scaled * 1.7f) * 0.3f;
+			}
+			for (int i = 0; i < InnerIterations; i++)
+			{
+				float scaled = value + i * 0.015625f;
+				value += MathF.Sin(scaled) * MathF.Cos(scaled * 0.5f);
+			}
+			return value;
+		}
+
+		public void CommitPerfMetrics()
+		{
+			if (runningTimer != null)
+			{
+				runningTimer.Stop();
+				totalUs += PerfUtility.StopwatchToUs(runningTimer);
+				runningTimer = null;
+			}
+			Validator.Set($"Perf.{ClassName}.TotalUs", totalUs.ToString());
+		}
+	}
+
+	[Cilboxable]
+	public class PerfRootBehaviour : MonoBehaviour
+	{
+		public const string ClassName = "TestCilbox.PerfRootBehaviour";
+		private const float TwoPi = 6.283185307179586f;
+		private const int RecursiveDepth = 12;
+		private const int DftSize = 96;
+		private const int DftRepeats = 3;
+		private const int TrigIterations = 350000;
+		private const int MatrixSize = 20;
+		private const int MatrixRepeats = 8;
+		private const int PeerCallCount = 2500;
+
+		public PerfPeerBehaviour peer;
+
+		public void Start()
+		{
+			System.Diagnostics.Stopwatch totalSw = System.Diagnostics.Stopwatch.StartNew();
+
+			long recursiveUs = RunRecursiveTask();
+			long dftUs = RunDftTask();
+			long trigUs = RunTrigTask();
+			long matrixUs = RunMatrixTask();
+			long peerUs = RunPeerTask();
+
+			totalSw.Stop();
+			Validator.Set($"Perf.{ClassName}.RecursiveUs", recursiveUs.ToString());
+			Validator.Set($"Perf.{ClassName}.FourierUs", dftUs.ToString());
+			Validator.Set($"Perf.{ClassName}.TrigUs", trigUs.ToString());
+			Validator.Set($"Perf.{ClassName}.MatrixUs", matrixUs.ToString());
+			Validator.Set($"Perf.{ClassName}.PeerCallsUs", peerUs.ToString());
+			Validator.Set($"Perf.{ClassName}.TotalUs", PerfUtility.StopwatchToUs(totalSw).ToString());
+		}
+
+		private long RunRecursiveTask()
+		{
+			System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+			int recursiveResult = RecursivePerf(RecursiveDepth);
+			sw.Stop();
+			Validator.Set($"Perf.{ClassName}.RecursiveResult", recursiveResult.ToString());
+			return PerfUtility.StopwatchToUs(sw);
+		}
+
+		private int RecursivePerf(int depth)
+		{
+			if (depth <= 0) return 1;
+			return RecursivePerf(depth - 1) + RecursivePerf(depth - 1);
+		}
+
+		private long RunDftTask()
+		{
+			System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+			float checksum = RunDiscreteFourier(DftSize, DftRepeats);
+			sw.Stop();
+			Validator.Set($"Perf.{ClassName}.FourierChecksum", checksum.ToString());
+			return PerfUtility.StopwatchToUs(sw);
+		}
+
+		private float RunDiscreteFourier(int sampleCount, int repeats)
+		{
+			float[] signal = new float[sampleCount];
+			float[] real = new float[sampleCount];
+			float[] imag = new float[sampleCount];
+
+			for (int i = 0; i < sampleCount; i++)
+			{
+				float x = i * 0.09f;
+				signal[i] = MathF.Sin(x) + MathF.Cos(x * 0.7f);
+			}
+
+			float checksum = 0.0f;
+			for (int rep = 0; rep < repeats; rep++)
+			{
+				for (int k = 0; k < sampleCount; k++)
+				{
+					float sumReal = 0.0f;
+					float sumImag = 0.0f;
+					for (int n = 0; n < sampleCount; n++)
+					{
+						float angle = TwoPi * k * n / sampleCount;
+						float sample = signal[n];
+						sumReal += sample * MathF.Cos(angle);
+						sumImag -= sample * MathF.Sin(angle);
+					}
+					real[k] = sumReal;
+					imag[k] = sumImag;
+				}
+
+				for (int i = 0; i < sampleCount; i++)
+				{
+					checksum += MathF.Abs(real[i]) + MathF.Abs(imag[i]);
+					signal[i] = real[i] * 0.001f + imag[i] * 0.0005f;
+				}
+			}
+
+			return checksum;
+		}
+
+		private long RunTrigTask()
+		{
+			System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+			float trigAccum = 0.0f;
+			for (int i = 0; i < TrigIterations; i++)
+			{
+				float x = i * 0.0025f;
+				trigAccum += MathF.Sin(x) * MathF.Cos(x * 1.3f) + MathF.Sin(x * 0.2f);
+			}
+			sw.Stop();
+			Validator.Set($"Perf.{ClassName}.TrigAccum", trigAccum.ToString());
+			return PerfUtility.StopwatchToUs(sw);
+		}
+
+		private long RunMatrixTask()
+		{
+			System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+			float checksum = MatrixMultiplyWork(MatrixSize, MatrixRepeats);
+			sw.Stop();
+			Validator.Set($"Perf.{ClassName}.MatrixChecksum", checksum.ToString());
+			return PerfUtility.StopwatchToUs(sw);
+		}
+
+		private float MatrixMultiplyWork(int size, int repeats)
+		{
+			int len = size * size;
+			float[] a = new float[len];
+			float[] b = new float[len];
+			float[] c = new float[len];
+			float[] temp;
+
+			for (int i = 0; i < len; i++)
+			{
+				a[i] = 0.1f + i * 0.001f;
+				b[i] = 0.2f + i * 0.0007f;
+			}
+
+			for (int rep = 0; rep < repeats; rep++)
+			{
+				for (int row = 0; row < size; row++)
+				{
+					int rowStart = row * size;
+					for (int col = 0; col < size; col++)
+					{
+						float sum = 0.0f;
+						for (int k = 0; k < size; k++)
+						{
+							sum += a[rowStart + k] * b[k * size + col];
+						}
+						c[rowStart + col] = sum;
+					}
+				}
+
+				temp = a;
+				a = b;
+				b = c;
+				c = temp;
+			}
+
+			return b[0] + b[len - 1];
+		}
+
+		private long RunPeerTask()
+		{
+			System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+			float value = 0.125f;
+			if (peer != null)
+			{
+				peer.BeginPerfTiming();
+				for (int i = 0; i < PeerCallCount; i++)
+				{
+					value = peer.ComputeKernel(value + i * 0.0001f, 6);
+				}
+				peer.CommitPerfMetrics();
+			}
+			sw.Stop();
+			Validator.Set($"Perf.{ClassName}.PeerChecksum", value.ToString());
+			return PerfUtility.StopwatchToUs(sw);
+		}
+	}
+}
