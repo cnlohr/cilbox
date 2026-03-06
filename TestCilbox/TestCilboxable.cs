@@ -354,6 +354,46 @@ namespace TestCilbox
 			Validator.Set("NativeOutVec3AlreadyInit", alreadyInit.ToString() );
 
 			behaviour2.Behaviour2Test();
+			myBehaviour3Arr = new TestCilboxBehaviour3[] { new TestCilboxBehaviour3(123), new TestCilboxBehaviour3(456)};
+			Validator.Set("myBehaviour3Arr Length", myBehaviour3Arr.Length.ToString());
+			Validator.Set("myBehaviour3Arr 0", myBehaviour3Arr[0].number.ToString());
+			Validator.Set("myBehaviour3Arr 1", myBehaviour3Arr[1].number.ToString());
+			myBehaviour3Arr[1].number = 789;
+			Validator.Set("myBehaviour3Arr 1 changed", myBehaviour3Arr[1].number.ToString());
+
+			try
+			{
+				Validator.Set("ThrowFromOtherBehaviour1", "try");
+				behaviour2.ThrowExceptionTest();
+			}
+			catch (Exception)
+			{
+				Validator.Set("ThrowFromOtherBehaviour1", "caught");
+			}
+
+			try
+			{
+				Validator.Set("ThrowFromOtherBehaviour2", "try");
+				behaviour2.ThrowNativeExceptionTest();
+			}
+			catch (IndexOutOfRangeException)
+			{
+				Validator.Set("ThrowFromOtherBehaviour2", "caught");
+			}
+			finally
+			{
+				Validator.Set("ThrowFromOtherBehaviour2Finally", "finally");
+			}
+
+			try
+			{
+				Validator.Set("ThrowFromOtherConstructor", "try");
+				TestCilboxExceptConstructor exceptConstructor = new TestCilboxExceptConstructor();
+			}
+			catch (Exception)
+			{
+				Validator.Set("ThrowFromOtherConstructor", "caught");
+			}
 		}
 
 		public void Update()
@@ -517,11 +557,30 @@ namespace TestCilbox
 			Validator.Set( "Method Called On Peer", "OK" );
 			Validator.Set( "Public Field Change In Editor", pubsettee.ToString() ); // Should not be 35254
 		}
+
+		public void ThrowExceptionTest()
+		{
+			throw new Exception("Test Exception from Behaviour2");
+		}
+
+		public int ThrowNativeExceptionTest()
+		{
+			int[] emptyArr = new int[0];
+			return emptyArr[0];
+		}
 	}
 
 	[Cilboxable]
-	public class TestCilboxBehaviour3 : MonoBehaviour
+	public class TestCilboxBehaviour3
 	{
+		public TestCilboxBehaviour3(int value) {this.number = value;}
+		public int number = 123;
+	}
+
+	[Cilboxable]
+	public class TestCilboxExceptConstructor
+	{
+		public TestCilboxExceptConstructor() { throw new Exception("Constructor Exception"); }
 	}
 	[Cilboxable]
 	public class PerfUtility
