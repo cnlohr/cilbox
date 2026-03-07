@@ -125,11 +125,15 @@ namespace UnityEngine
 
 		public class SceneManager
 		{
-			public static Scene GetActiveScene() { return null; }
+			public static Scene GetActiveScene() { return Scene.EmptyScene; }
 		}
 		public class Scene
 		{
-			public GameObject[] GetRootGameObjects() { return new GameObject[0]; }
+			public static Scene EmptyScene = new Scene();
+			public GameObject[] GetRootGameObjects() { return GameObject.AllObjects.ToArray(); }
+			public bool isDirty { get; set; }
+			public bool IsValid () { return true; }
+			public bool isLoaded = true;
 		}
 	}
 
@@ -189,25 +193,26 @@ namespace UnityEngine
 		}
 	}
 
-	public class Transform
+	public class Transform : Component
 	{
 		public Vector3 position;
 		public GameObject parent = null;
+		public GameObject gameObject = null;
 	}
 
-	public class Component
+	public class Component : Object
 	{
 	}
 
 	public class GameObject : UnityEngine.Object
 	{
 		public static List<GameObject> AllObjects = new List<GameObject>();
-		public List<MonoBehaviour> AllComponents = new List<MonoBehaviour>();
+		public List<Object> AllComponents = new List<Object>();
 		public String name;
 		public HideFlags hideFlags;
 		public Transform transform = new Transform();
 
-		public MonoBehaviour[] GetComponentsInChildren<T>( bool something ) { return new MonoBehaviour[0]; }
+		public T[] GetComponentsInChildren<T>( bool something ) { return AllComponents.ToArray().OfType<T>().ToArray(); }
 
 		public GameObject gameObject = null;
 

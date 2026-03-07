@@ -8,6 +8,7 @@ using System.Collections;
 using System.Runtime.InteropServices;
 using System.Reflection;
 using System.Threading;
+using UnityEngine.SceneManagement;
 
 
 namespace TestCilbox
@@ -344,7 +345,7 @@ namespace TestCilbox
 
 			// let the CI take its time running Start()
 			cb.timeoutLengthUs = 200000; // 200ms
-			Cilbox.CilboxScenePostprocessor.OnPostprocessScene();
+			Cilbox.CilboxScenePostprocessor.OnPostprocessScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene() );
 			Application.CallBeforeRender();
 
 			Thread.Sleep(50); // Give assembly time to write out.
