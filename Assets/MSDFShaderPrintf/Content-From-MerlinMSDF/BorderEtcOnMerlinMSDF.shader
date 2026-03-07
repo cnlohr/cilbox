@@ -26,6 +26,7 @@ Shader "GUI/BorderEtcOnMerlinMSDF"
 		Pass
 		{
 			Tags {"LightMode"="ShadowCaster"}
+			Cull Off
 
 			CGPROGRAM
 			#pragma vertex vert
@@ -59,6 +60,7 @@ Shader "GUI/BorderEtcOnMerlinMSDF"
         {
             Blend SrcAlpha OneMinusSrcAlpha
             ZWrite Off
+			Cull Off
        
             CGPROGRAM
             #pragma vertex vert
