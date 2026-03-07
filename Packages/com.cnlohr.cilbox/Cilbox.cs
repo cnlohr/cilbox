@@ -2418,7 +2418,7 @@ spiperf.End();
 				GameObject[] rootObjects = scene.GetRootGameObjects();
 				foreach (GameObject root in rootObjects)
 				{
-					MonoBehaviour[] components = (MonoBehaviour[])root.GetComponentsInChildren<MonoBehaviour>(true);
+					MonoBehaviour[] components = root.GetComponentsInChildren<MonoBehaviour>(true);
 
 					foreach (MonoBehaviour component in components)
 					{

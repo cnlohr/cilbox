@@ -212,7 +212,7 @@ namespace UnityEngine
 		public HideFlags hideFlags;
 		public Transform transform = new Transform();
 
-		public Object[] GetComponentsInChildren<T>( bool something ) { return AllComponents.ToArray(); }
+		public T[] GetComponentsInChildren<T>( bool something ) { return AllComponents.ToArray().OfType<T>().ToArray(); }
 
 		public GameObject gameObject = null;
 
