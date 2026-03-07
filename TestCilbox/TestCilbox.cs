@@ -16,6 +16,8 @@ namespace TestCilbox
 	[CilboxTarget]
 	public class CilboxTester : Cilbox.Cilbox
 	{
+		public override long MaxTimeoutLengthUs => 2000000; // 2 seconds.
+
 		static HashSet<String> whiteListType = new HashSet<String>(){
 			"Cilbox.CilboxPublicUtils",
 			"TestCilbox.DisposeTester",
@@ -413,6 +415,10 @@ namespace TestCilbox
 
 			cb.disabled = false;
 			proxy.GetType().GetMethod("FixedUpdate",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
+
+			cb.timeoutLengthUs = 3000000; // should be over max
+			Validator.Set("Real timeoutLengthUs", cb.timeoutLengthUs.ToString() );
+			Validator.Validate("Real timeoutLengthUs", cb.MaxTimeoutLengthUs.ToString() );
 
 			Validator.Validate( "Manual Recover After Timeout", "recovered" );
 			Validator.Validate( "FixedUpdate", "called" );

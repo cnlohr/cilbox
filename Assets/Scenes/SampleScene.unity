@@ -1453,7 +1453,7 @@ MonoBehaviour:
   verboseLogging: 0
   disabledReason: 
   disabled: 0
-  timeoutLengthUs: 500000
+  desiredTimeoutLengthUs: 400000
   interpreterAccountingDepth: 0
   interpreterAccountingDropDead: 0
   interpreterAccountingCumulitiveTicks: 0
