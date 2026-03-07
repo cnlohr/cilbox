@@ -2363,7 +2363,7 @@ spiperf.End();
 		public void OnPreprocessBuild(UnityEditor.Build.Reporting.BuildReport report)
 		{
 			UnityEngine.SceneManagement.Scene activeScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
-			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing(activeScene);
+			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing();
 
 			if( allBehavioursThatNeedCilboxing.Length == 0 )
 				return;
@@ -2377,8 +2377,8 @@ spiperf.End();
 			dirtier.hideFlags = HideFlags.HideInHierarchy;
 			dirtier.transform.position = new Vector3(UnityEngine.Random.Range(-100,100),UnityEngine.Random.Range(-100,100),UnityEngine.Random.Range(-100,100));
 			UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
-				UnityEngine.SceneManagement.SceneManager.GetActiveScene() );
-			UnityEditor.SceneManagement.EditorSceneManager.SaveScene( UnityEngine.SceneManagement.SceneManager.GetActiveScene() );
+				activeScene );
+			UnityEditor.SceneManagement.EditorSceneManager.SaveScene( activeScene );
 		}
 	}
 	public class CilboxScenePostprocessor {
@@ -2386,9 +2386,8 @@ spiperf.End();
 		public static void OnPostprocessScene(UnityEngine.SceneManagement.Scene scene) {
 
 			ProfilerMarker perf = new ProfilerMarker("Initial Setup"); perf.Begin();
-			UnityEngine.SceneManagement.Scene scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
 
-			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing(scene);
+			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing();
 
 			Debug.Log( $"Postprocessing scene. Cilbox scripts to do: {allBehavioursThatNeedCilboxing.Length}" );
 			if( allBehavioursThatNeedCilboxing.Length == 0 ) return;
@@ -2411,16 +2410,15 @@ spiperf.End();
 			List<System.Type> TypesInUseInSceneList = new List<System.Type>();
 			HashSet<System.Type> TypesInUseInScene = new HashSet<System.Type>();;
 
-			UnityEngine.SceneManagement.Scene activeScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
 
 			System.Reflection.Assembly [] assys = AppDomain.CurrentDomain.GetAssemblies();
 
-			if( activeScene != null )
+			if( scene != null )
 			{
-				GameObject[] rootObjects = activeScene.GetRootGameObjects();
+				GameObject[] rootObjects = scene.GetRootGameObjects();
 				foreach (GameObject root in rootObjects)
 				{
-					MonoBehaviour[] components = root.GetComponentsInChildren<MonoBehaviour>(true);
+					MonoBehaviour[] components = (MonoBehaviour[])root.GetComponentsInChildren<MonoBehaviour>(true);
 
 					foreach (MonoBehaviour component in components)
 					{
