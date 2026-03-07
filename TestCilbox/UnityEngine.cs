@@ -80,6 +80,11 @@ namespace UnityEngine
 		// Nothing.
 	}
 
+	public class Collision
+	{
+		// Nothing.
+	}
+
 	public static class Application
 	{
 		public static String dataPath = ".";

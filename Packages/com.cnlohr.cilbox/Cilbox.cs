@@ -3041,10 +3041,12 @@ spiperf.End();
 		Update,
 		Start,
 		Awake,
-		OnTriggerEnter,
-		OnTriggerExit,
 		OnEnable,
 		OnDisable,
-		OnDestroy
+		OnDestroy,
+		OnTriggerEnter,
+		OnTriggerExit,
+		OnCollisionEnter,
+		OnCollisionExit
 	}
 }
