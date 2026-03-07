@@ -3030,5 +3030,6 @@ spiperf.End();
 		OnTriggerExit,
 		OnEnable,
 		OnDisable,
+		OnDestroy
 	}
 }
