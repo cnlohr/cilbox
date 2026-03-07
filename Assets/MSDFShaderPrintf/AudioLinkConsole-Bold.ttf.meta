@@ -1,0 +1,21 @@
+fileFormatVersion: 2
+guid: 2f7fe2d02e189f24ba426050fe1b88a1
+TrueTypeFontImporter:
+  externalObjects: {}
+  serializedVersion: 4
+  fontSize: 30
+  forceTextureCase: 0
+  characterSpacing: 4
+  characterPadding: 2
+  includeFontData: 1
+  fontNames:
+  - AudioLink Console Bold
+  fallbackFontReferences: []
+  customCharacters: 
+  fontRenderingMode: 0
+  ascentCalculationMode: 1
+  useLegacyBoundsCalculation: 0
+  shouldRoundAdvanceValue: 1
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
