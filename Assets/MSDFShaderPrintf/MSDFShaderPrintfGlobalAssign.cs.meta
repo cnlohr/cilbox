@@ -1,0 +1,13 @@
+fileFormatVersion: 2
+guid: d6e020de97510834293e486a31d72b30
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - MSDFAssignTexture: {fileID: 18700000, guid: c622bfc8da5b0c445b672da4b018e73b,
+      type: 3}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
