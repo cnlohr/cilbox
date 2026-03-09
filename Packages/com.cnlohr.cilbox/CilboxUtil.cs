@@ -1008,26 +1008,57 @@ namespace Cilbox
 		///////////////////////////////////////////////////////////////////////////
 		//  REFLECTION HELPERS  ///////////////////////////////////////////////////
 		///////////////////////////////////////////////////////////////////////////
-		public static MonoBehaviour [] GetAllBehavioursThatNeedCilboxing()
+		public static MonoBehaviour [] GetAllBehavioursThatNeedCilboxing(UnityEngine.SceneManagement.Scene? scene = null)
 		{
-			List<MonoBehaviour> ret = new List<MonoBehaviour>();
-
-			object[] objToCheck = GameObject.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-			foreach (object o in objToCheck)
+			if (scene != null)
 			{
-				GameObject g = (GameObject) o;
-				MonoBehaviour [] scripts = g.GetComponents<MonoBehaviour>();
-				foreach (MonoBehaviour m in scripts )
+				if( !scene.IsValid() || !scene.isLoaded )
+				return Array.Empty<MonoBehaviour>();
+
+				List<MonoBehaviour> ret = new List<MonoBehaviour>();
+				GameObject[] roots = scene.GetRootGameObjects();
+				int rootLength = roots.Length;
+				for( int i = 0; i < rootLength; i++ )
 				{
-					// Skip null objects.
-					if (m == null)
+					GameObject root = roots[i];
+					if( root == null )
 						continue;
-					if( !HasCilboxableAttribute( m.GetType() ) )
-						continue;
-					ret.Add(m);
+
+					MonoBehaviour[] scripts = root.GetComponentsInChildren<MonoBehaviour>(true);
+					int scriptLength = scripts.Length;
+					for( int scriptIndex = 0; scriptIndex < scriptLength; scriptIndex++ )
+					{
+						MonoBehaviour script = scripts[scriptIndex];
+						if( script == null )
+							continue;
+						if( !HasCilboxableAttribute( script.GetType() ) )
+							continue;
+						ret.Add( script );
+					}
 				}
+				return ret.ToArray();
 			}
-			return ret.ToArray();
+			else
+			{
+				List<MonoBehaviour> ret = new List<MonoBehaviour>();
+
+				object[] objToCheck = GameObject.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+				foreach (object o in objToCheck)
+				{
+					GameObject g = (GameObject) o;
+					MonoBehaviour [] scripts = g.GetComponents<MonoBehaviour>();
+					foreach (MonoBehaviour m in scripts )
+					{
+						// Skip null objects.
+						if (m == null)
+							continue;
+						if( !HasCilboxableAttribute( m.GetType() ) )
+							continue;
+						ret.Add(m);
+					}
+				}
+				return ret.ToArray();
+			}
 		}
 
 		// Checks if the type is nested within a type with the CilboxableAttribute.
