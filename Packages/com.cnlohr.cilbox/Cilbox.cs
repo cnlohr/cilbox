@@ -1,6 +1,7 @@
 //#define PER_INSTRUCTION_PROFILING
 
 using UnityEngine;
+using UnityEngine.Serialization;
 using System.Collections.Generic;
 using System;
 using System.Collections.Specialized;
@@ -1944,7 +1945,15 @@ spiperf.End();
 		public String disabledReason = "";
 		public bool disabled = false;
 
-		public long timeoutLengthUs = 500000; // 500ms Can be changed by specific Cilbox application.
+		[SerializeField][FormerlySerializedAs("timeoutLengthUs")] private long desiredTimeoutLengthUs = 500000; // 500ms Can be changed by specific Cilbox instance.
+		public long timeoutLengthUs
+		{
+			get => desiredTimeoutLengthUs;
+			set => desiredTimeoutLengthUs = Math.Min(value, MaxTimeoutLengthUs);
+		}
+
+		public virtual long MaxTimeoutLengthUs => 1000000; // 1 second. Can be overridden by specific Cilbox application.
+
 		[HideInInspector] public uint interpreterAccountingDepth = 0;
 		[HideInInspector] public long interpreterAccountingDropDead = 0;
 		[HideInInspector] public long interpreterAccountingCumulitiveTicks = 0;
@@ -1978,6 +1987,7 @@ spiperf.End();
 			if( initialized ) return;
 			initialized = true;
 			//Debug.Log( "Cilbox Initialize Metadata:" + assemblyData.Length );
+			timeoutLengthUs = desiredTimeoutLengthUs; // make sure min is applied once.
 
 			Dictionary< String, Serializee > assemblyRoot = new Serializee( Convert.FromBase64String( assemblyData ), Serializee.ElementType.Map ).AsMap();
 			Dictionary< String, Serializee > classData = assemblyRoot["classes"].AsMap();
