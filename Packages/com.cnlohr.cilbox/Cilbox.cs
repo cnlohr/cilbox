@@ -2409,7 +2409,7 @@ spiperf.End();
 	}
 	public class CilboxScenePostprocessor {
 		//[PostProcessSceneAttribute (2)] This is actually called by IProcessSceneWithReport
-		public static void OnPostprocessScene(UnityEngine.SceneManagement.Scene scene) {
+		public static void OnPostprocessScene(UnityEngine.SceneManagement.Scene? scene) {
 
 			ProfilerMarker perf = new ProfilerMarker("Initial Setup"); perf.Begin();
 
@@ -2441,7 +2441,7 @@ spiperf.End();
 
 			if( scene != null )
 			{
-				GameObject[] rootObjects = scene.GetRootGameObjects();
+				GameObject[] rootObjects =((UnityEngine.SceneManagement.Scene) scene).GetRootGameObjects();
 				foreach (GameObject root in rootObjects)
 				{
 					MonoBehaviour[] components = root.GetComponentsInChildren<MonoBehaviour>(true);

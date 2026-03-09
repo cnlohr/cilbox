@@ -1013,8 +1013,11 @@ namespace Cilbox
 			if (scene != null)
 			{
 				UnityEngine.SceneManagement.Scene _scene = (UnityEngine.SceneManagement.Scene)scene;
-				if( !_scene.IsValid() || !_scene.isLoaded )
-				return Array.Empty<MonoBehaviour>();
+				if( !_scene.IsValid())
+				{
+					Debug.LogWarning($"Scene {_scene.name} is not valid. Returning empty MonoBehaviour array.");					
+					return Array.Empty<MonoBehaviour>();
+				}
 
 				List<MonoBehaviour> ret = new List<MonoBehaviour>();
 				GameObject[] roots = _scene.GetRootGameObjects();

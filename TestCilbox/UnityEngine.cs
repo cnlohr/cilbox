@@ -132,13 +132,15 @@ namespace UnityEngine
 		{
 			public static Scene GetActiveScene() { return Scene.EmptyScene; }
 		}
-		public class Scene
+		public struct Scene
 		{
 			public static Scene EmptyScene = new Scene();
 			public GameObject[] GetRootGameObjects() { return GameObject.AllObjects.ToArray(); }
 			public bool isDirty { get; set; }
 			public bool IsValid () { return true; }
 			public bool isLoaded = true;
+			public string name = "Scene";
+			public Scene() { }
 		}
 	}
 
