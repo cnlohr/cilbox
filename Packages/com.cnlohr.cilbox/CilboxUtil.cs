@@ -1012,11 +1012,12 @@ namespace Cilbox
 		{
 			if (scene != null)
 			{
-				if( !scene.IsValid() || !scene.isLoaded )
+				UnityEngine.SceneManagement.Scene _scene = (UnityEngine.SceneManagement.Scene)scene;
+				if( !_scene.IsValid() || !_scene.isLoaded )
 				return Array.Empty<MonoBehaviour>();
 
 				List<MonoBehaviour> ret = new List<MonoBehaviour>();
-				GameObject[] roots = scene.GetRootGameObjects();
+				GameObject[] roots = _scene.GetRootGameObjects();
 				int rootLength = roots.Length;
 				for( int i = 0; i < rootLength; i++ )
 				{
