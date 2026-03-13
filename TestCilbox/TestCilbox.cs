@@ -321,6 +321,11 @@ namespace TestCilbox
 				}
 			}
 
+			Cilbox.Cilbox.OnCilboxDisabled += (Cilbox.Cilbox box, string reason) =>
+			{
+				Validator.AddCount($"CilboxDisabled_{box.GetType().FullName}");
+			};
+
 			GameObject go = new GameObject("MyObjectToProxy");
 			TestCilboxBehaviour b = go.CreateComponent<TestCilboxBehaviour>();
 
@@ -582,6 +587,8 @@ namespace TestCilbox
 			Validator.Validate("ThrowFromOtherBehaviour2", "caught");
 			Validator.Validate("ThrowFromOtherBehaviour2Finally", "finally");
 			Validator.Validate("ThrowFromOtherConstructor", "caught");
+
+			Validator.ValidateCount($"CilboxDisabled_{cb.GetType().FullName}", 1 );
 
 			if( runPerf )
 			{

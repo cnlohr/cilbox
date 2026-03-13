@@ -1972,6 +1972,10 @@ spiperf.End();
 		abstract public bool CheckTypeAllowed( String sType );
 		abstract public bool CheckFieldAllowed( String sType, String sFieldName );
 
+		public delegate void CilboxDisabledEvent( Cilbox box, string reason );
+
+		public static CilboxDisabledEvent OnCilboxDisabled;
+
 		public void ForceReinit()
 		{
 			initialized = false;
@@ -2353,6 +2357,7 @@ spiperf.End();
 			this.disabledReason = reason;
 			this.disabled = true;
 			//this.InterpreterExit();
+			OnCilboxDisabled?.Invoke(this, reason);
 		}
 	}
 
