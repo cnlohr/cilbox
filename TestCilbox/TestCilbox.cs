@@ -43,6 +43,7 @@ namespace TestCilbox
 			"System.Int16",
 			"System.Int32",
 			"System.Int64",
+			"System.IntPtr",
 			"System.MathF",
 			"System.NullReferenceException",
 			"System.Object",
@@ -561,6 +562,76 @@ namespace TestCilbox
 			Validator.Validate("TestEnum Array int value 1", "1");
 			Validator.Validate("TestEnum Array 2", "ThirdValue");
 			Validator.Validate("TestEnum Array int value 2", "30");
+
+			Validator.Validate("Ushort Array Assigned Length", "3");
+			Validator.Validate("Ushort Array Assigned 0", "7");
+			Validator.Validate("Ushort Array Assigned 1", "1234");
+			Validator.Validate("Ushort Array Assigned 2", "65535");
+
+			Validator.Validate("Ushort Array With Data Length", "3");
+			Validator.Validate("Ushort Array With Data 0", "42");
+			Validator.Validate("Ushort Array With Data 1", "512");
+			Validator.Validate("Ushort Array With Data 2", "60000");
+
+			Validator.Validate("Uint Array Assigned Length", "3");
+			Validator.Validate("Uint Array Assigned 0", "7");
+			Validator.Validate("Uint Array Assigned 1", "1234");
+			Validator.Validate("Uint Array Assigned 2", "4000000000");
+
+			Validator.Validate("Uint Array With Data Length", "3");
+			Validator.Validate("Uint Array With Data 0", "42");
+			Validator.Validate("Uint Array With Data 1", "512");
+			Validator.Validate("Uint Array With Data 2", "3000000000");
+
+			Validator.Validate("Nint Array Assigned Length", "3");
+			Validator.Validate("Nint Array Assigned 0", "7");
+			Validator.Validate("Nint Array Assigned 1", "1234");
+			Validator.Validate("Nint Array Assigned 2", "56789");
+
+			Validator.Validate("Nint Array With Data Length", "3");
+			Validator.Validate("Nint Array With Data 0", "42");
+			Validator.Validate("Nint Array With Data 1", "512");
+			Validator.Validate("Nint Array With Data 2", "9000");
+
+			Validator.Validate("Byte Array Assigned Length", "3");
+			Validator.Validate("Byte Array Assigned 0", "7");
+			Validator.Validate("Byte Array Assigned 1", "123");
+			Validator.Validate("Byte Array Assigned 2", "255");
+
+			Validator.Validate("Byte Array With Data Length", "3");
+			Validator.Validate("Byte Array With Data 0", "42");
+			Validator.Validate("Byte Array With Data 1", "64");
+			Validator.Validate("Byte Array With Data 2", "255");
+
+			Validator.Validate("Float Array Assigned Length", "3");
+			Validator.Validate("Float Array Assigned 0", "1.5");
+			Validator.Validate("Float Array Assigned 1", "2.25");
+			Validator.Validate("Float Array Assigned 2", "3.75");
+
+			Validator.Validate("Float Array With Data Length", "3");
+			Validator.Validate("Float Array With Data 0", "4.5");
+			Validator.Validate("Float Array With Data 1", "6.25");
+			Validator.Validate("Float Array With Data 2", "8.75");
+
+			Validator.Validate("Double Array Assigned Length", "3");
+			Validator.Validate("Double Array Assigned 0", "1.5");
+			Validator.Validate("Double Array Assigned 1", "2.25");
+			Validator.Validate("Double Array Assigned 2", "3.75");
+
+			Validator.Validate("Double Array With Data Length", "3");
+			Validator.Validate("Double Array With Data 0", "4.5");
+			Validator.Validate("Double Array With Data 1", "6.25");
+			Validator.Validate("Double Array With Data 2", "8.75");
+
+			Validator.Validate("Object Array Assigned Length", "3");
+			Validator.Validate("Object Array Assigned 0", "alpha");
+			Validator.Validate("Object Array Assigned 1", "42");
+			Validator.Validate("Object Array Assigned 2", "gamma");
+
+			Validator.Validate("Object Array With Data Length", "3");
+			Validator.Validate("Object Array With Data 0", "beta");
+			Validator.Validate("Object Array With Data 1", "64");
+			Validator.Validate("Object Array With Data 2", "delta");
 
 			// Boxing enums
 			Validator.Validate("Boxed MyEnum", "Value2");
