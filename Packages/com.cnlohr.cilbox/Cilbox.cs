@@ -2793,6 +2793,7 @@ spiperf.End();
 												{
 													TypesInUseInScene.Add( rf.DeclaringType );
 													TypesInUseInSceneList.Add( rf.DeclaringType );
+													changeOperand = true; // We need to rewrite the operand to point to our new metadata for the field, which will have a reference to the declaring type.
 												}
 
 												Dictionary<String, Serializee> fieldProps = new Dictionary<String, Serializee>();
@@ -2803,12 +2804,6 @@ spiperf.End();
 												fieldProps["isStatic"] = new Serializee( (rf.IsStatic?1:0).ToString() );
 												originalMetaToFriendlyName[writebackToken] = rf.Name;
 												assemblyMetadata[(mdcount++).ToString()] = new Serializee(fieldProps);
-
-												// InlineField operands can be MemberRef tokens even when the resolved field is
-												// an internal cilbox field definition. Keep a second mapping keyed by the
-												// resolved FieldInfo metadata token so the later field-index backfill can
-												// recognize nested/value-type fields and avoid treating them as external.
-												assemblyMetadataReverseOriginal[(rf.DeclaringType.Assembly, rf.MetadataToken)] = writebackToken;
 											}
 										}
 										else if( ot == CilboxUtil.OpCodes.OperandType.InlineType )
