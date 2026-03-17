@@ -552,6 +552,13 @@ namespace TestCilbox
 			Validator.Validate("(byte)TestState Field == Playing", "True");
 			Validator.Validate("(byte)TestState Field == Paused", "False");
 
+			Validator.Validate("TestPayload Field Score", "123");
+			Validator.Validate("TestPayload Field Lives", "4");
+			Validator.Validate("TestPayload Local Score", "77");
+			Validator.Validate("TestPayload Local Lives", "2");
+			Validator.Validate("TestPayload Local Score Mutated", "82");
+			Validator.Validate("TestPayload Local Lives Mutated", "3");
+
 			// Enum method calls (MyEnum is Cilboxable)
 			Validator.ValidateCount("MyEnumMethod", 2);
 			Validator.Validate("MyEnumMethod_1", "Value1");
@@ -565,6 +572,8 @@ namespace TestCilbox
 			Validator.ValidateCount("TestStateMethod", 2);
 			Validator.Validate("TestStateMethod_1", "Stopped");
 			Validator.Validate("TestStateMethod_2", "Playing");
+			Validator.Validate("TestPayloadMethod Score", "82");
+			Validator.Validate("TestPayloadMethod Lives", "3");
 
 			// MyEnum array (Cilboxable)
 			Validator.Validate("MyEnum Array 0", "Value1");
@@ -588,6 +597,10 @@ namespace TestCilbox
 			Validator.Validate("TestState Array byte value 1", "1");
 			Validator.Validate("TestState Array 2", "Paused");
 			Validator.Validate("TestState Array byte value 2", "2");
+			Validator.Validate("TestPayload Array Score 0", "10");
+			Validator.Validate("TestPayload Array Lives 0", "1");
+			Validator.Validate("TestPayload Array Score 1", "20");
+			Validator.Validate("TestPayload Array Lives 1", "3");
 
 			// Boxing enums
 			Validator.Validate("Boxed MyEnum", "Value2");

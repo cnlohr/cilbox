@@ -24,6 +24,7 @@ namespace TestCilbox
 		public MyEnum myEnumField = MyEnum.Value2;
 		public TestEnum testEnumField = TestEnum.SecondValue;
 		private TestState testStateField = TestState.Playing;
+		private TestPayload testPayloadField = new TestPayload { Score = 123, Lives = 4 };
 
 		public enum MyEnum
 		{
@@ -37,6 +38,12 @@ namespace TestCilbox
 			Stopped = 0,
 			Playing = 1,
 			Paused = 2,
+		}
+
+		private struct TestPayload
+		{
+			public int Score;
+			public byte Lives;
 		}
 
 		public TestCilboxBehaviour() { }
@@ -329,12 +336,23 @@ namespace TestCilbox
 			Validator.Set("(byte)TestState Field == Playing", ((byte)testStateField == (byte)TestState.Playing).ToString() );
 			Validator.Set("(byte)TestState Field == Paused", ((byte)testStateField == (byte)TestState.Paused).ToString() );
 
+			Validator.Set("TestPayload Field Score", testPayloadField.Score.ToString() );
+			Validator.Set("TestPayload Field Lives", testPayloadField.Lives.ToString() );
+			TestPayload payload = new TestPayload { Score = 77, Lives = 2 };
+			Validator.Set("TestPayload Local Score", payload.Score.ToString() );
+			Validator.Set("TestPayload Local Lives", payload.Lives.ToString() );
+			payload.Score += 5;
+			payload.Lives += 1;
+			Validator.Set("TestPayload Local Score Mutated", payload.Score.ToString() );
+			Validator.Set("TestPayload Local Lives Mutated", payload.Lives.ToString() );
+
 			MyEnumMethod(MyEnum.Value1);
 			MyEnumMethod(myEnumField);
 			TestEnumMethod(TestEnum.FirstValue);
 			TestEnumMethod(testEnumField);
 			TestStateMethod(TestState.Stopped);
 			TestStateMethod(testStateField);
+			TestPayloadMethod(payload);
 
 			MyEnum[] myEnumArr = new MyEnum[] { MyEnum.Value1, MyEnum.Value2, MyEnum.Value3 };
 			for (int j = 0; j < myEnumArr.Length; j++) {
@@ -354,6 +372,17 @@ namespace TestCilbox
 			{
 				Validator.Set("TestState Array " + j, testStateArr[j].ToString() );
 				Validator.Set("TestState Array byte value " + j, ((byte)testStateArr[j]).ToString() );
+			}
+
+			TestPayload[] payloadArr = new TestPayload[]
+			{
+				new TestPayload { Score = 10, Lives = 1 },
+				new TestPayload { Score = 20, Lives = 3 },
+			};
+			for (int j = 0; j < payloadArr.Length; j++)
+			{
+				Validator.Set("TestPayload Array Score " + j, payloadArr[j].Score.ToString() );
+				Validator.Set("TestPayload Array Lives " + j, payloadArr[j].Lives.ToString() );
 			}
 
 			object boxedMyEnum = MyEnum.Value2;
@@ -572,6 +601,12 @@ namespace TestCilbox
 		{
 			Validator.AddCount("TestStateMethod");
 			Validator.Set("TestStateMethod_" + Validator.GetCount("TestStateMethod"), state.ToString() );
+		}
+
+		private void TestPayloadMethod(TestPayload payload)
+		{
+			Validator.Set("TestPayloadMethod Score", payload.Score.ToString() );
+			Validator.Set("TestPayloadMethod Lives", payload.Lives.ToString() );
 		}
 
 		public void TestOutVec3(out Vector3 vec)

@@ -1400,8 +1400,15 @@ spiperf.Begin();
 							interpretedThrow(pc - 1, new IndexOutOfRangeException());
 							break;
 						}
-						Type t = box.metadatas[otyp].nativeType;
-						array[index] = Convert.ChangeType( valSE.AsObject(), t );  // This shouldn't be type changing.s
+						CilMetadataTokenInfo elemMeta = box.metadatas[otyp];
+						if( elemMeta.nativeTypeIsCilboxProxy || elemMeta.nativeType == null )
+						{
+							array[index] = valSE.AsObject( box );
+						}
+						else
+						{
+							array[index] = Convert.ChangeType( valSE.AsObject(), elemMeta.nativeType );  // This shouldn't be type changing.s
+						}
 						break;
 					}
 					case 0xA5: // unbox.any
@@ -1529,6 +1536,27 @@ spiperf.Begin();
 								throw new CilboxInterpreterRuntimeException($"Cannot create references to functions outside this cilbox ({dt.Name})", parentClass.className, methodName, pc);
 							stackBuffer[++sp].LoadObject( box.classesList[dt.interpretiveMethodClass].methods[dt.interpretiveMethod] );
 							break;
+						case 0x15: // initobj <typeTok>
+						{
+							uint typeToken = BytecodeAsU32( ref pc );
+							CilMetadataTokenInfo initMeta = box.metadatas[typeToken];
+							StackElement addr = stackBuffer[sp--];
+							object defaultValue = CreateDefaultValueForType( initMeta );
+
+							if( addr.type == StackType.Address )
+							{
+								addr.DereferenceLoadAddress( defaultValue );
+							}
+							else if( addr.type == StackType.NativeHandle )
+							{
+								addr.DereferenceLoadNativeHandle( box, defaultValue );
+							}
+							else
+							{
+								throw new CilboxInterpreterRuntimeException("Invalid stack type for initobj instruction", parentClass.className, methodName, pc);
+							}
+							break;
+						}
 						case 0x16: // constrained.
 							constrainedMeta = box.metadatas[BytecodeAsU32( ref pc )];
 							break;
@@ -1569,6 +1597,73 @@ spiperf.End();
 			//box.InterpreterExit();
 
 			return ( sp == -1 ) ? StackElement.nil : stackBuffer[sp--];
+
+			object CreateDefaultValueForType( CilMetadataTokenInfo typeMeta )
+			{
+				if( typeMeta.nativeTypeIsCilboxProxy )
+				{
+					if( !box.classes.TryGetValue( typeMeta.Name, out int classId ) )
+						throw new CilboxInterpreterRuntimeException($"Could not find internal type for initobj: {typeMeta.Name}", parentClass.className, methodName, pc);
+					return CreateDefaultInternalObject( box.classesList[classId] );
+				}
+
+				if( typeMeta.nativeType != null )
+				{
+					if( !typeMeta.nativeType.IsValueType )
+						return null;
+					try
+					{
+						return Activator.CreateInstance( typeMeta.nativeType );
+					}
+					catch
+					{
+						return null;
+					}
+				}
+
+				return null;
+			}
+
+			CilboxHeapInstance CreateDefaultInternalObject( CilboxClass cls )
+			{
+				CilboxHeapInstance newObj = new CilboxHeapInstance();
+				newObj.className = cls.className;
+				newObj.cls = cls;
+				newObj.fields = new StackElement[cls.instanceFieldNames.Length];
+
+				for( int i = 0; i < cls.instanceFieldNames.Length; i++ )
+				{
+					Type fieldType = cls.instanceFieldTypes[i];
+					if( fieldType == null )
+					{
+						newObj.fields[i].LoadObject( null );
+						continue;
+					}
+
+					StackType fieldStackType = StackElement.StackTypeFromType( fieldType );
+					if( fieldStackType < StackType.Object )
+					{
+						newObj.fields[i].type = fieldStackType;
+					}
+					else if( fieldType.IsValueType )
+					{
+						try
+						{
+							newObj.fields[i].LoadObject( Activator.CreateInstance( fieldType ) );
+						}
+						catch
+						{
+							newObj.fields[i].LoadObject( null );
+						}
+					}
+					else
+					{
+						newObj.fields[i].LoadObject( null );
+					}
+				}
+
+				return newObj;
+			}
 
 			void interpretedThrow(int currentInstruction, object thrownObj)
 			{
@@ -2691,6 +2786,15 @@ spiperf.End();
 												writebackToken = mdcount;
 												FieldInfo rf = proxyAssembly.ManifestModule.ResolveField( (int)operand );
 
+												// Field references can pull in nested/internal value types that are not
+												// directly attached to a scene object. Make sure we serialize those
+												// declaring types just like we already do for referenced methods.
+												if( !TypesInUseInScene.Contains( rf.DeclaringType ) )
+												{
+													TypesInUseInScene.Add( rf.DeclaringType );
+													TypesInUseInSceneList.Add( rf.DeclaringType );
+												}
+
 												Dictionary<String, Serializee> fieldProps = new Dictionary<String, Serializee>();
 												fieldProps["mt"] = new Serializee( ((int)MetaTokenType.mtField).ToString() );
 												fieldProps["dt"] = CilboxUtil.GetSerializeeFromNativeType( rf.DeclaringType );
@@ -2699,6 +2803,12 @@ spiperf.End();
 												fieldProps["isStatic"] = new Serializee( (rf.IsStatic?1:0).ToString() );
 												originalMetaToFriendlyName[writebackToken] = rf.Name;
 												assemblyMetadata[(mdcount++).ToString()] = new Serializee(fieldProps);
+
+												// InlineField operands can be MemberRef tokens even when the resolved field is
+												// an internal cilbox field definition. Keep a second mapping keyed by the
+												// resolved FieldInfo metadata token so the later field-index backfill can
+												// recognize nested/value-type fields and avoid treating them as external.
+												assemblyMetadataReverseOriginal[(rf.DeclaringType.Assembly, rf.MetadataToken)] = writebackToken;
 											}
 										}
 										else if( ot == CilboxUtil.OpCodes.OperandType.InlineType )
