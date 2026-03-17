@@ -4,6 +4,7 @@ using System;
 using System.Collections.Specialized;
 using System.Collections;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -11,7 +12,6 @@ using System.Text;
 using UnityEditor;
 using UnityEditor.Callbacks;
 using System.Reflection;
-using System.IO;
 #endif
 
 namespace Cilbox
@@ -437,8 +437,32 @@ namespace Cilbox
 
 	public class Serializee
 	{
+		public class SerializedPayload
+		{
+			public byte[] rawBytes;
+			public byte[] compressedBytes;
+			public byte[] storedBytes;
+			public bool usingCompressed;
+
+			public int RawSize => rawBytes?.Length ?? 0;
+			public int CompressedSize => compressedBytes?.Length ?? 0;
+			public int StoredSize => storedBytes?.Length ?? 0;
+			public int BytesSaved => RawSize - StoredSize;
+		}
+
+		private class SerializedNode
+		{
+			public ElementType type;
+			public string stringValue;
+			public byte[] blobValue;
+			public List<SerializedNode> children;
+		}
+
 		private Memory<byte> buffer;
 		private ElementType e;
+
+		private const byte CompressedStringRefToken = 5;
+		private static readonly byte[] CompressionMagic = new byte[] { (byte)'C', (byte)'B', (byte)'S', (byte)'1' };
 
 		// TODO: Version 2: Use a string dictionary.
 		// lsb 0..2 = # of bytes to describe length or # of elements (Bytes little endian) Only #'s 0..6 are valid.
@@ -457,7 +481,13 @@ namespace Cilbox
 			Blob = 4,
 		};
 
-		public Serializee( Memory<byte> bufferIn, ElementType eIn ) { buffer = bufferIn; e = eIn; }
+		private Serializee() { }
+
+		public Serializee( Memory<byte> bufferIn, ElementType eIn )
+		{
+			buffer = MaybeExpandCompressedBuffer( bufferIn );
+			e = eIn;
+		}
 
 		public Serializee( String str ) // For serialization
 		{
@@ -619,11 +649,315 @@ namespace Cilbox
 
 		public Memory<byte> DumpAsMemory() { return buffer; } // For getting a serialized buffer.
 
+		public SerializedPayload BuildSerializedPayload()
+		{
+			byte[] rawBytes = buffer.ToArray();
+			byte[] compressedBytes = BuildCompressedBuffer( rawBytes );
+			bool useCompressed = compressedBytes.Length < rawBytes.Length;
+			return new SerializedPayload()
+			{
+				rawBytes = rawBytes,
+				compressedBytes = compressedBytes,
+				storedBytes = useCompressed ? compressedBytes : rawBytes,
+				usingCompressed = useCompressed,
+			};
+		}
+
+		public static byte[] ExpandSerializedBuffer( byte[] bufferIn )
+		{
+			return MaybeExpandCompressedBuffer( new Memory<byte>( bufferIn ) ).ToArray();
+		}
+
 		// Serialization Helpers
 		private int SpliceInto( Span<byte> si )
 		{
 			buffer.Span.CopyTo( si );
 			return buffer.Length;
+		}
+
+		private static Memory<byte> MaybeExpandCompressedBuffer( Memory<byte> bufferIn )
+		{
+			if( !IsCompressedBuffer( bufferIn.Span ) )
+				return bufferIn;
+			return new Memory<byte>( ExpandCompressedBuffer( bufferIn.Span ) );
+		}
+
+		private static bool IsCompressedBuffer( ReadOnlySpan<byte> bytes )
+		{
+			if( bytes.Length < CompressionMagic.Length + 1 )
+				return false;
+			for( int i = 0; i < CompressionMagic.Length; i++ )
+			{
+				if( bytes[i] != CompressionMagic[i] )
+					return false;
+			}
+			return true;
+		}
+
+		private static byte[] BuildCompressedBuffer( byte[] rawBytes )
+		{
+			int offset = 0;
+			SerializedNode root = ParseRawNode( rawBytes, ref offset );
+			if( offset != rawBytes.Length )
+				throw new Exception( "Compressed serialization parse did not consume full buffer." );
+
+			Dictionary<string, int> stringCounts = new Dictionary<string, int>();
+			CollectStringCounts( root, stringCounts );
+
+			List<KeyValuePair<string, int>> orderedStrings = new List<KeyValuePair<string, int>>( stringCounts );
+			orderedStrings.Sort( (a, b) =>
+			{
+				int lenDiff = Encoding.UTF8.GetByteCount( b.Key ).CompareTo( Encoding.UTF8.GetByteCount( a.Key ) );
+				if( lenDiff != 0 ) return lenDiff;
+				int countDiff = b.Value.CompareTo( a.Value );
+				if( countDiff != 0 ) return countDiff;
+				return string.CompareOrdinal( a.Key, b.Key );
+			} );
+
+			List<string> dictionaryStrings = new List<string>();
+			Dictionary<string, int> dictionaryIndexes = new Dictionary<string, int>();
+			foreach( var entry in orderedStrings )
+			{
+				int utf8Length = Encoding.UTF8.GetByteCount( entry.Key );
+				int rawBodySize = ComputeVarUIntLength( (uint)utf8Length ) + utf8Length;
+				int dictEntrySize = rawBodySize;
+				int referenceSize = ComputeVarUIntLength( (uint)dictionaryStrings.Count );
+				int savings = (entry.Value * rawBodySize) - (dictEntrySize + (entry.Value * referenceSize));
+				if( savings <= 0 )
+					continue;
+				dictionaryIndexes[entry.Key] = dictionaryStrings.Count;
+				dictionaryStrings.Add( entry.Key );
+			}
+
+			using( MemoryStream stream = new MemoryStream( rawBytes.Length ) )
+			{
+				stream.Write( CompressionMagic, 0, CompressionMagic.Length );
+				WriteVarUInt( stream, (uint)dictionaryStrings.Count );
+				for( int i = 0; i < dictionaryStrings.Count; i++ )
+				{
+					byte[] utf8 = Encoding.UTF8.GetBytes( dictionaryStrings[i] );
+					WriteVarUInt( stream, (uint)utf8.Length );
+					stream.Write( utf8, 0, utf8.Length );
+				}
+				WriteCompressedNode( stream, root, dictionaryIndexes );
+				return stream.ToArray();
+			}
+		}
+
+		private static byte[] ExpandCompressedBuffer( ReadOnlySpan<byte> bytes )
+		{
+			int offset = CompressionMagic.Length;
+			int dictionaryCount = (int)ReadVarUInt( bytes, ref offset );
+			string[] dictionary = new string[dictionaryCount];
+			for( int i = 0; i < dictionaryCount; i++ )
+			{
+				int utf8Length = (int)ReadVarUInt( bytes, ref offset );
+				dictionary[i] = Encoding.UTF8.GetString( bytes.Slice( offset, utf8Length ).ToArray() );
+				offset += utf8Length;
+			}
+
+			SerializedNode root = ReadCompressedNode( bytes, ref offset, dictionary );
+			if( offset != bytes.Length )
+				throw new Exception( "Compressed serialization decode did not consume full buffer." );
+
+			return SerializeNodeToRawBytes( root );
+		}
+
+		private static SerializedNode ParseRawNode( ReadOnlySpan<byte> bytes, ref int offset )
+		{
+			(int len, ElementType type) = PullInfo( bytes, ref offset );
+			switch( type )
+			{
+			case ElementType.String:
+			{
+				string value = Encoding.UTF8.GetString( bytes.Slice( offset, len ).ToArray() );
+				offset += len;
+				return new SerializedNode() { type = type, stringValue = value };
+			}
+			case ElementType.Blob:
+			{
+				byte[] blob = bytes.Slice( offset, len ).ToArray();
+				offset += len;
+				return new SerializedNode() { type = type, blobValue = blob };
+			}
+			case ElementType.List:
+			case ElementType.Map:
+			{
+				int payloadStart = offset;
+				(int elementCount, ElementType countType) = PullInfo( bytes, ref offset );
+				if( countType != ElementType.Invalid )
+					throw new Exception( $"Invalid list payload header {countType}" );
+				List<SerializedNode> children = new List<SerializedNode>( elementCount );
+				for( int i = 0; i < elementCount; i++ )
+					children.Add( ParseRawNode( bytes, ref offset ) );
+				if( offset != payloadStart + len )
+					throw new Exception( "List decode length mismatch." );
+				return new SerializedNode() { type = type, children = children };
+			}
+			default:
+				throw new Exception( $"Unsupported serialized element type {type}" );
+			}
+		}
+
+		private static byte[] SerializeNodeToRawBytes( SerializedNode node )
+		{
+			Serializee s = SerializeNode( node );
+			return s.DumpAsMemory().ToArray();
+		}
+
+		private static Serializee SerializeNode( SerializedNode node )
+		{
+			switch( node.type )
+			{
+			case ElementType.String:
+				return new Serializee( node.stringValue );
+			case ElementType.Blob:
+				return CreateFromBlob( node.blobValue );
+			case ElementType.List:
+			case ElementType.Map:
+			{
+				Serializee[] children = new Serializee[node.children.Count];
+				for( int i = 0; i < children.Length; i++ )
+					children[i] = SerializeNode( node.children[i] );
+				Serializee listSerializee = new Serializee();
+				listSerializee.SetAsList( children, node.type );
+				return listSerializee;
+			}
+			default:
+				throw new Exception( $"Unsupported serialized element type {node.type}" );
+			}
+		}
+
+		private static void CollectStringCounts( SerializedNode node, Dictionary<string, int> counts )
+		{
+			if( node.type == ElementType.String )
+			{
+				int existingCount;
+				counts.TryGetValue( node.stringValue, out existingCount );
+				counts[node.stringValue] = existingCount + 1;
+				return;
+			}
+
+			if( node.children == null )
+				return;
+
+			for( int i = 0; i < node.children.Count; i++ )
+				CollectStringCounts( node.children[i], counts );
+		}
+
+		private static void WriteCompressedNode( Stream stream, SerializedNode node, Dictionary<string, int> dictionaryIndexes )
+		{
+			switch( node.type )
+			{
+			case ElementType.String:
+			{
+				int index;
+				if( dictionaryIndexes.TryGetValue( node.stringValue, out index ) )
+				{
+					stream.WriteByte( CompressedStringRefToken );
+					WriteVarUInt( stream, (uint)index );
+				}
+				else
+				{
+					stream.WriteByte( (byte)ElementType.String );
+					byte[] utf8 = Encoding.UTF8.GetBytes( node.stringValue );
+					WriteVarUInt( stream, (uint)utf8.Length );
+					stream.Write( utf8, 0, utf8.Length );
+				}
+				break;
+			}
+			case ElementType.Blob:
+				stream.WriteByte( (byte)ElementType.Blob );
+				WriteVarUInt( stream, (uint)node.blobValue.Length );
+				stream.Write( node.blobValue, 0, node.blobValue.Length );
+				break;
+			case ElementType.List:
+			case ElementType.Map:
+				stream.WriteByte( (byte)node.type );
+				WriteVarUInt( stream, (uint)node.children.Count );
+				for( int i = 0; i < node.children.Count; i++ )
+					WriteCompressedNode( stream, node.children[i], dictionaryIndexes );
+				break;
+			default:
+				throw new Exception( $"Unsupported serialized element type {node.type}" );
+			}
+		}
+
+		private static SerializedNode ReadCompressedNode( ReadOnlySpan<byte> bytes, ref int offset, string[] dictionary )
+		{
+			byte token = bytes[offset++];
+			switch( token )
+			{
+			case (byte)ElementType.String:
+			{
+				int utf8Length = (int)ReadVarUInt( bytes, ref offset );
+				string value = Encoding.UTF8.GetString( bytes.Slice( offset, utf8Length ).ToArray() );
+				offset += utf8Length;
+				return new SerializedNode() { type = ElementType.String, stringValue = value };
+			}
+			case CompressedStringRefToken:
+			{
+				int index = (int)ReadVarUInt( bytes, ref offset );
+				if( index < 0 || index >= dictionary.Length )
+					throw new Exception( $"Serialized string dictionary index out of range: {index}" );
+				return new SerializedNode() { type = ElementType.String, stringValue = dictionary[index] };
+			}
+			case (byte)ElementType.Blob:
+			{
+				int length = (int)ReadVarUInt( bytes, ref offset );
+				byte[] blob = bytes.Slice( offset, length ).ToArray();
+				offset += length;
+				return new SerializedNode() { type = ElementType.Blob, blobValue = blob };
+			}
+			case (byte)ElementType.List:
+			case (byte)ElementType.Map:
+			{
+				int count = (int)ReadVarUInt( bytes, ref offset );
+				List<SerializedNode> children = new List<SerializedNode>( count );
+				for( int i = 0; i < count; i++ )
+					children.Add( ReadCompressedNode( bytes, ref offset, dictionary ) );
+				return new SerializedNode() { type = (ElementType)token, children = children };
+			}
+			default:
+				throw new Exception( $"Unsupported compressed serialized token {token}" );
+			}
+		}
+
+		private static void WriteVarUInt( Stream stream, uint value )
+		{
+			while( value >= 0x80 )
+			{
+				stream.WriteByte( (byte)((value & 0x7f) | 0x80) );
+				value >>= 7;
+			}
+			stream.WriteByte( (byte)value );
+		}
+
+		private static uint ReadVarUInt( ReadOnlySpan<byte> bytes, ref int offset )
+		{
+			uint value = 0;
+			int shift = 0;
+			while( true )
+			{
+				if( shift > 28 )
+					throw new Exception( "VarUInt too large." );
+				byte chunk = bytes[offset++];
+				value |= (uint)(chunk & 0x7f) << shift;
+				if( (chunk & 0x80) == 0 )
+					return value;
+				shift += 7;
+			}
+		}
+
+		private static int ComputeVarUIntLength( uint value )
+		{
+			int len = 1;
+			while( value >= 0x80 )
+			{
+				value >>= 7;
+				len++;
+			}
+			return len;
 		}
 
 		static private byte ComputeLengthBytes( int len )
@@ -648,9 +982,9 @@ namespace Cilbox
 		}
 
 		// Deserialization Helpers
-		private (int, ElementType) PullInfo( Span<byte> b, ref int i )
+		private static (int, ElementType) PullInfo( ReadOnlySpan<byte> b, ref int i )
 		{
-			if( buffer.Length <= 0 ) return ( 0, 0 );
+			if( b.Length <= 0 ) return ( 0, 0 );
 			byte bl = b[i++]; // info byte
 			int len = 0;
 			int lend = bl & 0x7;
@@ -683,6 +1017,20 @@ namespace Cilbox
 
 	public static class CilboxUtil
 	{
+		public static string BuildSerializedDebugView( Serializee.SerializedPayload payload )
+		{
+			int savings = payload.RawSize - payload.CompressedSize;
+			float percent = payload.RawSize > 0 ? (100.0f * savings) / payload.RawSize : 0.0f;
+			string mode = payload.usingCompressed ? "compressed" : "raw";
+			StringBuilder sb = new StringBuilder();
+			sb.AppendLine( $"raw={payload.RawSize} bytes compressed={payload.CompressedSize} bytes stored={payload.StoredSize} bytes saved={savings} bytes ({percent:0.0}%) mode={mode}" );
+			sb.AppendLine( "raw:" );
+			sb.AppendLine( Convert.ToBase64String( payload.rawBytes ) );
+			sb.AppendLine( "compressed:" );
+			sb.Append( Convert.ToBase64String( payload.compressedBytes ) );
+			return sb.ToString();
+		}
+
 		// Used both in Cilbox + CilboxProxy for getting strings of fields into objects.
 		public static object DeserializeDataForProxyField( Type t, String sInitialize )
 		{
@@ -752,7 +1100,11 @@ namespace Cilbox
 		public static void AssemblyLoggerTask( String fileName, String assemblyData, Cilbox b )
 		{
 			StreamWriter CLog = File.CreateText( fileName );
-			CLog.WriteLine( "Cilbox Size: " + assemblyData.Length + " bytes." );
+			byte[] storedBytes = Convert.FromBase64String( assemblyData );
+			byte[] rawBytes = Serializee.ExpandSerializedBuffer( storedBytes );
+			Serializee.SerializedPayload payload = new Serializee( rawBytes, Serializee.ElementType.Map ).BuildSerializedPayload();
+			CLog.WriteLine( BuildSerializedDebugView( payload ) );
+			CLog.WriteLine();
 
 			try
 			{
@@ -762,7 +1114,7 @@ namespace Cilbox
 				Dictionary< String, int > classes;
 				CilboxClass [] classesList;
 
-				Dictionary< String, Serializee > assemblyRoot = new Serializee( Convert.FromBase64String( assemblyData ), Serializee.ElementType.Map ).AsMap();
+				Dictionary< String, Serializee > assemblyRoot = new Serializee( storedBytes, Serializee.ElementType.Map ).AsMap();
 				Dictionary< String, Serializee > classData = assemblyRoot["classes"].AsMap();
 				Dictionary< String, Serializee > metaData = assemblyRoot["metadata"].AsMap();
 
