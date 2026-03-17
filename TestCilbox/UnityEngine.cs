@@ -149,10 +149,15 @@ namespace UnityEngine
 	};
 
 
-	public class MonoBehaviour : Object
+	public class MonoBehaviour : Behaviour
 	{
-		public GameObject gameObject;
 		public MonoBehaviour() { }
+	}
+
+	public class Behaviour : Component
+	{
+		public bool enabled = true;
+		public Behaviour() { }
 	}
 
 	public class Debug
@@ -204,11 +209,11 @@ namespace UnityEngine
 	{
 		public Vector3 position;
 		public GameObject parent = null;
-		public GameObject gameObject = null;
 	}
 
 	public class Component : Object
 	{
+		public GameObject gameObject = null;
 	}
 
 	public class GameObject : UnityEngine.Object
@@ -242,24 +247,23 @@ namespace UnityEngine
 
 		public static implicit operator bool(GameObject obj) { return obj != null; }
 
-		public T CreateComponent<T>() where T: MonoBehaviour, new() {
-			T ret = (T)AddComponent( typeof(T) );
-			return (T)ret;
+		public T CreateComponent<T>() where T: Component, new() {
+			return (T)AddComponent( typeof(T) );
 		}
 
-		public T AddComponent<T>() where T : MonoBehaviour
+		public T AddComponent<T>() where T : Component
 		{
 	        ConstructorInfo ctor = typeof(T).GetConstructor(new Type[]{});
 			T m = (T)ctor.Invoke(new object[] {});
 			m.gameObject = this;
 			AllComponents.Add(m);
-			return (T)m;
+			return m;
 		}
 
-		public MonoBehaviour AddComponent( Type t )
+		public Component AddComponent( Type t )
 		{
 	        ConstructorInfo ctor = t.GetConstructor(new Type[]{});
-			MonoBehaviour m = (MonoBehaviour)ctor.Invoke(new object[] {});
+			Component m = (Component)ctor.Invoke(new object[] {});
 			m.gameObject = this;
 			AllComponents.Add(m);
 			return m;
