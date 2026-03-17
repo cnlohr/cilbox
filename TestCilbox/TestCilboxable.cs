@@ -23,12 +23,20 @@ namespace TestCilbox
 		public TestCilboxBehaviour3[] myBehaviour3Arr;
 		public MyEnum myEnumField = MyEnum.Value2;
 		public TestEnum testEnumField = TestEnum.SecondValue;
+		private TestState testStateField = TestState.Playing;
 
 		public enum MyEnum
 		{
 			Value1,
 			Value2,
 			Value3 = 30,
+		}
+
+		private enum TestState : byte
+		{
+			Stopped = 0,
+			Playing = 1,
+			Paused = 2,
 		}
 
 		public TestCilboxBehaviour() { }
@@ -306,10 +314,27 @@ namespace TestCilbox
 			Validator.Set("TestEnumNativeEqualsSecondValue", TestUtil.TestEnumNativeEquals(testEnumField, TestEnum.SecondValue).ToString() );
 			Validator.Set("TestEnumNativeEqualsThirdValue", TestUtil.TestEnumNativeEquals(testEnumField, TestEnum.ThirdValue).ToString() );
 
+			Validator.Set("TestState.Stopped", TestState.Stopped.ToString() );
+			Validator.Set("TestState.Playing", TestState.Playing.ToString() );
+			Validator.Set("TestState.Paused", TestState.Paused.ToString() );
+			Validator.Set("(byte)TestState.Stopped", ((byte)TestState.Stopped).ToString() );
+			Validator.Set("(byte)TestState.Playing", ((byte)TestState.Playing).ToString() );
+			Validator.Set("(byte)TestState.Paused", ((byte)TestState.Paused).ToString() );
+			Validator.Set("TestState Field", testStateField.ToString() );
+			Validator.Set("(byte)TestState Field", ((byte)testStateField).ToString() );
+			Validator.Set("TestState Field == Stopped", (testStateField == TestState.Stopped).ToString() );
+			Validator.Set("TestState Field == Playing", (testStateField == TestState.Playing).ToString() );
+			Validator.Set("TestState Field == Paused", (testStateField == TestState.Paused).ToString() );
+			Validator.Set("(byte)TestState Field == Stopped", ((byte)testStateField == (byte)TestState.Stopped).ToString() );
+			Validator.Set("(byte)TestState Field == Playing", ((byte)testStateField == (byte)TestState.Playing).ToString() );
+			Validator.Set("(byte)TestState Field == Paused", ((byte)testStateField == (byte)TestState.Paused).ToString() );
+
 			MyEnumMethod(MyEnum.Value1);
 			MyEnumMethod(myEnumField);
 			TestEnumMethod(TestEnum.FirstValue);
 			TestEnumMethod(testEnumField);
+			TestStateMethod(TestState.Stopped);
+			TestStateMethod(testStateField);
 
 			MyEnum[] myEnumArr = new MyEnum[] { MyEnum.Value1, MyEnum.Value2, MyEnum.Value3 };
 			for (int j = 0; j < myEnumArr.Length; j++) {
@@ -322,6 +347,13 @@ namespace TestCilbox
 			{
 				Validator.Set("TestEnum Array " + j, enumArr[j].ToString() );
 				Validator.Set("TestEnum Array int value " + j, ((int)enumArr[j]).ToString() );
+			}
+
+			TestState[] testStateArr = new TestState[] { TestState.Stopped, TestState.Playing, TestState.Paused };
+			for (int j = 0; j < testStateArr.Length; j++)
+			{
+				Validator.Set("TestState Array " + j, testStateArr[j].ToString() );
+				Validator.Set("TestState Array byte value " + j, ((byte)testStateArr[j]).ToString() );
 			}
 
 			object boxedMyEnum = MyEnum.Value2;
@@ -534,6 +566,12 @@ namespace TestCilbox
 		{
 			Validator.AddCount("TestEnumMethod");
 			Validator.Set("TestEnumMethod_" + Validator.GetCount("TestEnumMethod"), e.ToString() );
+		}
+
+		private void TestStateMethod(TestState state)
+		{
+			Validator.AddCount("TestStateMethod");
+			Validator.Set("TestStateMethod_" + Validator.GetCount("TestStateMethod"), state.ToString() );
 		}
 
 		public void TestOutVec3(out Vector3 vec)
