@@ -384,6 +384,110 @@ namespace TestCilbox
 				Validator.Set("TestPayload Array Score " + j, payloadArr[j].Score.ToString() );
 				Validator.Set("TestPayload Array Lives " + j, payloadArr[j].Lives.ToString() );
 			}
+			ushort[] ushortAssigned = new ushort[3];
+			ushortAssigned[0] = 7;
+			ushortAssigned[1] = 1234;
+			ushortAssigned[2] = 65535;
+			Validator.Set("Ushort Array Assigned Length", ushortAssigned.Length.ToString() );
+			Validator.Set("Ushort Array Assigned 0", ushortAssigned[0].ToString() );
+			Validator.Set("Ushort Array Assigned 1", ushortAssigned[1].ToString() );
+			Validator.Set("Ushort Array Assigned 2", ushortAssigned[2].ToString() );
+
+			ushort[] ushortWithData = new ushort[] { 42, 512, 60000 };
+			Validator.Set("Ushort Array With Data Length", ushortWithData.Length.ToString() );
+			Validator.Set("Ushort Array With Data 0", ushortWithData[0].ToString() );
+			Validator.Set("Ushort Array With Data 1", ushortWithData[1].ToString() );
+			Validator.Set("Ushort Array With Data 2", ushortWithData[2].ToString() );
+
+			uint[] uintAssigned = new uint[3];
+			uintAssigned[0] = 7u;
+			uintAssigned[1] = 1234u;
+			uintAssigned[2] = 4000000000u;
+			Validator.Set("Uint Array Assigned Length", uintAssigned.Length.ToString() );
+			Validator.Set("Uint Array Assigned 0", uintAssigned[0].ToString() );
+			Validator.Set("Uint Array Assigned 1", uintAssigned[1].ToString() );
+			Validator.Set("Uint Array Assigned 2", uintAssigned[2].ToString() );
+
+			uint[] uintWithData = new uint[] { 42u, 512u, 3000000000u };
+			Validator.Set("Uint Array With Data Length", uintWithData.Length.ToString() );
+			Validator.Set("Uint Array With Data 0", uintWithData[0].ToString() );
+			Validator.Set("Uint Array With Data 1", uintWithData[1].ToString() );
+			Validator.Set("Uint Array With Data 2", uintWithData[2].ToString() );
+
+			nint[] nintAssigned = new nint[3];
+			nintAssigned[0] = (nint)7;
+			nintAssigned[1] = (nint)1234;
+			nintAssigned[2] = (nint)56789;
+			Validator.Set("Nint Array Assigned Length", nintAssigned.Length.ToString() );
+			Validator.Set("Nint Array Assigned 0", nintAssigned[0].ToString() );
+			Validator.Set("Nint Array Assigned 1", nintAssigned[1].ToString() );
+			Validator.Set("Nint Array Assigned 2", nintAssigned[2].ToString() );
+
+			nint[] nintWithData = new nint[] { (nint)42, (nint)512, (nint)9000 };
+			Validator.Set("Nint Array With Data Length", nintWithData.Length.ToString() );
+			Validator.Set("Nint Array With Data 0", nintWithData[0].ToString() );
+			Validator.Set("Nint Array With Data 1", nintWithData[1].ToString() );
+			Validator.Set("Nint Array With Data 2", nintWithData[2].ToString() );
+
+			byte[] byteAssigned = new byte[3];
+			byteAssigned[0] = 7;
+			byteAssigned[1] = 123;
+			byteAssigned[2] = 255;
+			Validator.Set("Byte Array Assigned Length", byteAssigned.Length.ToString() );
+			Validator.Set("Byte Array Assigned 0", byteAssigned[0].ToString() );
+			Validator.Set("Byte Array Assigned 1", byteAssigned[1].ToString() );
+			Validator.Set("Byte Array Assigned 2", byteAssigned[2].ToString() );
+
+			byte[] byteWithData = new byte[] { 42, 64, 255 };
+			Validator.Set("Byte Array With Data Length", byteWithData.Length.ToString() );
+			Validator.Set("Byte Array With Data 0", byteWithData[0].ToString() );
+			Validator.Set("Byte Array With Data 1", byteWithData[1].ToString() );
+			Validator.Set("Byte Array With Data 2", byteWithData[2].ToString() );
+
+			float[] floatAssigned = new float[3];
+			floatAssigned[0] = 1.5f;
+			floatAssigned[1] = 2.25f;
+			floatAssigned[2] = 3.75f;
+			Validator.Set("Float Array Assigned Length", floatAssigned.Length.ToString() );
+			Validator.Set("Float Array Assigned 0", floatAssigned[0].ToString() );
+			Validator.Set("Float Array Assigned 1", floatAssigned[1].ToString() );
+			Validator.Set("Float Array Assigned 2", floatAssigned[2].ToString() );
+
+			float[] floatWithData = new float[] { 4.5f, 6.25f, 8.75f };
+			Validator.Set("Float Array With Data Length", floatWithData.Length.ToString() );
+			Validator.Set("Float Array With Data 0", floatWithData[0].ToString() );
+			Validator.Set("Float Array With Data 1", floatWithData[1].ToString() );
+			Validator.Set("Float Array With Data 2", floatWithData[2].ToString() );
+
+			double[] doubleAssigned = new double[3];
+			doubleAssigned[0] = 1.5;
+			doubleAssigned[1] = 2.25;
+			doubleAssigned[2] = 3.75;
+			Validator.Set("Double Array Assigned Length", doubleAssigned.Length.ToString() );
+			Validator.Set("Double Array Assigned 0", doubleAssigned[0].ToString() );
+			Validator.Set("Double Array Assigned 1", doubleAssigned[1].ToString() );
+			Validator.Set("Double Array Assigned 2", doubleAssigned[2].ToString() );
+
+			double[] doubleWithData = new double[] { 4.5, 6.25, 8.75 };
+			Validator.Set("Double Array With Data Length", doubleWithData.Length.ToString() );
+			Validator.Set("Double Array With Data 0", doubleWithData[0].ToString() );
+			Validator.Set("Double Array With Data 1", doubleWithData[1].ToString() );
+			Validator.Set("Double Array With Data 2", doubleWithData[2].ToString() );
+
+			object[] objectAssigned = new object[3];
+			objectAssigned[0] = "alpha";
+			objectAssigned[1] = 42;
+			objectAssigned[2] = "gamma";
+			Validator.Set("Object Array Assigned Length", objectAssigned.Length.ToString() );
+			Validator.Set("Object Array Assigned 0", objectAssigned[0].ToString() );
+			Validator.Set("Object Array Assigned 1", objectAssigned[1].ToString() );
+			Validator.Set("Object Array Assigned 2", objectAssigned[2].ToString() );
+
+			object[] objectWithData = new object[] { "beta", 64, "delta" };
+			Validator.Set("Object Array With Data Length", objectWithData.Length.ToString() );
+			Validator.Set("Object Array With Data 0", objectWithData[0].ToString() );
+			Validator.Set("Object Array With Data 1", objectWithData[1].ToString() );
+			Validator.Set("Object Array With Data 2", objectWithData[2].ToString() );
 
 			object boxedMyEnum = MyEnum.Value2;
 			MyEnum castMyEnum = (MyEnum)boxedMyEnum;
