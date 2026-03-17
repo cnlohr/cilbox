@@ -52,7 +52,6 @@ namespace Cilbox
 		{
 			// Types defined inside this cilbox are serialized and interpreted locally,
 			// so they should not be forced through the native whitelist.
-			if( IsCilboxInternalType( sType ) ) return sType;
 			if( box.CheckTypeAllowed( sType ) == true ) return sType;
 
 			Debug.LogError( $"TYPE FAILED CHECK: {sType}" );
