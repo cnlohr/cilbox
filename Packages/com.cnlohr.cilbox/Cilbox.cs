@@ -403,40 +403,7 @@ spiperf.Begin();
 
 								if( ctorAsNewObj )
 								{
-									CilboxHeapInstance newObj = new CilboxHeapInstance();
-									newObj.className = targetClass.className;
-									newObj.cls = targetClass;
-									newObj.fields = new StackElement[targetClass.instanceFieldNames.Length];
-									for( int i = 0; i < targetClass.instanceFieldNames.Length; i++ )
-									{
-										Type fieldType = targetClass.instanceFieldTypes[i];
-										if( fieldType == null )
-										{
-											newObj.fields[i].LoadObject( null );
-											continue;
-										}
-
-										StackType fieldStackType = StackElement.StackTypeFromType( fieldType );
-										if( fieldStackType < StackType.Object )
-										{
-											newObj.fields[i].type = fieldStackType;
-										}
-										else if( fieldType.IsValueType )
-										{
-											try
-											{
-												newObj.fields[i].LoadObject( Activator.CreateInstance( fieldType ) );
-											}
-											catch
-											{
-												newObj.fields[i].LoadObject( null );
-											}
-										}
-										else
-										{
-											newObj.fields[i].LoadObject( null );
-										}
-									}
+									CilboxHeapInstance newObj = CreateDefaultInternalObject( targetClass );
 									stackBuffer[nextParameterStart].LoadObject( newObj );
 									try
 									{
