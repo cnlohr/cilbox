@@ -1383,6 +1383,7 @@ spiperf.Begin();
 						CilMetadataTokenInfo elemMeta = box.metadatas[otyp];
 						if( elemMeta.nativeTypeIsCilboxProxy || elemMeta.nativeType == null )
 						{
+							// This actually gets the value in valSE, and converts it to the int/float/native handle, etc. based on "this" box.
 							array[index] = valSE.AsObject( box );
 						}
 						else
