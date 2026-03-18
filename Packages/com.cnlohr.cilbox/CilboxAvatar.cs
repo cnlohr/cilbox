@@ -91,7 +91,7 @@ namespace Cilbox
 		}
 
 		// After a type is allowed, this is called to see if the specific method is OK.
-		override public bool CheckMethodAllowed( out MethodInfo mi, Type declaringType, String name, Serializee [] parametersIn, Serializee [] genericArgumentsIn, String fullSignature )
+		override public bool CheckMethodAllowed( out MethodInfo mi, Type declaringType, String name, SerializedTypeDescriptor [] parametersIn, SerializedTypeDescriptor [] genericArgumentsIn, String fullSignature )
 		{
 			mi = null;
 
