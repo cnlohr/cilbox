@@ -46,6 +46,14 @@ namespace TestCilbox
 			public byte Lives;
 		}
 
+		private struct ComplexOutPayload
+		{
+			public string Label;
+			public Vector3 Position;
+			public TestPayload Payload;
+			public TestCilboxBehaviour2 Peer;
+		}
+
 		public TestCilboxBehaviour() { }
 
 		public void RecursiveTest(int i)
@@ -517,6 +525,34 @@ namespace TestCilbox
 			Vector3 alreadyInit = new Vector3(5, 5, 5);
 			TestUtil.GetOutVec3(out alreadyInit);
 			Validator.Set("NativeOutVec3AlreadyInit", alreadyInit.ToString() );
+			bool privateOutSuccess = TryGetPrivateOutInt(out int privateOutInt);
+			Validator.Set("PrivateBoolOutSuccess", privateOutSuccess.ToString() );
+			Validator.Set("PrivateBoolOutInt", privateOutInt.ToString() );
+			int privateOutAlreadyInit = -1;
+			bool privateOutAlreadyInitSuccess = TryGetPrivateOutInt(out privateOutAlreadyInit);
+			Validator.Set("PrivateBoolOutAlreadyInitSuccess", privateOutAlreadyInitSuccess.ToString() );
+			Validator.Set("PrivateBoolOutAlreadyInitInt", privateOutAlreadyInit.ToString() );
+			bool privateComplexOutSuccess = TryGetPrivateComplexOutPayload(out ComplexOutPayload complexOut);
+			Validator.Set("PrivateComplexOutSuccess", privateComplexOutSuccess.ToString() );
+			Validator.Set("PrivateComplexOutLabel", complexOut.Label );
+			Validator.Set("PrivateComplexOutPosition", complexOut.Position.ToString() );
+			Validator.Set("PrivateComplexOutScore", complexOut.Payload.Score.ToString() );
+			Validator.Set("PrivateComplexOutLives", complexOut.Payload.Lives.ToString() );
+			Validator.Set("PrivateComplexOutPeer", complexOut.Peer.pubsettee.ToString() );
+			ComplexOutPayload complexOutAlreadyInit = new ComplexOutPayload
+			{
+				Label = "stale",
+				Position = new Vector3(-1, -1, -1),
+				Payload = new TestPayload { Score = -1, Lives = 0 },
+				Peer = null,
+			};
+			bool privateComplexOutAlreadyInitSuccess = TryGetPrivateComplexOutPayload(out complexOutAlreadyInit);
+			Validator.Set("PrivateComplexOutAlreadyInitSuccess", privateComplexOutAlreadyInitSuccess.ToString() );
+			Validator.Set("PrivateComplexOutAlreadyInitLabel", complexOutAlreadyInit.Label );
+			Validator.Set("PrivateComplexOutAlreadyInitPosition", complexOutAlreadyInit.Position.ToString() );
+			Validator.Set("PrivateComplexOutAlreadyInitScore", complexOutAlreadyInit.Payload.Score.ToString() );
+			Validator.Set("PrivateComplexOutAlreadyInitLives", complexOutAlreadyInit.Payload.Lives.ToString() );
+			Validator.Set("PrivateComplexOutAlreadyInitPeer", complexOutAlreadyInit.Peer.pubsettee.ToString() );
 
 			behaviour2.Behaviour2Test();
 			myBehaviour3Arr = new TestCilboxBehaviour3[] { new TestCilboxBehaviour3(123), new TestCilboxBehaviour3(456)};
@@ -711,6 +747,24 @@ namespace TestCilbox
 		{
 			Validator.Set("TestPayloadMethod Score", payload.Score.ToString() );
 			Validator.Set("TestPayloadMethod Lives", payload.Lives.ToString() );
+		}
+
+		private bool TryGetPrivateOutInt(out int i)
+		{
+			i = ipriviateinance + ipublicinstance;
+			return true;
+		}
+
+		private bool TryGetPrivateComplexOutPayload(out ComplexOutPayload payload)
+		{
+			payload = new ComplexOutPayload
+			{
+				Label = "private-complex",
+				Position = new Vector3(9, 4, 2),
+				Payload = new TestPayload { Score = 321, Lives = 7 },
+				Peer = behaviour2,
+			};
+			return true;
 		}
 
 		public void TestOutVec3(out Vector3 vec)
