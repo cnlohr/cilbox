@@ -33,6 +33,7 @@ namespace Cilbox
 				if ((b & 0x80) == 0) break;
 				shift += 7;
 			}
+
 			return result;
 		}
 
@@ -209,6 +210,118 @@ namespace Cilbox
 				writeElement(arr[i]);
 		}
 
+		// ── Token-based field serialization ──
+		// Format per field: [token:byte] [length:int32] [payload:bytes...]
+		// End of struct:    [0x00]
+
+		public const byte EndOfStruct = 0;
+
+		/// <summary>
+		/// Writes a length-prefixed field: token byte, int32 payload length, then payload.
+		/// </summary>
+		public static void WriteField(List<byte> buf, byte token, Action<List<byte>> writePayload)
+		{
+			buf.Add(token);
+			int lengthPos = buf.Count;
+			buf.Add(0); buf.Add(0); buf.Add(0); buf.Add(0); // placeholder length
+			int dataStart = buf.Count;
+			writePayload(buf);
+			int dataLen = buf.Count - dataStart;
+			Span<byte> tmp = stackalloc byte[4];
+			BinaryPrimitives.WriteInt32LittleEndian(tmp, dataLen);
+			buf[lengthPos] = tmp[0];
+			buf[lengthPos + 1] = tmp[1];
+			buf[lengthPos + 2] = tmp[2];
+			buf[lengthPos + 3] = tmp[3];
+		}
+
+		public static void WriteEndStruct(List<byte> buf) => buf.Add(EndOfStruct);
+
+		// ── WriteField convenience overloads (avoid lambda allocation for common types) ──
+
+		public static void WriteFieldString(List<byte> buf, byte token, string value)
+		{
+			WriteField(buf, token, b => WriteString(b, value));
+		}
+
+		public static void WriteFieldInt(List<byte> buf, byte token, int value)
+		{
+			WriteField(buf, token, b => WriteInt(b, value));
+		}
+
+		public static void WriteFieldBool(List<byte> buf, byte token, bool value)
+		{
+			WriteField(buf, token, b => WriteBool(b, value));
+		}
+
+		public static void WriteFieldByte(List<byte> buf, byte token, byte value)
+		{
+			WriteField(buf, token, b => WriteByte(b, value));
+		}
+
+		public static void WriteFieldLong(List<byte> buf, byte token, long value)
+		{
+			WriteField(buf, token, b => WriteLong(b, value));
+		}
+
+		public static void WriteFieldBlob(List<byte> buf, byte token, byte[] value)
+		{
+			WriteField(buf, token, b => WriteBlob(b, value));
+		}
+
+		/// <summary>
+		/// Writes fields via the callback, then automatically appends EndOfStruct.
+		/// </summary>
+		public static void WriteStruct(List<byte> buf, Action<List<byte>> writeFields)
+		{
+			writeFields(buf);
+			WriteEndStruct(buf);
+		}
+
+		// ── ReadFields helper (encapsulates the token loop) ──
+
+		public delegate void FieldReader(byte token, byte[] buf, ref int pos);
+
+		/// <summary>
+		/// Reads fields in a token loop until EndOfStruct. For each field, calls the handler
+		/// with the token, buffer, and position. Automatically skips to fieldEnd after each field.
+		/// </summary>
+		public static void ReadFields(byte[] buf, ref int pos, FieldReader handler)
+		{
+			while (true)
+			{
+				byte token = ReadFieldToken(buf, ref pos);
+				if (token == EndOfStruct) break;
+				int fieldEnd = ReadFieldLength(buf, ref pos);
+				handler(token, buf, ref pos);
+				pos = fieldEnd;
+			}
+		}
+
+		/// <summary>
+		/// Reads the next field token. Returns EndOfStruct (0) at struct boundary.
+		/// </summary>
+		public static byte ReadFieldToken(byte[] buf, ref int pos) => buf[pos++];
+
+		/// <summary>
+		/// Reads the int32 field payload length and returns the end position of the field.
+		/// The caller reads the payload, then sets pos = fieldEnd to ensure alignment.
+		/// </summary>
+		public static int ReadFieldLength(byte[] buf, ref int pos)
+		{
+			int len = ReadInt(buf, ref pos);
+			return pos + len;
+		}
+
+		/// <summary>
+		/// Skips an unknown field by reading its length prefix and advancing past the payload.
+		/// </summary>
+		public static void SkipField(byte[] buf, ref int pos)
+		{
+			int len = ReadInt(buf, ref pos);
+			pos += len;
+		}
+
 		public static byte[] CompressToBytes(byte version, Action<List<byte>> writePayload)
 		{
 			List<byte> payload = new List<byte>();
@@ -262,50 +375,55 @@ namespace Cilbox
 	{
 		public string assemblyName;
 		public string typeName;
-		// Generic fields (present when isGeneric flag set)
+		// Generic fields (present when genericArgs token written)
 		public string genericName;
 		public SerializedTypeDescriptor[] genericArgs;
-		// Underlying type (present when hasUnderlyingType flag set)
+		// Underlying type (present when underlyingType token written)
 		public SerializedTypeDescriptor underlyingType;
 
 		public bool IsGeneric => genericArgs != null && genericArgs.Length > 0;
 		public bool HasUnderlyingType => underlyingType != null;
 
+		// Field tokens
+		const byte T_AssemblyName = 1;
+		const byte T_TypeName = 2;
+		const byte T_GenericName = 3;
+		const byte T_GenericArgs = 4;
+		const byte T_UnderlyingType = 5;
+
 		public static SerializedTypeDescriptor Read(byte[] buf, ref int pos)
 		{
 			var td = new SerializedTypeDescriptor();
-			byte flags = BinaryHelper.ReadByte(buf, ref pos);
-			td.assemblyName = BinaryHelper.ReadString(buf, ref pos);
-			td.typeName = BinaryHelper.ReadString(buf, ref pos);
-			if ((flags & 1) != 0) // isGeneric
+			BinaryHelper.ReadFields(buf, ref pos, delegate(byte token, byte[] b, ref int p)
 			{
-				td.genericName = BinaryHelper.ReadString(buf, ref pos);
-				td.genericArgs = BinaryHelper.ReadArray(buf, ref pos, Read);
-			}
-			if ((flags & 2) != 0) // hasUnderlyingType
-			{
-				td.underlyingType = Read(buf, ref pos);
-			}
+				switch (token)
+				{
+					case T_AssemblyName: td.assemblyName = BinaryHelper.ReadString(b, ref p); break;
+					case T_TypeName: td.typeName = BinaryHelper.ReadString(b, ref p); break;
+					case T_GenericName: td.genericName = BinaryHelper.ReadString(b, ref p); break;
+					case T_GenericArgs: td.genericArgs = BinaryHelper.ReadArray(b, ref p, Read); break;
+					case T_UnderlyingType: td.underlyingType = Read(b, ref p); break;
+				}
+			});
 			return td;
 		}
 
 		public void Write(List<byte> buf)
 		{
-			byte flags = 0;
-			if (IsGeneric) flags |= 1;
-			if (HasUnderlyingType) flags |= 2;
-			BinaryHelper.WriteByte(buf, flags);
-			BinaryHelper.WriteString(buf, assemblyName);
-			BinaryHelper.WriteString(buf, typeName);
-			if (IsGeneric)
+			BinaryHelper.WriteStruct(buf, b =>
 			{
-				BinaryHelper.WriteString(buf, genericName);
-				BinaryHelper.WriteArray(buf, genericArgs, e => e.Write(buf));
-			}
-			if (HasUnderlyingType)
-			{
-				underlyingType.Write(buf);
-			}
+				BinaryHelper.WriteFieldString(b, T_AssemblyName, assemblyName);
+				BinaryHelper.WriteFieldString(b, T_TypeName, typeName);
+				if (IsGeneric)
+				{
+					BinaryHelper.WriteFieldString(b, T_GenericName, genericName);
+					BinaryHelper.WriteField(b, T_GenericArgs, b2 => BinaryHelper.WriteArray(b2, genericArgs, e => e.Write(b2)));
+				}
+				if (HasUnderlyingType)
+				{
+					BinaryHelper.WriteField(b, T_UnderlyingType, b2 => underlyingType.Write(b2));
+				}
+			});
 		}
 
 	}
@@ -315,18 +433,30 @@ namespace Cilbox
 		public string name;
 		public SerializedTypeDescriptor type;
 
+		const byte T_Name = 1;
+		const byte T_Type = 2;
+
 		public static SerializedField Read(byte[] buf, ref int pos)
 		{
 			var f = new SerializedField();
-			f.name = BinaryHelper.ReadString(buf, ref pos);
-			f.type = SerializedTypeDescriptor.Read(buf, ref pos);
+			BinaryHelper.ReadFields(buf, ref pos, delegate(byte token, byte[] b, ref int p)
+			{
+				switch (token)
+				{
+					case T_Name: f.name = BinaryHelper.ReadString(b, ref p); break;
+					case T_Type: f.type = SerializedTypeDescriptor.Read(b, ref p); break;
+				}
+			});
 			return f;
 		}
 
 		public void Write(List<byte> buf)
 		{
-			BinaryHelper.WriteString(buf, name);
-			type.Write(buf);
+			BinaryHelper.WriteStruct(buf, b =>
+			{
+				BinaryHelper.WriteFieldString(b, T_Name, name);
+				BinaryHelper.WriteField(b, T_Type, b2 => type.Write(b2));
+			});
 		}
 	}
 
@@ -340,30 +470,46 @@ namespace Cilbox
 		public bool hasCatchType;
 		public SerializedTypeDescriptor catchType;
 
+		const byte T_Flags = 1;
+		const byte T_TryOffset = 2;
+		const byte T_TryLength = 3;
+		const byte T_HandlerOffset = 4;
+		const byte T_HandlerLength = 5;
+		const byte T_CatchType = 6; // presence implies hasCatchType=true
+
 		public static SerializedExceptionHandler Read(byte[] buf, ref int pos)
 		{
 			var eh = new SerializedExceptionHandler();
-			eh.flags = BinaryHelper.ReadInt(buf, ref pos);
-			eh.tryOffset = BinaryHelper.ReadInt(buf, ref pos);
-			eh.tryLength = BinaryHelper.ReadInt(buf, ref pos);
-			eh.handlerOffset = BinaryHelper.ReadInt(buf, ref pos);
-			eh.handlerLength = BinaryHelper.ReadInt(buf, ref pos);
-			eh.hasCatchType = BinaryHelper.ReadBool(buf, ref pos);
-			if (eh.hasCatchType)
-				eh.catchType = SerializedTypeDescriptor.Read(buf, ref pos);
+			BinaryHelper.ReadFields(buf, ref pos, delegate(byte token, byte[] b, ref int p)
+			{
+				switch (token)
+				{
+					case T_Flags: eh.flags = BinaryHelper.ReadInt(b, ref p); break;
+					case T_TryOffset: eh.tryOffset = BinaryHelper.ReadInt(b, ref p); break;
+					case T_TryLength: eh.tryLength = BinaryHelper.ReadInt(b, ref p); break;
+					case T_HandlerOffset: eh.handlerOffset = BinaryHelper.ReadInt(b, ref p); break;
+					case T_HandlerLength: eh.handlerLength = BinaryHelper.ReadInt(b, ref p); break;
+					case T_CatchType:
+						eh.hasCatchType = true;
+						eh.catchType = SerializedTypeDescriptor.Read(b, ref p);
+						break;
+				}
+			});
 			return eh;
 		}
 
 		public void Write(List<byte> buf)
 		{
-			BinaryHelper.WriteInt(buf, flags);
-			BinaryHelper.WriteInt(buf, tryOffset);
-			BinaryHelper.WriteInt(buf, tryLength);
-			BinaryHelper.WriteInt(buf, handlerOffset);
-			BinaryHelper.WriteInt(buf, handlerLength);
-			BinaryHelper.WriteBool(buf, hasCatchType);
-			if (hasCatchType)
-				catchType.Write(buf);
+			BinaryHelper.WriteStruct(buf, b =>
+			{
+				BinaryHelper.WriteFieldInt(b, T_Flags, flags);
+				BinaryHelper.WriteFieldInt(b, T_TryOffset, tryOffset);
+				BinaryHelper.WriteFieldInt(b, T_TryLength, tryLength);
+				BinaryHelper.WriteFieldInt(b, T_HandlerOffset, handlerOffset);
+				BinaryHelper.WriteFieldInt(b, T_HandlerLength, handlerLength);
+				if (hasCatchType)
+					BinaryHelper.WriteField(b, T_CatchType, b2 => catchType.Write(b2));
+			});
 		}
 	}
 
@@ -380,37 +526,63 @@ namespace Cilbox
 		public SerializedField[] parameters;
 		public SerializedExceptionHandler[] exceptionHandlers;
 
+		const byte T_MethodName = 1;
+		const byte T_MaxStack = 2;
+		const byte T_Flags = 3; // packed: isVoid|isStatic|isCtor
+		const byte T_FullSignature = 4;
+		const byte T_Body = 5;
+		const byte T_Locals = 6;
+		const byte T_Parameters = 7;
+		const byte T_ExceptionHandlers = 8;
+
 		public static SerializedMethod Read(byte[] buf, ref int pos)
 		{
 			var m = new SerializedMethod();
-			m.methodName = BinaryHelper.ReadString(buf, ref pos);
-			m.maxStack = BinaryHelper.ReadInt(buf, ref pos);
-			byte flags = BinaryHelper.ReadByte(buf, ref pos);
-			m.isVoid = (flags & 1) != 0;
-			m.isStatic = (flags & 2) != 0;
-			m.isCtor = (flags & 4) != 0;
-			m.fullSignature = BinaryHelper.ReadString(buf, ref pos);
-			m.body = BinaryHelper.ReadBlob(buf, ref pos);
-			m.locals = BinaryHelper.ReadArray(buf, ref pos, SerializedField.Read);
-			m.parameters = BinaryHelper.ReadArray(buf, ref pos, SerializedField.Read);
-			m.exceptionHandlers = BinaryHelper.ReadArray(buf, ref pos, SerializedExceptionHandler.Read);
+			BinaryHelper.ReadFields(buf, ref pos, delegate(byte token, byte[] b, ref int p)
+			{
+				switch (token)
+				{
+					case T_MethodName: m.methodName = BinaryHelper.ReadString(b, ref p); break;
+					case T_MaxStack: m.maxStack = BinaryHelper.ReadInt(b, ref p); break;
+					case T_Flags:
+						byte flags = BinaryHelper.ReadByte(b, ref p);
+						m.isVoid = (flags & 1) != 0;
+						m.isStatic = (flags & 2) != 0;
+						m.isCtor = (flags & 4) != 0;
+						break;
+					case T_FullSignature: m.fullSignature = BinaryHelper.ReadString(b, ref p); break;
+					case T_Body: m.body = BinaryHelper.ReadBlob(b, ref p); break;
+					case T_Locals: m.locals = BinaryHelper.ReadArray(b, ref p, SerializedField.Read); break;
+					case T_Parameters: m.parameters = BinaryHelper.ReadArray(b, ref p, SerializedField.Read); break;
+					case T_ExceptionHandlers:
+						m.exceptionHandlers =
+							BinaryHelper.ReadArray(b, ref p, SerializedExceptionHandler.Read); break;
+				}
+			});
 			return m;
 		}
 
 		public void Write(List<byte> buf)
 		{
-			BinaryHelper.WriteString(buf, methodName);
-			BinaryHelper.WriteInt(buf, maxStack);
-			byte flags = 0;
-			if (isVoid) flags |= 1;
-			if (isStatic) flags |= 2;
-			if (isCtor) flags |= 4;
-			BinaryHelper.WriteByte(buf, flags);
-			BinaryHelper.WriteString(buf, fullSignature);
-			BinaryHelper.WriteBlob(buf, body);
-			BinaryHelper.WriteArray(buf, locals, e => e.Write(buf));
-			BinaryHelper.WriteArray(buf, parameters, e => e.Write(buf));
-			BinaryHelper.WriteArray(buf, exceptionHandlers, e => e.Write(buf));
+			BinaryHelper.WriteStruct(buf, b =>
+			{
+				BinaryHelper.WriteFieldString(b, T_MethodName, methodName);
+				BinaryHelper.WriteFieldInt(b, T_MaxStack, maxStack);
+				BinaryHelper.WriteField(b, T_Flags, b2 =>
+				{
+					byte flags = 0;
+					if (isVoid) flags |= 1;
+					if (isStatic) flags |= 2;
+					if (isCtor) flags |= 4;
+					BinaryHelper.WriteByte(b2, flags);
+				});
+				BinaryHelper.WriteFieldString(b, T_FullSignature, fullSignature);
+				BinaryHelper.WriteFieldBlob(b, T_Body, body);
+				BinaryHelper.WriteField(b, T_Locals, b2 => BinaryHelper.WriteArray(b2, locals, e => e.Write(b2)));
+				BinaryHelper.WriteField(b, T_Parameters, b2 => BinaryHelper.WriteArray(b2, parameters, e => e.Write(b2)));
+				BinaryHelper.WriteField(b, T_ExceptionHandlers,
+					b2 => BinaryHelper.WriteArray(b2, exceptionHandlers, e => e.Write(b2)));
+			});
 		}
 	}
 
@@ -421,22 +593,36 @@ namespace Cilbox
 		public SerializedField[] instanceFields;
 		public SerializedMethod[] methods;
 
+		const byte T_ClassName = 1;
+		const byte T_StaticFields = 2;
+		const byte T_InstanceFields = 3;
+		const byte T_Methods = 4;
+
 		public static SerializedClass Read(byte[] buf, ref int pos)
 		{
 			var c = new SerializedClass();
-			c.className = BinaryHelper.ReadString(buf, ref pos);
-			c.staticFields = BinaryHelper.ReadArray(buf, ref pos, SerializedField.Read);
-			c.instanceFields = BinaryHelper.ReadArray(buf, ref pos, SerializedField.Read);
-			c.methods = BinaryHelper.ReadArray(buf, ref pos, SerializedMethod.Read);
+			BinaryHelper.ReadFields(buf, ref pos, delegate(byte token, byte[] b, ref int p)
+			{
+				switch (token)
+				{
+					case T_ClassName: c.className = BinaryHelper.ReadString(b, ref p); break;
+					case T_StaticFields: c.staticFields = BinaryHelper.ReadArray(b, ref p, SerializedField.Read); break;
+					case T_InstanceFields: c.instanceFields = BinaryHelper.ReadArray(b, ref p, SerializedField.Read); break;
+					case T_Methods: c.methods = BinaryHelper.ReadArray(b, ref p, SerializedMethod.Read); break;
+				}
+			});
 			return c;
 		}
 
 		public void Write(List<byte> buf)
 		{
-			BinaryHelper.WriteString(buf, className);
-			BinaryHelper.WriteArray(buf, staticFields, e => e.Write(buf));
-			BinaryHelper.WriteArray(buf, instanceFields, e => e.Write(buf));
-			BinaryHelper.WriteArray(buf, methods, e => e.Write(buf));
+			BinaryHelper.WriteStruct(buf, b =>
+			{
+				BinaryHelper.WriteFieldString(b, T_ClassName, className);
+				BinaryHelper.WriteField(b, T_StaticFields, b2 => BinaryHelper.WriteArray(b2, staticFields, e => e.Write(b2)));
+				BinaryHelper.WriteField(b, T_InstanceFields, b2 => BinaryHelper.WriteArray(b2, instanceFields, e => e.Write(b2)));
+				BinaryHelper.WriteField(b, T_Methods, b2 => BinaryHelper.WriteArray(b2, methods, e => e.Write(b2)));
+			});
 		}
 	}
 
@@ -473,78 +659,92 @@ namespace Cilbox
 		public SerializedTypeDescriptor[] methodParameters;
 		public SerializedTypeDescriptor[] methodGenericArguments;
 
+		const byte T_MetaTokenType = 1;
+		const byte T_StringValue = 2;
+		const byte T_ArrayInitData = 3;
+		const byte T_FieldDeclaringType = 4;
+		const byte T_FieldName = 5;
+		const byte T_FieldIsStatic = 6;
+		const byte T_FieldIndex = 7; // presence implies fieldHasIndex=true
+		const byte T_TypeDescriptor = 8;
+		const byte T_MethodDeclaringType = 9;
+		const byte T_MethodName = 10;
+		const byte T_MethodFullSignature = 11;
+		const byte T_MethodIsStatic = 12;
+		const byte T_MethodAssembly = 13;
+		const byte T_MethodParameters = 14;
+		const byte T_MethodGenericArguments = 15;
+
 		public static SerializedMetadataToken Read(byte[] buf, ref int pos)
 		{
 			var t = new SerializedMetadataToken();
-			t.metaTokenType = BinaryHelper.ReadByte(buf, ref pos);
-			MetaTokenType mt = (MetaTokenType)t.metaTokenType;
-
-			switch (mt)
+			BinaryHelper.ReadFields(buf, ref pos, delegate(byte token, byte[] b, ref int p)
 			{
-			case MetaTokenType.mtString:
-				t.stringValue = BinaryHelper.ReadString(buf, ref pos);
-				break;
-			case MetaTokenType.mtArrayInitializer:
-				t.arrayInitData = BinaryHelper.ReadBlob(buf, ref pos);
-				break;
-			case MetaTokenType.mtField:
-				t.fieldDeclaringType = SerializedTypeDescriptor.Read(buf, ref pos);
-				t.fieldName = BinaryHelper.ReadString(buf, ref pos);
-				t.fieldIsStatic = BinaryHelper.ReadBool(buf, ref pos);
-				t.fieldHasIndex = BinaryHelper.ReadBool(buf, ref pos);
-				if (t.fieldHasIndex)
-					t.fieldIndex = BinaryHelper.ReadInt(buf, ref pos);
-				break;
-			case MetaTokenType.mtType:
-				t.typeDescriptor = SerializedTypeDescriptor.Read(buf, ref pos);
-				break;
-			case MetaTokenType.mtMethod:
-				t.methodDeclaringType = SerializedTypeDescriptor.Read(buf, ref pos);
-				t.methodName = BinaryHelper.ReadString(buf, ref pos);
-				t.methodFullSignature = BinaryHelper.ReadString(buf, ref pos);
-				t.methodIsStatic = BinaryHelper.ReadBool(buf, ref pos);
-				t.methodAssembly = BinaryHelper.ReadString(buf, ref pos);
-				t.methodParameters = BinaryHelper.ReadArray(buf, ref pos, SerializedTypeDescriptor.Read);
-				t.methodGenericArguments = BinaryHelper.ReadArray(buf, ref pos, SerializedTypeDescriptor.Read);
-				break;
-			}
+				switch (token)
+				{
+					case T_MetaTokenType: t.metaTokenType = BinaryHelper.ReadByte(b, ref p); break;
+					case T_StringValue: t.stringValue = BinaryHelper.ReadString(b, ref p); break;
+					case T_ArrayInitData: t.arrayInitData = BinaryHelper.ReadBlob(b, ref p); break;
+					case T_FieldDeclaringType: t.fieldDeclaringType = SerializedTypeDescriptor.Read(b, ref p); break;
+					case T_FieldName: t.fieldName = BinaryHelper.ReadString(b, ref p); break;
+					case T_FieldIsStatic: t.fieldIsStatic = BinaryHelper.ReadBool(b, ref p); break;
+					case T_FieldIndex:
+						t.fieldHasIndex = true;
+						t.fieldIndex = BinaryHelper.ReadInt(b, ref p);
+						break;
+					case T_TypeDescriptor: t.typeDescriptor = SerializedTypeDescriptor.Read(b, ref p); break;
+					case T_MethodDeclaringType: t.methodDeclaringType = SerializedTypeDescriptor.Read(b, ref p); break;
+					case T_MethodName: t.methodName = BinaryHelper.ReadString(b, ref p); break;
+					case T_MethodFullSignature: t.methodFullSignature = BinaryHelper.ReadString(b, ref p); break;
+					case T_MethodIsStatic: t.methodIsStatic = BinaryHelper.ReadBool(b, ref p); break;
+					case T_MethodAssembly: t.methodAssembly = BinaryHelper.ReadString(b, ref p); break;
+					case T_MethodParameters: t.methodParameters = BinaryHelper.ReadArray(b, ref p, SerializedTypeDescriptor.Read); break;
+					case T_MethodGenericArguments: t.methodGenericArguments = BinaryHelper.ReadArray(b, ref p, SerializedTypeDescriptor.Read); break;
+				}
+			});
 			return t;
 		}
 
 		public void Write(List<byte> buf)
 		{
-			BinaryHelper.WriteByte(buf, metaTokenType);
-			MetaTokenType mt = (MetaTokenType)metaTokenType;
-
-			switch (mt)
+			BinaryHelper.WriteStruct(buf, b =>
 			{
-			case MetaTokenType.mtString:
-				BinaryHelper.WriteString(buf, stringValue);
-				break;
-			case MetaTokenType.mtArrayInitializer:
-				BinaryHelper.WriteBlob(buf, arrayInitData);
-				break;
-			case MetaTokenType.mtField:
-				fieldDeclaringType.Write(buf);
-				BinaryHelper.WriteString(buf, fieldName);
-				BinaryHelper.WriteBool(buf, fieldIsStatic);
-				BinaryHelper.WriteBool(buf, fieldHasIndex);
-				if (fieldHasIndex)
-					BinaryHelper.WriteInt(buf, fieldIndex);
-				break;
-			case MetaTokenType.mtType:
-				typeDescriptor.Write(buf);
-				break;
-			case MetaTokenType.mtMethod:
-				methodDeclaringType.Write(buf);
-				BinaryHelper.WriteString(buf, methodName);
-				BinaryHelper.WriteString(buf, methodFullSignature);
-				BinaryHelper.WriteBool(buf, methodIsStatic);
-				BinaryHelper.WriteString(buf, methodAssembly);
-				BinaryHelper.WriteArray(buf, methodParameters ?? Array.Empty<SerializedTypeDescriptor>(), e => e.Write(buf));
-				BinaryHelper.WriteArray(buf, methodGenericArguments ?? Array.Empty<SerializedTypeDescriptor>(), e => e.Write(buf));
-				break;
-			}
+				BinaryHelper.WriteFieldByte(b, T_MetaTokenType, metaTokenType);
+				MetaTokenType mt = (MetaTokenType)metaTokenType;
+
+				switch (mt)
+				{
+					case MetaTokenType.mtString:
+						BinaryHelper.WriteFieldString(b, T_StringValue, stringValue);
+						break;
+					case MetaTokenType.mtArrayInitializer:
+						BinaryHelper.WriteFieldBlob(b, T_ArrayInitData, arrayInitData);
+						break;
+					case MetaTokenType.mtField:
+						BinaryHelper.WriteField(b, T_FieldDeclaringType, b2 => fieldDeclaringType.Write(b2));
+						BinaryHelper.WriteFieldString(b, T_FieldName, fieldName);
+						BinaryHelper.WriteFieldBool(b, T_FieldIsStatic, fieldIsStatic);
+						if (fieldHasIndex)
+							BinaryHelper.WriteFieldInt(b, T_FieldIndex, fieldIndex);
+						break;
+					case MetaTokenType.mtType:
+						BinaryHelper.WriteField(b, T_TypeDescriptor, b2 => typeDescriptor.Write(b2));
+						break;
+					case MetaTokenType.mtMethod:
+						BinaryHelper.WriteField(b, T_MethodDeclaringType, b2 => methodDeclaringType.Write(b2));
+						BinaryHelper.WriteFieldString(b, T_MethodName, methodName);
+						BinaryHelper.WriteFieldString(b, T_MethodFullSignature, methodFullSignature);
+						BinaryHelper.WriteFieldBool(b, T_MethodIsStatic, methodIsStatic);
+						BinaryHelper.WriteFieldString(b, T_MethodAssembly, methodAssembly);
+						BinaryHelper.WriteField(b, T_MethodParameters,
+							b2 => BinaryHelper.WriteArray(b2, methodParameters ?? Array.Empty<SerializedTypeDescriptor>(),
+								e => e.Write(b2)));
+						BinaryHelper.WriteField(b, T_MethodGenericArguments,
+							b2 => BinaryHelper.WriteArray(b2,
+								methodGenericArguments ?? Array.Empty<SerializedTypeDescriptor>(), e => e.Write(b2)));
+						break;
+				}
+			});
 		}
 	}
 
@@ -553,18 +753,30 @@ namespace Cilbox
 		public string name;
 		public long value;
 
+		const byte T_Name = 1;
+		const byte T_Value = 2;
+
 		public static SerializedEnumValue Read(byte[] buf, ref int pos)
 		{
 			var v = new SerializedEnumValue();
-			v.name = BinaryHelper.ReadString(buf, ref pos);
-			v.value = BinaryHelper.ReadLong(buf, ref pos);
+			BinaryHelper.ReadFields(buf, ref pos, delegate(byte token, byte[] b, ref int p)
+			{
+				switch (token)
+				{
+					case T_Name: v.name = BinaryHelper.ReadString(b, ref p); break;
+					case T_Value: v.value = BinaryHelper.ReadLong(b, ref p); break;
+				}
+			});
 			return v;
 		}
 
 		public void Write(List<byte> buf)
 		{
-			BinaryHelper.WriteString(buf, name);
-			BinaryHelper.WriteLong(buf, value);
+			BinaryHelper.WriteStruct(buf, b =>
+			{
+				BinaryHelper.WriteFieldString(b, T_Name, name);
+				BinaryHelper.WriteFieldLong(b, T_Value, value);
+			});
 		}
 	}
 
@@ -574,20 +786,33 @@ namespace Cilbox
 		public SerializedTypeDescriptor underlyingType;
 		public SerializedEnumValue[] values;
 
+		const byte T_EnumName = 1;
+		const byte T_UnderlyingType = 2;
+		const byte T_Values = 3;
+
 		public static SerializedEnum Read(byte[] buf, ref int pos)
 		{
 			var e = new SerializedEnum();
-			e.enumName = BinaryHelper.ReadString(buf, ref pos);
-			e.underlyingType = SerializedTypeDescriptor.Read(buf, ref pos);
-			e.values = BinaryHelper.ReadArray(buf, ref pos, SerializedEnumValue.Read);
+			BinaryHelper.ReadFields(buf, ref pos, delegate(byte token, byte[] b, ref int p)
+			{
+				switch (token)
+				{
+					case T_EnumName: e.enumName = BinaryHelper.ReadString(b, ref p); break;
+					case T_UnderlyingType: e.underlyingType = SerializedTypeDescriptor.Read(b, ref p); break;
+					case T_Values: e.values = BinaryHelper.ReadArray(b, ref p, SerializedEnumValue.Read); break;
+				}
+			});
 			return e;
 		}
 
 		public void Write(List<byte> buf)
 		{
-			BinaryHelper.WriteString(buf, enumName);
-			underlyingType.Write(buf);
-			BinaryHelper.WriteArray(buf, values, e => e.Write(buf));
+			BinaryHelper.WriteStruct(buf, b =>
+			{
+				BinaryHelper.WriteFieldString(b, T_EnumName, enumName);
+				BinaryHelper.WriteField(b, T_UnderlyingType, b2 => underlyingType.Write(b2));
+				BinaryHelper.WriteField(b, T_Values, b2 => BinaryHelper.WriteArray(b2, values, e => e.Write(b2)));
+			});
 		}
 	}
 
@@ -599,20 +824,33 @@ namespace Cilbox
 		public SerializedMetadataToken[] metadata; // index 0 is invalid/empty sentinel
 		public SerializedEnum[] enums;
 
+		const byte T_Classes = 1;
+		const byte T_Metadata = 2;
+		const byte T_Enums = 3;
+
 		public static SerializedAssembly Read(byte[] buf, ref int pos)
 		{
 			var asm = new SerializedAssembly();
-			asm.classes = BinaryHelper.ReadArray(buf, ref pos, SerializedClass.Read);
-			asm.metadata = BinaryHelper.ReadArray(buf, ref pos, SerializedMetadataToken.Read);
-			asm.enums = BinaryHelper.ReadArray(buf, ref pos, SerializedEnum.Read);
+			BinaryHelper.ReadFields(buf, ref pos, delegate(byte token, byte[] b, ref int p)
+			{
+				switch (token)
+				{
+					case T_Classes: asm.classes = BinaryHelper.ReadArray(b, ref p, SerializedClass.Read); break;
+					case T_Metadata: asm.metadata = BinaryHelper.ReadArray(b, ref p, SerializedMetadataToken.Read); break;
+					case T_Enums: asm.enums = BinaryHelper.ReadArray(b, ref p, SerializedEnum.Read); break;
+				}
+			});
 			return asm;
 		}
 
 		public void Write(List<byte> buf)
 		{
-			BinaryHelper.WriteArray(buf, classes, e => e.Write(buf));
-			BinaryHelper.WriteArray(buf, metadata, e => e.Write(buf));
-			BinaryHelper.WriteArray(buf, enums, e => e.Write(buf));
+			BinaryHelper.WriteStruct(buf, b =>
+			{
+				BinaryHelper.WriteField(b, T_Classes, b2 => BinaryHelper.WriteArray(b2, classes, e => e.Write(b2)));
+				BinaryHelper.WriteField(b, T_Metadata, b2 => BinaryHelper.WriteArray(b2, metadata, e => e.Write(b2)));
+				BinaryHelper.WriteField(b, T_Enums, b2 => BinaryHelper.WriteArray(b2, enums, e => e.Write(b2)));
+			});
 		}
 
 		public byte[] ToBytes() => BinaryHelper.CompressToBytes(FormatVersion, Write);
@@ -644,6 +882,7 @@ namespace Cilbox
 						sb.Append(genericDefName[i]);
 						continue;
 					}
+
 					int j = i + 1;
 					while (j < genericDefName.Length && char.IsDigit(genericDefName[j]))
 						j++;
@@ -700,6 +939,16 @@ namespace Cilbox
 		// Array (recursive)
 		public SerializedProxyField[] arrayElements;
 
+		const byte T_FieldType = 1;
+		const byte T_FieldName = 2;
+		const byte T_MatchingInstanceId = 3;
+		const byte T_Data = 4;				// String / Json
+		const byte T_PrimitivePayload = 5;	// stackType byte + primitive value bytes
+		const byte T_FieldObjectIndex = 6;	// CilboxRef / ObjectRef
+		const byte T_ObjectRefIsNull = 7;	// CilboxRef / ObjectRef
+		const byte T_ElementType = 8;		// Array / Json
+		const byte T_ArrayElements = 9;		// Array
+
 		private static object ReadPrimitiveValue(byte[] buf, ref int pos, byte stackType)
 		{
 			switch (stackType)
@@ -741,73 +990,65 @@ namespace Cilbox
 		public static SerializedProxyField Read(byte[] buf, ref int pos)
 		{
 			var f = new SerializedProxyField();
-			f.fieldType = BinaryHelper.ReadByte(buf, ref pos);
-			bool hasName = BinaryHelper.ReadBool(buf, ref pos);
-			if (hasName)
-				f.fieldName = BinaryHelper.ReadString(buf, ref pos);
-			f.matchingInstanceId = BinaryHelper.ReadInt(buf, ref pos);
-
-			switch ((ProxyFieldType)f.fieldType)
+			BinaryHelper.ReadFields(buf, ref pos, delegate(byte token, byte[] b, ref int p)
 			{
-			case ProxyFieldType.Empty:
-				break;
-			case ProxyFieldType.String:
-				f.data = BinaryHelper.ReadString(buf, ref pos);
-				break;
-			case ProxyFieldType.Primitive:
-				f.stackType = BinaryHelper.ReadByte(buf, ref pos);
-				f.primitiveValue = ReadPrimitiveValue(buf, ref pos, f.stackType);
-				break;
-			case ProxyFieldType.CilboxRef:
-			case ProxyFieldType.ObjectRef:
-				f.fieldObjectIndex = BinaryHelper.ReadInt(buf, ref pos);
-				f.objectRefIsNull = BinaryHelper.ReadBool(buf, ref pos);
-				break;
-			case ProxyFieldType.Array:
-				f.elementType = SerializedTypeDescriptor.Read(buf, ref pos);
-				f.arrayElements = BinaryHelper.ReadArray(buf, ref pos, Read);
-				break;
-			case ProxyFieldType.Json:
-				f.elementType = SerializedTypeDescriptor.Read(buf, ref pos);
-				f.data = BinaryHelper.ReadString(buf, ref pos);
-				break;
-			}
+				switch (token)
+				{
+					case T_FieldType: f.fieldType = BinaryHelper.ReadByte(b, ref p); break;
+					case T_FieldName: f.fieldName = BinaryHelper.ReadString(b, ref p); break;
+					case T_MatchingInstanceId: f.matchingInstanceId = BinaryHelper.ReadInt(b, ref p); break;
+					case T_Data: f.data = BinaryHelper.ReadString(b, ref p); break;
+					case T_PrimitivePayload:
+						f.stackType = BinaryHelper.ReadByte(b, ref p);
+						f.primitiveValue = ReadPrimitiveValue(b, ref p, f.stackType);
+						break;
+					case T_FieldObjectIndex: f.fieldObjectIndex = BinaryHelper.ReadInt(b, ref p); break;
+					case T_ObjectRefIsNull: f.objectRefIsNull = BinaryHelper.ReadBool(b, ref p); break;
+					case T_ElementType: f.elementType = SerializedTypeDescriptor.Read(b, ref p); break;
+					case T_ArrayElements: f.arrayElements = BinaryHelper.ReadArray(b, ref p, Read); break;
+				}
+			});
 			return f;
 		}
 
 		public void Write(List<byte> buf)
 		{
-			BinaryHelper.WriteByte(buf, fieldType);
-			BinaryHelper.WriteBool(buf, fieldName != null);
-			if (fieldName != null)
-				BinaryHelper.WriteString(buf, fieldName);
-			BinaryHelper.WriteInt(buf, matchingInstanceId);
-
-			switch ((ProxyFieldType)fieldType)
+			BinaryHelper.WriteStruct(buf, b =>
 			{
-			case ProxyFieldType.Empty:
-				break;
-			case ProxyFieldType.String:
-				BinaryHelper.WriteString(buf, data);
-				break;
-			case ProxyFieldType.Primitive:
-				BinaryHelper.WriteByte(buf, stackType);
-				WritePrimitiveValue(buf, primitiveValue, stackType);
-				break;
-			case ProxyFieldType.CilboxRef:
-			case ProxyFieldType.ObjectRef:
-				BinaryHelper.WriteInt(buf, fieldObjectIndex);
-				BinaryHelper.WriteBool(buf, objectRefIsNull);
-				break;
-			case ProxyFieldType.Array:
-				elementType.Write(buf);
-				BinaryHelper.WriteArray(buf, arrayElements, e => e.Write(buf));
-				break;
-			case ProxyFieldType.Json:
-				elementType.Write(buf);
-				BinaryHelper.WriteString(buf, data);
-				break;
-			}
+				BinaryHelper.WriteFieldByte(b, T_FieldType, fieldType);
+				if (fieldName != null)
+					BinaryHelper.WriteFieldString(b, T_FieldName, fieldName);
+				BinaryHelper.WriteFieldInt(b, T_MatchingInstanceId, matchingInstanceId);
+
+				switch ((ProxyFieldType)fieldType)
+				{
+					case ProxyFieldType.Empty:
+						break;
+					case ProxyFieldType.String:
+						BinaryHelper.WriteFieldString(b, T_Data, data);
+						break;
+					case ProxyFieldType.Primitive:
+						BinaryHelper.WriteField(b, T_PrimitivePayload, b2 =>
+						{
+							BinaryHelper.WriteByte(b2, stackType);
+							WritePrimitiveValue(b2, primitiveValue, stackType);
+						});
+						break;
+					case ProxyFieldType.CilboxRef:
+					case ProxyFieldType.ObjectRef:
+						BinaryHelper.WriteFieldInt(b, T_FieldObjectIndex, fieldObjectIndex);
+						BinaryHelper.WriteFieldBool(b, T_ObjectRefIsNull, objectRefIsNull);
+						break;
+					case ProxyFieldType.Array:
+						BinaryHelper.WriteField(b, T_ElementType, b2 => elementType.Write(b2));
+						BinaryHelper.WriteField(b, T_ArrayElements, b2 => BinaryHelper.WriteArray(b2, arrayElements, e => e.Write(b2)));
+						break;
+					case ProxyFieldType.Json:
+						BinaryHelper.WriteField(b, T_ElementType, b2 => elementType.Write(b2));
+						BinaryHelper.WriteFieldString(b, T_Data, data);
+						break;
+				}
+			});
 		}
 	}
 
@@ -816,16 +1057,27 @@ namespace Cilbox
 		public const byte FormatVersion = 1;
 		public SerializedProxyField[] fields;
 
+		const byte T_Fields = 1;
+
 		public static SerializedProxy Read(byte[] buf, ref int pos)
 		{
 			var p = new SerializedProxy();
-			p.fields = BinaryHelper.ReadArray(buf, ref pos, SerializedProxyField.Read);
+			BinaryHelper.ReadFields(buf, ref pos, delegate(byte token, byte[] b, ref int pp)
+			{
+				switch (token)
+				{
+					case T_Fields: p.fields = BinaryHelper.ReadArray(b, ref pp, SerializedProxyField.Read); break;
+				}
+			});
 			return p;
 		}
 
 		public void Write(List<byte> buf)
 		{
-			BinaryHelper.WriteArray(buf, fields, e => e.Write(buf));
+			BinaryHelper.WriteStruct(buf, b =>
+			{
+				BinaryHelper.WriteField(b, T_Fields, b2 => BinaryHelper.WriteArray(b2, fields, e => e.Write(b2)));
+			});
 		}
 
 		public byte[] ToBytes() => BinaryHelper.CompressToBytes(FormatVersion, Write);
