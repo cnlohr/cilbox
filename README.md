@@ -27,11 +27,11 @@ Ideally the scene could have a `CilboxScene` and an avatar could also have a `Ci
 
 ### The general approach
 1. You mark your class as `[Cilboxable]`
-2. On build, any components with a `[Cilboxable]` script are serialized, and replaced with a `CilboxProxy` which has a public String containing the serialized data for all of its properties.
+2. On build, any components with a `[Cilboxable]` script are serialized, and replaced with a `CilboxProxy` which has a public String containing the serialized data for its serialized fields and referenced objects.
 3. All classes that are `[Cilboxable]` are reflected and all fields information and method bytecode is extracted and saved off as a serialized ball of goo.
 4. All `[Cilbox`ed classes are loaded out of the ball of goo into a dictionary of classes where the bytecode is kept as byte arrays, and static members are configured with their appropriate types.
 5. When running, each gameobject with a `CilboxProxy` will wake up, and load into a series of `object`s the data that was part of the original class.
-6. Whenever `Start` or `Update` is called, the `CilboxProxy` will ask `Cilbox` to emulate the bytecode associated with that method.
+6. Whenever a forwarded Unity entrypoint is called, the `CilboxProxy` will ask `Cilbox` to emulate the bytecode associated with that method.
 7. The bytecode emulator can make all needed decisions about proper sandboxing, infinte loop termination, etc. But for the most part, my intent is to just disable any code that's doing something that could be usnafeish.
 
 ### Cilbox has
@@ -53,8 +53,15 @@ Ideally the scene could have a `CilboxScene` and an avatar could also have a `Ci
 The general idea is that at load, the Cilbox will load all classes, metadata, and methods.  Then any references that script has to the surrounding system are patched in, but only if the specific class/method is allowed.
 
 In general, the process for deciding if a feature is allowed is:
-1. Is the CLASS pertaining to this meta (callee, parameter, field, etc.) associated with this meta/call allowed by seeing if it is on the whitelist by calling `CheckTypeAllowed( String sType )`
-2. If the CLASS is on the whitelist, then it will call `CheckMethodAllowed()`.  If CheckMethodAllowed says it's OK, then the reference can be made.
+1. Is the native type pertaining to this meta (callee, parameter, field, etc.) allowed by calling `CheckTypeAllowed( String sType )`.
+2. If the access is a method call, `CheckMethodAllowed()` is consulted before the reference is made.
+3. If the access is a native field reference, `CheckFieldAllowed()` is consulted before the reference is made.
+4. Component access can also be remapped through `GetComponentTypeOverride()` for shim / replacement scenarios.
+
+## Security model
+ * Access to native types, methods, and fields is allowlist-based. Supported compound types currently include arrays (including object arrays), enums, internal structs / value types, nested generic types, and tested `Dictionary<,>` usage, but only when the required native surface is explicitly permitted.
+ * Access to fields on objects outside the cilbox is also allowlist-based. Properties remain supported, and explicitly approved native fields are supported too. Arbitrary external field access is still blocked.
+ * General-purpose reflection should still be considered unsupported. The runtime uses reflection internally for whitelisting and dispatch, but exposing open reflection to guest code would be difficult to secure.
 
 For additional information:
  * For all security-related notes surrounding the load decisions, please see [CilboxUsage.cs](Packages/com.cnlohr.cilbox/CilboxUsage.cs). 
@@ -62,19 +69,17 @@ For additional information:
 
 ### Resource accounting
 
-While a cilbox is executing, every 64 cycles it reports back to the owning box that it is using CPU time.  If the amount of time spent executing that cilbox per frame exceeds `timeoutLengthTicks` ticks, then, the script will be killed at the next 64-cycle checkin.
+While a cilbox is executing, every 64 cycles it reports back to the owning box that it is using CPU time.  If the amount of time spent executing that cilbox per frame exceeds `timeoutLengthUs`, then the script will be killed at the next 64-cycle checkin.
 
 Execution time encompasses all time that is spent while there is a cilbox execution context.  For example, if your cilbox calls a Unity function, while it is within the unity function, it will be accounted against your script.  If your script is executing, and another method is called from a thread concurrently, then that time is only single-accounted.
 
-By default, `timeoutLengthTicks` is 500ms.  For Avatars, 5ms.
+By default, `timeoutLengthUs` is 500ms.  For Avatars, 5ms.
 
 If execution within a box is exceeded, the box is disabled.  The box can be re-enabled by setting a flag on the box, to re-enable it, but in general, it should be expected to stay off, unless the asset is unloaded.
 
-### Things you can't do (At least not today)
- * You cannot arbitrarily add an externally accessable method to your script. For instance, you cannot add your script to Unity UI and select a function that is not available in the `CilboxProxy`.  So, only input functions like `Start()` `Awake()` `FixedUpdate()` `Update()` etc...
- * It is unlikely any form of reflection would be possible, because, it would be extremely difficult to secure.
- * It will be tricky to allow compound types for security reasons.
- * You can't currently reference fields of objects outside Cilbox, but you can access properties that have getters/setters.  This may be considered in the future.
+
+### Current limitations
+ * You still cannot arbitrarily expose a custom method directly to Unity UI / inspector event pickers. Invocation is limited to the entrypoints forwarded by `CilboxProxy`, such as `Awake()`, `Start()`, `FixedUpdate()`, `Update()`, `OnEnable()`, `OnDisable()`, `OnDestroy()`, `OnTriggerEnter/Exit()` and `OnCollisionEnter/Exit()`.
 
 ## Cleanup
  * Clean up the `GetConstructors` code to use `GetConstructor` but we need access to the modifiers.
