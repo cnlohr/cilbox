@@ -13,6 +13,7 @@
 	<ItemGroup>
 		<Compile Include="../Packages/com.cnlohr.cilbox/Cilbox.cs" />
 		<Compile Include="../Packages/com.cnlohr.cilbox/CilboxProxy.cs" />
+        <Compile Include="../Packages/com.cnlohr.cilbox/CilboxSerialization.cs" />
 		<Compile Include="../Packages/com.cnlohr.cilbox/CilboxUtil.cs" />
 		<Compile Include="../Packages/com.cnlohr.cilbox/CilboxUsage.cs" />
 	</ItemGroup>
