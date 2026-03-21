@@ -748,6 +748,18 @@ namespace TestCilbox
 	}
 
 	[Cilboxable]
+	public class CycleRootBehaviour : MonoBehaviour
+	{
+		public CycleChildBehaviour child;
+	}
+
+	[Cilboxable]
+	public class CycleChildBehaviour : MonoBehaviour
+	{
+		public CycleRootBehaviour root;
+	}
+
+	[Cilboxable]
 	public class TestCilboxBehaviour3
 	{
 		public TestCilboxBehaviour3(int value) {this.number = value;}
