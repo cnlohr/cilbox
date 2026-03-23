@@ -1223,6 +1223,30 @@ spiperf.Begin();
 						}
 						break;
 					}
+					case 0x81: // stobj
+					{
+						uint typeToken = BytecodeAsU32( ref pc );
+						CilMetadataTokenInfo stobjMeta = box.metadatas[typeToken];
+						StackElement value = stackBuffer[sp--];
+						StackElement addr = stackBuffer[sp--];
+						object obj = ( stobjMeta.nativeType != null && value.type < StackType.Object ) ?
+							value.CoerceToObject( stobjMeta.nativeType ) :
+							value.AsObject( box );
+
+						if( addr.type == StackType.Address )
+						{
+							addr.DereferenceLoadAddress( obj );
+						}
+						else if( addr.type == StackType.NativeHandle )
+						{
+							addr.DereferenceLoadNativeHandle( box, obj );
+						}
+						else
+						{
+							throw new CilboxInterpreterRuntimeException("Invalid stack type for stobj instruction", parentClass.className, methodName, pc);
+						}
+						break;
+					}
 					case 0x8C: // box (This pulls off a type)
 					{
 						uint otyp = BytecodeAsU32( ref pc );
