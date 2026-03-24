@@ -46,6 +46,7 @@ namespace TestCilbox
 			"System.IntPtr",
 			"System.MathF",
 			"System.NullReferenceException",
+			"System.Numerics.Vector2",
 			"System.Object",
 			"System.Single",
 			"System.String",
@@ -702,6 +703,10 @@ namespace TestCilbox
 			Validator.Validate("Double Array With Data 0", "4.5");
 			Validator.Validate("Double Array With Data 1", "6.25");
 			Validator.Validate("Double Array With Data 2", "8.75");
+
+			Validator.Validate("Static Readonly Vector2 Array Length", "2");
+			Validator.Validate("Static Readonly Vector2 Array 0", "<1, 2>");
+			Validator.Validate("Static Readonly Vector2 Array 1", "<3.5, 4.5>");
 
 			Validator.Validate("Object Array Assigned Length", "3");
 			Validator.Validate("Object Array Assigned 0", "alpha");

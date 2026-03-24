@@ -18,6 +18,11 @@ namespace TestCilbox
 		static private int iprivatestatic = 557;
 		static public int ipublicstatic = 558;
 		static public int recursive_test_counter = 0;
+		private static readonly System.Numerics.Vector2[] staticReadonlyVector2Array = new System.Numerics.Vector2[]
+		{
+			new System.Numerics.Vector2(1.0f, 2.0f),
+			new System.Numerics.Vector2(3.5f, 4.5f),
+		};
 		public TestCilboxBehaviour2 behaviour2;
 		public int[] intArr = new int[] { 1, 2, 3 };
 		public TestCilboxBehaviour3[] myBehaviour3Arr;
@@ -481,6 +486,12 @@ namespace TestCilbox
 			Validator.Set("Double Array With Data 0", doubleWithData[0].ToString() );
 			Validator.Set("Double Array With Data 1", doubleWithData[1].ToString() );
 			Validator.Set("Double Array With Data 2", doubleWithData[2].ToString() );
+
+			Validator.Set("Static Readonly Vector2 Array Length", staticReadonlyVector2Array.Length.ToString() );
+			for (int j = 0; j < staticReadonlyVector2Array.Length; j++)
+			{
+				Validator.Set("Static Readonly Vector2 Array " + j, staticReadonlyVector2Array[j].ToString() );
+			}
 
 			object[] objectAssigned = new object[3];
 			objectAssigned[0] = "alpha";
