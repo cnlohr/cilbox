@@ -268,6 +268,19 @@ namespace TestCilbox
 			proxy.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic, Type.EmptyTypes).Invoke(proxy, new object[0]);
 		}
 
+		private static object GetProxyFieldObject(Cilbox.CilboxProxy proxy, string fieldName)
+		{
+			for( int i = 0; i < proxy.cls.instanceFieldNames.Length; i++ )
+			{
+				if( proxy.cls.instanceFieldNames[i] == fieldName )
+				{
+					return proxy.fields[i].o;
+				}
+			}
+
+			throw new InvalidOperationException($"Field {fieldName} was not found on proxy class {proxy.className}.");
+		}
+
 		private static void PrintPerfSummary()
 		{
 			string rootClass = PerfRootBehaviour.ClassName;
@@ -342,6 +355,13 @@ namespace TestCilbox
 			b.behaviour2 = b2;
 			b2.pubsettee = 12345;
 
+			GameObject cycleRootGo = new GameObject("CycleRootToProxy");
+			CycleRootBehaviour cycleRoot = cycleRootGo.CreateComponent<CycleRootBehaviour>();
+			GameObject cycleChildGo = new GameObject("CycleChildToProxy");
+			CycleChildBehaviour cycleChild = cycleChildGo.CreateComponent<CycleChildBehaviour>();
+			cycleRoot.child = cycleChild;
+			cycleChild.root = cycleRoot;
+
 			GameObject perfRootGo = null;
 			GameObject perfPeerGo = null;
 			if( runPerf )
@@ -365,6 +385,8 @@ namespace TestCilbox
 			Thread.Sleep(50); // Give assembly time to write out.
 
 			Cilbox.CilboxProxy proxy = go.GetComponents<Cilbox.CilboxProxy>()[0];
+			Cilbox.CilboxProxy cycleRootProxy = cycleRootGo.GetComponents<Cilbox.CilboxProxy>()[0];
+			Cilbox.CilboxProxy cycleChildProxy = cycleChildGo.GetComponents<Cilbox.CilboxProxy>()[0];
 			Cilbox.CilboxProxy perfRootProxy = null;
 			Cilbox.CilboxProxy perfPeerProxy = null;
 			if( runPerf )
@@ -375,11 +397,24 @@ namespace TestCilbox
 
 			try
 			{
+				cycleRootProxy.RuntimeProxyLoad();
+				Cilbox.CilboxProxy cycleRootChildField = (Cilbox.CilboxProxy)GetProxyFieldObject(cycleRootProxy, "child");
+				Cilbox.CilboxProxy cycleChildRootField = (Cilbox.CilboxProxy)GetProxyFieldObject(cycleChildProxy, "root");
+				Validator.Set( "Cycle Root Load Completed", (cycleRootProxy.fields != null).ToString() );
+				Validator.Set( "Cycle Child Load Completed", (cycleChildProxy.fields != null).ToString() );
+				Validator.Set( "Cycle Root Has Child", (cycleRootChildField != null).ToString() );
+				Validator.Set( "Cycle Child Has Root", (cycleChildRootField != null).ToString() );
+				Validator.Set( "Cycle Child BackRef Same", (ReferenceEquals(cycleRootChildField, cycleChildProxy) && ReferenceEquals(cycleChildRootField, cycleRootProxy)).ToString() );
 				proxy.GetType().GetMethod("Awake",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
 				proxy.GetType().GetMethod("Start",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
 				Validator.Validate( "Start Test", "OK" );
 				Validator.Validate( "Start Marks", "I" );
 				Validator.Validate( "Arithmatic Test", "15" );
+				Validator.Validate( "Cycle Root Load Completed", "True" );
+				Validator.Validate( "Cycle Child Load Completed", "True" );
+				Validator.Validate( "Cycle Root Has Child", "True" );
+				Validator.Validate( "Cycle Child Has Root", "True" );
+				Validator.Validate( "Cycle Child BackRef Same", "True" );
 
 				Validator.Validate( "private instance filed", "555");
 				Validator.Validate( "public instance field", "556" );
