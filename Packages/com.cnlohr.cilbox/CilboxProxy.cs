@@ -79,8 +79,8 @@ namespace Cilbox
 				lstObjects.Add( e );
 			}
 
-			serializedObjectData =
-				Convert.ToBase64String(new Serializee(lstObjects.ToArray()).DumpAsMemory().ToArray());
+			Serializee.SerializedPayload payload = new Serializee(lstObjects.ToArray()).BuildSerializedPayload();
+			serializedObjectData = Convert.ToBase64String( payload.storedBytes );
 
 			buildTimeGuid = Guid.NewGuid().ToString();
 

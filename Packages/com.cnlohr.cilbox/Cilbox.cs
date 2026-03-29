@@ -3016,10 +3016,11 @@ spiperf.End();
 			assemblyRoot["metadata"] = new Serializee( assemblyMetadata );
 			assemblyRoot["enums"] = new Serializee( enumsDict );
 			Serializee assemblySerializee = new Serializee( assemblyRoot );
+			Serializee.SerializedPayload assemblyPayload = assemblySerializee.BuildSerializedPayload();
 
 			perf.End(); perf = new ProfilerMarker( "Serializing" ); perf.Begin();
 
-			String sAllAssemblyData = Convert.ToBase64String(assemblySerializee.DumpAsMemory().ToArray() );
+			String sAllAssemblyData = Convert.ToBase64String( assemblyPayload.storedBytes );
 
 			perf.End(); perf = new ProfilerMarker( "Checking If Assembly Changed" ); perf.Begin();
 
@@ -3039,6 +3040,11 @@ spiperf.End();
 			}
 
 			perf.End(); perf = new ProfilerMarker( "Applying Assembly" ); perf.Begin();
+
+			if( tac.exportDebuggingData )
+			{
+				Debug.Log( $"Cilbox assembly serialize raw={assemblyPayload.RawSize} bytes compressed={assemblyPayload.CompressedSize} bytes stored={assemblyPayload.StoredSize} bytes saved={assemblyPayload.BytesSaved} bytes" );
+			}
 
 			if( tac.exportDebuggingData )
 			{
