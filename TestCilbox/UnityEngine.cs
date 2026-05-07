@@ -208,12 +208,14 @@ namespace UnityEngine
 	public class Transform : Component
 	{
 		public Vector3 position;
-		public GameObject parent = null;
+		public Transform parent = null;
+		public string name => gameObject != null ? gameObject.name : null;
 	}
 
 	public class Component : Object
 	{
 		public GameObject gameObject = null;
+		public Transform transform => gameObject != null ? gameObject.transform : null;
 	}
 
 	public class GameObject : UnityEngine.Object
@@ -222,14 +224,20 @@ namespace UnityEngine
 		public List<Object> AllComponents = new List<Object>();
 		public String name;
 		public HideFlags hideFlags;
-		public Transform transform = new Transform();
+		private readonly Transform _transform = new Transform();
+		public Transform transform => _transform;
 
 		public T[] GetComponentsInChildren<T>( bool something ) { return AllComponents.ToArray().OfType<T>().ToArray(); }
 
 		public GameObject gameObject = null;
 
 		public static void Destroy( GameObject o ) { AllObjects.Remove( o ); }
-		public GameObject(String name) { this.name = name; GameObject.AllObjects.Add(this);  }
+		public GameObject(String name)
+		{
+			this.name = name;
+			this._transform.gameObject = this;
+			GameObject.AllObjects.Add(this);
+		}
 
 		public static GameObject Find( String s )
  		{
