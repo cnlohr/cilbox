@@ -444,9 +444,26 @@ spiperf.Begin();
 
 							Type[] paTypes = dt.nativeParameterTypes;
 							int numFields = paTypes.Length;
+
+							object[] callpar;
+							StackElement[] callpar_se;
+							bool callparPooled;
+							if( !dt.callparRented && dt.cachedCallpar != null )
+							{
+								dt.callparRented = true;
+								callpar = dt.cachedCallpar;
+								callpar_se = dt.cachedCallparSe;
+								callparPooled = true;
+							}
+							else
+							{
+								callpar = new object[numFields];
+								callpar_se = new StackElement[numFields];
+								callparPooled = false;
+							}
+
+							try {
 							object callthis = null;
-							object [] callpar = new object[numFields];
-							StackElement [] callpar_se = new StackElement[numFields];
 							int ik;
 							for( ik = 0; ik < numFields; ik++ )
 							{
@@ -581,6 +598,14 @@ spiperf.Begin();
 								// This is returning from a jump, so immediately abort.
 								if( isVoid ) stackBuffer[++sp] = StackElement.nil; /// ?? Please check me! If wrong, fix above, too.
 								cont = false;
+							}
+							} finally {
+								if( callparPooled )
+								{
+									Array.Clear( callpar, 0, numFields );
+									Array.Clear( callpar_se, 0, numFields );
+									dt.callparRented = false;
+								}
 							}
 						}
 
@@ -2010,6 +2035,9 @@ spiperf.End();
 		public MethodBase nativeMethod;
 		public Type[] nativeParameterTypes;
 		public bool nativeIsVoid;
+		public object[] cachedCallpar;
+		public StackElement[] cachedCallparSe;
+		public bool callparRented;
 		public int interpretiveMethod; // If nativeToken is 0, then it's a interpreted call.
 		public int interpretiveMethodClass; // If nativeToken is 0, then it's a interpreted call class
 
@@ -2375,6 +2403,8 @@ spiperf.End();
 							}
 							t.nativeParameterTypes = mpt;
 							t.nativeIsVoid = (m is MethodInfo mInfo) && mInfo.ReturnType == typeof(void);
+							t.cachedCallpar = new object[mp.Length];
+							t.cachedCallparSe = new StackElement[mp.Length];
 						} else if( !t.isNative )
 						{
 							throw new CilboxException( "Error: Could not find reference to: [" + useAssembly + "][" + declaringType.FullName + "][" + fullSignature + "] Type from:" + declaringTypeName );
