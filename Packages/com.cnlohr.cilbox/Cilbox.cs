@@ -169,53 +169,49 @@ namespace Cilbox
 
 		public object Interpret( CilboxProxy ths, object [] parametersIn )
 		{
-			StackElement [] parameters;
-			StackElement [] stackBuffer = new StackElement[Cilbox.defaultStackSize];
+			int plen = parametersIn?.Length ?? 0;
+			int thisOffset = isStatic ? 0 : 1;
+			int totalParams = plen + thisOffset;
 
-			int plen = 0;
-			if( parametersIn != null )
-			{
-				plen = parametersIn.Length;
-			}
+			Cilbox box = parentClass.box;
+			if( !box.InterpreterEntry(this) ) return null;
 
-			if( isStatic )
-			{
-				parameters = new StackElement[plen];
-				for( int p = 0; p < plen; p++ )
-					parameters[p].Load( parametersIn[p] );
-			}
-			else
-			{
-				parameters = new StackElement[plen+1];
-				parameters[0].Load( ths );
-				for( int p = 0; p < plen; p++ )
-					parameters[p+1].Load( parametersIn[p] );
-				plen++;
-			}
-
+			StackElement[] buf = box.RentStackBuffer();
 			object ret = null;
-			if( !parentClass.box.InterpreterEntry(this) ) return null;
 			try
 			{
-				ret = InterpretInner( stackBuffer, parameters ).AsObject();
+				if(!isStatic)
+				{
+					buf[0].Load(ths);
+				}
+				for( int p = 0; p < plen; p++ ) 
+				{
+					buf[thisOffset + p].Load( parametersIn[p] );
+				}
+				ArraySegment<StackElement> stackSeg = new ArraySegment<StackElement>( buf, totalParams, buf.Length - totalParams );
+				ArraySegment<StackElement> paramSeg = new ArraySegment<StackElement>( buf, 0, totalParams );
+
+				ret = InterpretInner( stackSeg, paramSeg ).AsObject();
 			}
 			catch( Exception e )
 			{
-				parentClass.box.InterpreterExit();
+				box.InterpreterExit();
+				box.ReturnStackBuffer( buf );
 
 				if (e is CilboxUnhandledInterpretedException uhe)
 				{
 					// strip the throwee just in case, and re-throw a normal runtime exception
 					string exceptionTypeName = uhe.Throwee?.GetType().FullName ?? "null";
 					string reason = $"Exception of type {exceptionTypeName} was unhandled in interpreted code";
-					parentClass.box.DisableWithReason(reason); // CilboxUnhandledInterpretedException bypasses the box disable
+					box.DisableWithReason(reason); // CilboxUnhandledInterpretedException bypasses the box disable
 					throw new CilboxInterpreterRuntimeException(reason, uhe.ClassName, uhe.MethodName, uhe.PC);
 				}
 
 				Debug.Log( e.ToString() );
 				throw;
 			}
-			parentClass.box.InterpreterExit();
+			box.InterpreterExit();
+			box.ReturnStackBuffer( buf );
 			return ret;
 		}
 
@@ -2055,6 +2051,21 @@ spiperf.End();
 
 		public static readonly int defaultStackSize = 1024;
 
+		private Stack<StackElement[]> stackBufferPool = new Stack<StackElement[]>();
+		internal StackElement[] RentStackBuffer()
+		{
+			lock( stackBufferPool )
+			{
+				if( stackBufferPool.Count > 0 ) return stackBufferPool.Pop();
+			}
+			return new StackElement[defaultStackSize];
+		}
+		internal void ReturnStackBuffer( StackElement[] buf )
+		{
+			Array.Clear( buf, 0, buf.Length );
+			lock( stackBufferPool ) { stackBufferPool.Push( buf ); }
+		}
+
 		public bool showFunctionProfiling;
 		public bool exportDebuggingData;
 		public bool verboseLogging = false;
@@ -2375,7 +2386,7 @@ spiperf.End();
 					{
 						if( c.methods[cctorIndex].isStatic )
 						{
-							c.methods[cctorIndex].Interpret( null, new object[0] );
+							c.methods[cctorIndex].Interpret( null, Array.Empty<object>() );
 						}
 					}
 				}
