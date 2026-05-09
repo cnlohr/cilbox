@@ -440,11 +440,10 @@ spiperf.Begin();
 						else
 						{
 							st = dt.nativeMethod;
-							if( st is MethodInfo )
-								isVoid = ((MethodInfo)st).ReturnType == typeof(void);
+							isVoid = dt.nativeIsVoid;
 
-							ParameterInfo [] pa = st.GetParameters();
-							int numFields = pa.Length;
+							Type[] paTypes = dt.nativeParameterTypes;
+							int numFields = paTypes.Length;
 							object callthis = null;
 							object [] callpar = new object[numFields];
 							StackElement [] callpar_se = new StackElement[numFields];
@@ -454,7 +453,7 @@ spiperf.Begin();
 								StackElement se = stackBuffer[sp--];
 								callpar_se[numFields-ik-1] = se;
 								object o = se.AsObject(box);
-								Type t = pa[numFields-ik-1].ParameterType;
+								Type t = paTypes[numFields-ik-1];
 
 								if( t.IsByRef )
 								{
@@ -2009,6 +2008,8 @@ spiperf.End();
 		// Todo handle interpreted types.
 		public bool isNative;
 		public MethodBase nativeMethod;
+		public Type[] nativeParameterTypes;
+		public bool nativeIsVoid;
 		public int interpretiveMethod; // If nativeToken is 0, then it's a interpreted call.
 		public int interpretiveMethodClass; // If nativeToken is 0, then it's a interpreted call class
 
@@ -2366,6 +2367,14 @@ spiperf.End();
 							t.nativeMethod = m;
 							t.isNative = true;
 							t.isValid = true;
+							ParameterInfo[] mp = m.GetParameters();
+							Type[] mpt = new Type[mp.Length];
+							for( int mpi = 0; mpi < mp.Length; mpi++ )
+							{
+								mpt[mpi] = mp[mpi].ParameterType;
+							}
+							t.nativeParameterTypes = mpt;
+							t.nativeIsVoid = (m is MethodInfo mInfo) && mInfo.ReturnType == typeof(void);
 						} else if( !t.isNative )
 						{
 							throw new CilboxException( "Error: Could not find reference to: [" + useAssembly + "][" + declaringType.FullName + "][" + fullSignature + "] Type from:" + declaringTypeName );
