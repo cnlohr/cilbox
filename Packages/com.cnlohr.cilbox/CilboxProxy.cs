@@ -513,10 +513,11 @@ namespace Cilbox
 		void OnEnable() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.OnEnable, null ); }
 		void OnDisable() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.OnDisable, null ); }
 		void OnDestroy() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.OnDestroy, null ); }
-		void OnTriggerEnter(Collider c) { if (proxyWasSetup) box.InterpretIID(cls, this, ImportFunctionID.OnTriggerEnter, new object[] { c }); }
-		void OnTriggerExit(Collider c) { if (proxyWasSetup) box.InterpretIID(cls, this, ImportFunctionID.OnTriggerExit, new object[] { c }); }
-		void OnCollisionEnter(Collision c) { if (proxyWasSetup) box.InterpretIID(cls, this, ImportFunctionID.OnCollisionEnter, new object[] { c }); }
-		void OnCollisionExit(Collision c) { if (proxyWasSetup) box.InterpretIID(cls, this, ImportFunctionID.OnCollisionExit, new object[] { c }); }
+		private readonly object[] _lifecycleArg1 = new object[1];
+		void OnTriggerEnter(Collider c) { if (proxyWasSetup) { _lifecycleArg1[0] = c; box.InterpretIID(cls, this, ImportFunctionID.OnTriggerEnter, _lifecycleArg1); } }
+		void OnTriggerExit(Collider c) { if (proxyWasSetup) { _lifecycleArg1[0] = c; box.InterpretIID(cls, this, ImportFunctionID.OnTriggerExit, _lifecycleArg1); } }
+		void OnCollisionEnter(Collision c) { if (proxyWasSetup) { _lifecycleArg1[0] = c; box.InterpretIID(cls, this, ImportFunctionID.OnCollisionEnter, _lifecycleArg1); } }
+		void OnCollisionExit(Collision c) { if (proxyWasSetup) { _lifecycleArg1[0] = c; box.InterpretIID(cls, this, ImportFunctionID.OnCollisionExit, _lifecycleArg1); } }
 	}
 }
 

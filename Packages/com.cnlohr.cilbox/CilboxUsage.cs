@@ -671,11 +671,14 @@ namespace Cilbox
 		{
 			public CilboxMethod meth;
 			public CilboxProxy o;
-		    public void ActionCallback0( )                                         { meth.Interpret( o, new object[0] ); }
-		    public void ActionCallback1<T0>( T0 o0 )                               { meth.Interpret( o, new object[]{o0} ); }
-		    public void ActionCallback2<T0,T1>( T0 o0, T1 o1 )                     { meth.Interpret( o, new object[]{o0,o1} ); }
-		    public void ActionCallback3<T0,T1,T2>( T0 o0, T1 o1, T2 o2 )           { meth.Interpret( o, new object[]{o0,o1,o2} ); }
-		    public void ActionCallback4<T0,T1,T2,T3>( T0 o0, T1 o1, T2 o2, T3 o3 ) { meth.Interpret( o, new object[]{o0,o1,o2,o3} ); }
+
+			//will reuse the object now instead of every call creating new object.
+			private object[] a1; private object[] a2; private object[] a3; private object[] a4;
+		    public void ActionCallback0( )                                         { meth.Interpret( o, Array.Empty<object>() ); }
+		    public void ActionCallback1<T0>( T0 o0 )                               { var a = a1 ??= new object[1]; a[0] = o0; meth.Interpret( o, a ); }
+		    public void ActionCallback2<T0,T1>( T0 o0, T1 o1 )                     { var a = a2 ??= new object[2]; a[0] = o0; a[1] = o1; meth.Interpret( o, a ); }
+		    public void ActionCallback3<T0,T1,T2>( T0 o0, T1 o1, T2 o2 )           { var a = a3 ??= new object[3]; a[0] = o0; a[1] = o1; a[2] = o2; meth.Interpret( o, a ); }
+		    public void ActionCallback4<T0,T1,T2,T3>( T0 o0, T1 o1, T2 o2, T3 o3 ) { var a = a4 ??= new object[4]; a[0] = o0; a[1] = o1; a[2] = o2; a[3] = o3; meth.Interpret( o, a ); }
 		}
 	}
 }
