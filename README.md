@@ -8,6 +8,12 @@ The performance is surprisingly high for something that is written in C# and not
 
 Performance has been tested on Synergiance's 6502 emulator.  It is able to just barely hit `2MHz` in-system. While running the 6502, verses about `240MHz` native, the rate that this system executes CIL insturctions is about `168 MHz`, when targeting IL2CPP in Unity 6.1.2f1 running on a 9950X3D.
 
+Performance testing between versions of Cilbox is possible with this command:
+
+```sh
+dotnet run --project TestCilbox/TestCilbox.csproj -c Release -- --perf
+```
+
 ## Security Disclaimer
 
 I am not a security researcher. I cannot make promises about the security of the core portion of the engine. I also cannot make claims to the fitness or suitability for any purpose.  There are likely bugs, so if you have one, I strongly encourage submitting a pull request.
