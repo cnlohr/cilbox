@@ -420,8 +420,11 @@ namespace Cilbox
 				typeName = ses["gn"].AsString();
 				Serializee [] gs = g.AsArray();
 				ga = new Type[gs.Length];
-				for( int i = 0; i < gs.Length; i++ )
-					ga[i] = GetNativeTypeFromSerializee( gs[i] );
+				for( int i = 0; i < gs.Length; i++ ) {
+					Type gt = GetNativeTypeFromSerializee( gs[i] );
+					if( gt == null ) return null;
+					ga[i] = gt;
+				}
 			}
 
 			Type ret = null;
