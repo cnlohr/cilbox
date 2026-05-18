@@ -536,6 +536,8 @@ namespace TestCilbox
 			Vector3 alreadyInit = new Vector3(5, 5, 5);
 			TestUtil.GetOutVec3(out alreadyInit);
 			Validator.Set("NativeOutVec3AlreadyInit", alreadyInit.ToString() );
+			Validator.Set("NullablePrimitiveCoerceValues", TestUtil.NullablePrimitiveSummary(true, 42, 1.5f) );
+			Validator.Set("NullablePrimitiveCoerceNulls", TestUtil.NullablePrimitiveSummary(null, null, null) );
 			bool privateOutSuccess = TryGetPrivateOutInt(out int privateOutInt);
 			Validator.Set("PrivateBoolOutSuccess", privateOutSuccess.ToString() );
 			Validator.Set("PrivateBoolOutInt", privateOutInt.ToString() );
