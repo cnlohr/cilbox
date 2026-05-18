@@ -524,6 +524,8 @@ namespace TestCilbox
 			WriteFloat(ref TestUtil.StaticFloat, 99.0f);
 			Validator.Set("NativeStaticFloat ref written", TestUtil.StaticFloat.ToString());
 			ReadInt(ref iprivatestatic);
+			TestCilboxBehaviour2.sharedValue = 321;
+			Validator.Set("Cross Class Static Field", TestCilboxBehaviour2.sharedValue.ToString());
 
 			TestUtil.GetOutVec3(out Vector3 outVec);
 			Validator.Set("NativeOutVec3", outVec.ToString() );
@@ -793,6 +795,7 @@ namespace TestCilbox
 	[Cilboxable]
 	public class TestCilboxBehaviour2 : MonoBehaviour
 	{
+		public static int sharedValue = 123;
 		public int pubsettee = 35254;
 		public void Behaviour2Test()
 		{
