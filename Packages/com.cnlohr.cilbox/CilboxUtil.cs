@@ -185,8 +185,7 @@ namespace Cilbox
 				{
 					return null;
 				}
-
-				return CoerceToObject(nullableUnderlyingType);
+				t = nullableUnderlyingType;
 			}
 
 			StackType rt = StackTypeFromType( t );
