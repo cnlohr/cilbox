@@ -484,7 +484,15 @@ spiperf.Begin();
 								ConstructorInfo ctor = (ConstructorInfo)st;
 								if( isNewObj )
 								{
-									iko = ctor.Invoke( callpar );
+									try
+									{
+										iko = ctor.Invoke( callpar );
+									}
+									catch( TargetInvocationException e )
+									{
+										interpretedThrow(pc - 1, e.InnerException ?? e);
+										break;
+									}
 									isVoid = false; // newobj always pushes a reference/value.
 								}
 								else
@@ -544,7 +552,15 @@ spiperf.Begin();
 									break;
 								}
 
-								iko = st.Invoke( callthis, callpar );
+								try
+								{
+									iko = st.Invoke( callthis, callpar );
+								}
+								catch( TargetInvocationException e )
+								{
+									interpretedThrow(pc - 1, e.InnerException ?? e);
+									break;
+								}
 								if( seorig.type == StackType.Address  && callthis is not BoxedCilboxEnum ) // enums are immutable
 								{
 									seorig.DereferenceLoadAddress( callthis );
@@ -556,7 +572,15 @@ spiperf.Begin();
 							}
 							else
 							{
-								iko = st.Invoke( null, callpar );
+								try
+								{
+									iko = st.Invoke( null, callpar );
+								}
+								catch( TargetInvocationException e )
+								{
+									interpretedThrow(pc - 1, e.InnerException ?? e);
+									break;
+								}
 							}
 
 							// Possibly copy back any references.
@@ -1690,7 +1714,7 @@ spiperf.End();
 				exceptionRegister = new StackElement() { type = StackType.Object, o = thrownObj };
 				if (!hasExceptionClauses)
 				{
-					throw new CilboxUnhandledInterpretedException("Exception thrown with no handlers: " + thrownObj.ToString(), thrownObj, parentClass.className, methodName, currentInstruction);
+					throw new CilboxUnhandledInterpretedException("Exception thrown with no handlers: " + (thrownObj?.ToString() ?? "(null)"), thrownObj, parentClass.className, methodName, currentInstruction);
 				}
 
 				CilboxExceptionHandlingClause found = null;
@@ -1745,7 +1769,7 @@ spiperf.End();
 
 				if (found == null)
 				{
-					throw new CilboxUnhandledInterpretedException("No handlers matched exception: " + thrownObj.ToString(), thrownObj, parentClass.className, methodName, currentInstruction);
+					throw new CilboxUnhandledInterpretedException("No handlers matched exception: " + (thrownObj?.ToString() ?? "(null)"), thrownObj, parentClass.className, methodName, currentInstruction);
 				}
 
 				leaveRegionEnqueueFinallys(currentInstruction, found.HandlerOffset, true);
