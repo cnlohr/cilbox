@@ -49,7 +49,6 @@ namespace TestCilbox
 			"System.Numerics.Vector2",
 			"System.Object",
 			"System.Nullable",
-			"System.Nullable`1",
 			"System.Single",
 			"System.String",
 			"System.TimeSpan",
