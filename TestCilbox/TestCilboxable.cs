@@ -542,6 +542,30 @@ namespace TestCilbox
 			Validator.Set("Object Array Element Access With Data 1", ObjectArrayElem(objectWithData, 1).ToString());
 			Validator.Set("Object Array Element Access With Data 2", ObjectArrayElem(objectWithData, 2).ToString());
 
+			long[] longWithData = new long[] { -1L, 9876543210L, long.MinValue };
+			Validator.Set("Long Array With Data Length", longWithData.Length.ToString() );
+			Validator.Set("Long Array With Data 0", longWithData[0].ToString() );
+			Validator.Set("Long Array With Data 1", longWithData[1].ToString() );
+			Validator.Set("Long Array With Data 2", longWithData[2].ToString() );
+
+			char[] charWithData = new char[3];
+			charWithData[0] = 'a';
+			charWithData[1] = '\u1234';
+			charWithData[2] = 'Z';
+			Validator.Set("Char Array With Data Length", charWithData.Length.ToString() );
+			Validator.Set("Char Array With Data 0", charWithData[0].ToString() );
+			Validator.Set("Char Array With Data 1", ((int)charWithData[1]).ToString() );
+			Validator.Set("Char Array With Data 2", charWithData[2].ToString() );
+
+			string[] stringAssigned = new string[3];
+			stringAssigned[0] = "red";
+			stringAssigned[1] = "green";
+			stringAssigned[2] = "blue";
+			Validator.Set("String Array Assigned Length", stringAssigned.Length.ToString() );
+			Validator.Set("String Array Assigned 0", stringAssigned[0] );
+			Validator.Set("String Array Assigned 1", stringAssigned[1] );
+			Validator.Set("String Array Assigned 2", stringAssigned[2] );
+
 			object boxedMyEnum = MyEnum.Value2;
 			MyEnum castMyEnum = (MyEnum)boxedMyEnum;
 			Validator.Set("Boxed MyEnum", castMyEnum.ToString() );
