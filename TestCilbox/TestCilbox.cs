@@ -428,6 +428,8 @@ namespace TestCilbox
 
 				Validator.Validate( "recursive function", "511" );
 				Validator.Validate( "string concatenation", "it works" );
+				Validator.Validate( "OverloadEcho int", "int:42" );
+				Validator.Validate( "OverloadEcho string", "string:forty-two" );
 				Validator.Validate( "MathF.Sin", "-0.058374193" );
 
 				// Make sure CI can fail.

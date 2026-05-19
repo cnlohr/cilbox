@@ -69,6 +69,16 @@ namespace TestCilbox
 			RecursiveTest( i-1 );
 		}
 
+		public string OverloadEcho(int value)
+		{
+			return "int:" + value;
+		}
+
+		public string OverloadEcho(string value)
+		{
+			return "string:" + value;
+		}
+
 		public void Start()
 		{
 			Debug.Log( "🔵 TestCilboxBehaviour.Start()" );
@@ -92,6 +102,8 @@ namespace TestCilbox
 			RecursiveTest(8);
 			Validator.Set( "recursive function", recursive_test_counter.ToString() );
 			Validator.Set( "string concatenation", "it" + " " + "works" );
+			Validator.Set( "OverloadEcho int", OverloadEcho(42) );
+			Validator.Set( "OverloadEcho string", OverloadEcho("forty-two") );
 			Validator.Set( "MathF.Sin", MathF.Sin(3.2f).ToString() );
 
 			using (DisposeTester dt = new DisposeTester())
