@@ -538,6 +538,10 @@ namespace TestCilbox
 			Validator.Set("NativeOutVec3AlreadyInit", alreadyInit.ToString() );
 			Validator.Set("NullablePrimitiveCoerceValues", TestUtil.NullablePrimitiveSummary(true, 42, 1.5f) );
 			Validator.Set("NullablePrimitiveCoerceNulls", TestUtil.NullablePrimitiveSummary(null, null, null) );
+			Type nullableReturnType = TestUtil.GetNullableIntReturnType();
+			Type nullableUnderlyingType = Nullable.GetUnderlyingType(nullableReturnType);
+			Validator.Set("NullableReturnTypeIsNullable", (nullableUnderlyingType != null).ToString() );
+			Validator.Set("NullableReturnTypeUnderlying", nullableUnderlyingType.FullName );
 			bool privateOutSuccess = TryGetPrivateOutInt(out int privateOutInt);
 			Validator.Set("PrivateBoolOutSuccess", privateOutSuccess.ToString() );
 			Validator.Set("PrivateBoolOutInt", privateOutInt.ToString() );

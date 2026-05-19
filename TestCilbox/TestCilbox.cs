@@ -52,6 +52,7 @@ namespace TestCilbox
 			"System.Single",
 			"System.String",
 			"System.TimeSpan",
+			"System.Type",
 			"System.UInt16",
 			"System.UInt32",
 			"System.ValueTuple",
@@ -265,6 +266,16 @@ namespace TestCilbox
 			string countText = count.HasValue ? count.Value.ToString() : "null";
 			string scaleText = scale.HasValue ? scale.Value.ToString() : "null";
 			return flagText + ", " + countText + ", " + scaleText;
+		}
+
+		public static int? GetNullableInt()
+		{
+			return 42;
+		}
+
+		public static Type GetNullableIntReturnType()
+		{
+			return typeof(TestUtil).GetMethod(nameof(GetNullableInt)).ReturnType;
 		}
 	}
 
@@ -745,6 +756,8 @@ namespace TestCilbox
 			Validator.Validate("NativeOutVec3AlreadyInit", "(12, 8, 0)");
 			Validator.Validate("NullablePrimitiveCoerceValues", "True, 42, 1.5");
 			Validator.Validate("NullablePrimitiveCoerceNulls", "null, null, null");
+			Validator.Validate("NullableReturnTypeIsNullable", "True");
+			Validator.Validate("NullableReturnTypeUnderlying", "System.Int32");
 			Validator.Validate("PrivateBoolOutSuccess", "True");
 			Validator.Validate("PrivateBoolOutInt", "1111");
 			Validator.Validate("PrivateBoolOutAlreadyInitSuccess", "True");
