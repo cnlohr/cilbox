@@ -1342,30 +1342,96 @@ spiperf.Begin();
 					case 0x95: case 0x96: case 0x97: case 0x98: case 0x99:
 					{
 						int index = stackBuffer[sp--].i;
-						if (stackBuffer[sp].o == null)
+						object arrObj = stackBuffer[sp].o;
+						if (arrObj == null)
 						{
 							interpretedThrow(pc - 1, new NullReferenceException());
 							break;
 						}
-						if (index < 0 || index >= ((Array)stackBuffer[sp].o).Length)
+						Array arr = (Array)arrObj;
+						if (index < 0 || index >= arr.Length)
 						{
 							interpretedThrow(pc - 1, new IndexOutOfRangeException());
 							break;
 						}
 						switch( b - 0x90 )
 						{
-						// Does this way work universally?  Can we assume the compiler knows what it's doing?
-						// Previously it looked more like a.GetValue( index ).
-						case 0: stackBuffer[sp].LoadSByte( (sbyte)(((sbyte[])stackBuffer[sp].o)[index]) ); break; // ldelem.i1
-						case 1: stackBuffer[sp].LoadByte( (byte)(((byte[])stackBuffer[sp].o)[index]) ); break; // ldelem.u1
-						case 2: stackBuffer[sp].LoadShort( (short)(((short[])stackBuffer[sp].o)[index]) ); break; // ldelem.i2
-						case 3: stackBuffer[sp].LoadUshort( (ushort)(((ushort[])stackBuffer[sp].o)[index]) ); break; // ldelem.u2
-						case 4: stackBuffer[sp].LoadInt( (int)(((int[])stackBuffer[sp].o)[index]) ); break; // ldelem.i4
-						case 5: stackBuffer[sp].LoadUint( (uint)(((uint[])stackBuffer[sp].o)[index]) ); break; // ldelem.u4
-						case 6: stackBuffer[sp].LoadUlong( (ulong)(((ulong[])stackBuffer[sp].o)[index]) ); break; // ldelem.u8 / ldelem.i8
-						case 7: stackBuffer[sp].LoadNint( (nint)(((nint[])stackBuffer[sp].o)[index]) ); break; // ldelem.i
-						case 8: stackBuffer[sp].LoadFloat( (float)(((float[])stackBuffer[sp].o)[index]) ); break; // ldelem.r4
-						case 9: stackBuffer[sp].LoadDouble( (double)(((double[])stackBuffer[sp].o)[index]) ); break; // ldelem.r8
+						case 0:
+							if( arrObj is sbyte[] sbyteArr )
+								stackBuffer[sp].LoadSByte( sbyteArr[index] );
+							else if( arrObj is bool[] boolArr )
+								stackBuffer[sp].LoadSByte( boolArr[index] ? (sbyte)1 : (sbyte)0 );
+							else
+								stackBuffer[sp].LoadSByte( Convert.ToSByte( arr.GetValue(index) ) );
+							break; // ldelem.i1
+						case 1:
+							if( arrObj is byte[] byteArr )
+								stackBuffer[sp].LoadByte( byteArr[index] );
+							else if( arrObj is bool[] boolArr )
+								stackBuffer[sp].LoadByte( boolArr[index] ? (byte)1 : (byte)0 );
+							else
+								stackBuffer[sp].LoadByte( Convert.ToByte( arr.GetValue(index) ) );
+							break; // ldelem.u1
+						case 2:
+							if( arrObj is short[] shortArr )
+								stackBuffer[sp].LoadShort( shortArr[index] );
+							else if( arrObj is char[] charArr )
+								stackBuffer[sp].LoadShort( (short)charArr[index] );
+							else
+								stackBuffer[sp].LoadShort( Convert.ToInt16( arr.GetValue(index) ) );
+							break; // ldelem.i2
+						case 3:
+							if( arrObj is ushort[] ushortArr )
+								stackBuffer[sp].LoadUshort( ushortArr[index] );
+							else if( arrObj is char[] charArr )
+								stackBuffer[sp].LoadUshort( charArr[index] );
+							else
+								stackBuffer[sp].LoadUshort( Convert.ToUInt16( arr.GetValue(index) ) );
+							break; // ldelem.u2
+						case 4:
+							if( arrObj is int[] intArr )
+								stackBuffer[sp].LoadInt( intArr[index] );
+							else
+								stackBuffer[sp].LoadInt( Convert.ToInt32( arr.GetValue(index) ) );
+							break; // ldelem.i4
+						case 5:
+							if( arrObj is uint[] uintArr )
+								stackBuffer[sp].LoadUint( uintArr[index] );
+							else
+								stackBuffer[sp].LoadUint( Convert.ToUInt32( arr.GetValue(index) ) );
+							break; // ldelem.u4
+						case 6:
+							if( arrObj is long[] longArr )
+								stackBuffer[sp].LoadLong( longArr[index] );
+							else if( arrObj is ulong[] ulongArr )
+								stackBuffer[sp].LoadUlong( ulongArr[index] );
+							else
+							{
+								object value = arr.GetValue(index);
+								if( value is ulong ulongValue )
+									stackBuffer[sp].LoadUlong( ulongValue );
+								else
+									stackBuffer[sp].LoadLong( Convert.ToInt64( value ) );
+							}
+							break;
+						case 7:
+							if( arrObj is nint[] nintArr )
+								stackBuffer[sp].LoadNint( nintArr[index] );
+							else
+								stackBuffer[sp].LoadNint( (nint)Convert.ToInt64( arr.GetValue(index) ) );
+							break; // ldelem.i
+						case 8:
+							if( arrObj is float[] floatArr )
+								stackBuffer[sp].LoadFloat( floatArr[index] );
+							else
+								stackBuffer[sp].LoadFloat( Convert.ToSingle( arr.GetValue(index) ) );
+							break; // ldelem.r4
+						case 9:
+							if( arrObj is double[] doubleArr )
+								stackBuffer[sp].LoadDouble( doubleArr[index] );
+							else
+								stackBuffer[sp].LoadDouble( Convert.ToDouble( arr.GetValue(index) ) );
+							break; // ldelem.r8
 
 						}
 						break;
@@ -1385,7 +1451,10 @@ spiperf.Begin();
 							interpretedThrow(pc - 1, new IndexOutOfRangeException());
 							break;
 						}
-						stackBuffer[++sp].LoadObject( a.GetValue(index) );
+						if( arrSE.o is object[] objectArr )
+							stackBuffer[++sp].LoadObject( objectArr[index] );
+						else
+							stackBuffer[++sp].LoadObject( a.GetValue(index) );
 						break;
 					}
 					case 0xa3: // ldelem <typeTok>
@@ -1424,12 +1493,13 @@ spiperf.Begin();
 						StackElement valSE = stackBuffer[sp--];
 						int index = stackBuffer[sp--].i;
 						StackElement arrSE = stackBuffer[sp--];
-						if (arrSE.o == null)
+						object arrObj = arrSE.o;
+						if (arrObj == null)
 						{
 							interpretedThrow(pc - 1, new NullReferenceException());
 							break;
 						}
-						Array asArr = (Array)(arrSE.o);
+						Array asArr = (Array)arrObj;
 						if (index < 0 || index >= asArr.Length)
 						{
 							interpretedThrow(pc - 1, new IndexOutOfRangeException());
@@ -1437,26 +1507,67 @@ spiperf.Begin();
 						}
 						switch( b - 0x9b )
 						{
-						case 0: asArr.SetValue( (nint)valSE.l, index ); break; // stelem.i
-						case 1: asArr.SetValue( (byte)(SByte)valSE.i, index ); break; // stelem.i1
+						case 0:
+							if( arrObj is nint[] nintArr )
+								nintArr[index] = (nint)valSE.l;
+							else
+								asArr.SetValue( (nint)valSE.l, index );
+							break; // stelem.i
+						case 1:
+							if( arrObj is sbyte[] sbyteArr )
+								sbyteArr[index] = (sbyte)valSE.i;
+							else if( arrObj is byte[] byteArr )
+								byteArr[index] = (byte)valSE.u;
+							else if( arrObj is bool[] boolArr )
+								boolArr[index] = valSE.i != 0;
+							else
+								asArr.SetValue( (byte)(SByte)valSE.i, index );
+							break; // stelem.i1
 						case 2: // stelem.i2 (used for Int16/UInt16/Char element arrays)
-							if( arrSE.o is ushort[] ushortArr )
+							if( arrObj is short[] shortArr )
+								shortArr[index] = (short)valSE.i;
+							else if( arrObj is ushort[] ushortArr )
 								ushortArr[index] = (ushort)valSE.u;
-							else if( arrSE.o is char[] charArr )
+							else if( arrObj is char[] charArr )
 								charArr[index] = (char)valSE.u;
 							else
 								asArr.SetValue( (short)valSE.i, index );
 							break;
 						case 3: // stelem.i4 (used for Int32/UInt32 element arrays)
-							if( arrSE.o is uint[] uintArr )
+							if( arrObj is int[] intArr )
+								intArr[index] = valSE.i;
+							else if( arrObj is uint[] uintArr )
 								uintArr[index] = valSE.u;
 							else
 								asArr.SetValue( valSE.i, index );
 							break;
-						case 4: asArr.SetValue( valSE.l, index ); break; // stelem.i8
-						case 5: ((float[])arrSE.AsObject())[index] = valSE.f; break; // stelem.r4
-						case 6: ((double[])arrSE.AsObject())[index] = valSE.d; break; // stelem.r8
-						case 7: ((object[])arrSE.AsObject())[index] = valSE.AsObject(); break; // stelem.ref
+						case 4:
+							if( arrObj is long[] longArr )
+								longArr[index] = valSE.l;
+							else if( arrObj is ulong[] ulongArr )
+								ulongArr[index] = valSE.e;
+							else
+								asArr.SetValue( valSE.l, index );
+							break; // stelem.i8
+						case 5:
+							if( arrObj is float[] floatArr )
+								floatArr[index] = valSE.f;
+							else
+								asArr.SetValue( valSE.f, index );
+							break; // stelem.r4
+						case 6:
+							if( arrObj is double[] doubleArr )
+								doubleArr[index] = valSE.d;
+							else
+								asArr.SetValue( valSE.d, index );
+							break; // stelem.r8
+						case 7:
+							object value = valSE.AsObject();
+							if( arrObj is object[] objectArr )
+								objectArr[index] = value;
+							else
+								asArr.SetValue( value, index );
+							break; // stelem.ref
 						}
 						break;
 					}
