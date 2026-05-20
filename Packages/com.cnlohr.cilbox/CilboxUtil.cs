@@ -20,22 +20,24 @@ namespace Cilbox
 	//  STACK ELEMENT CONTAINER  //////////////////////////////////////////////
 	///////////////////////////////////////////////////////////////////////////
 
-	public enum StackType
+	// StackType is re-used for serialization of primitives, so don't change
+	// any of the enum values
+	public enum StackType : byte
 	{
-		Boolean,
-		Sbyte,
-		Byte,
-		Short,
-		Ushort,
-		Int,
-		Uint,
-		Long,
-		Ulong,
-		Float,
-		Double,
-		Object,
-		Address,
-		NativeHandle,
+		Boolean      = 0,
+		Sbyte        = 1,
+		Byte         = 2,
+		Short        = 3,
+		Ushort       = 4,
+		Int          = 5,
+		Uint         = 6,
+		Long         = 7,
+		Ulong        = 8,
+		Float        = 9,
+		Double       = 10,
+		Object       = 11,
+		Address      = 12,
+		NativeHandle = 13,
 	}
 
 	[StructLayout(LayoutKind.Explicit)]

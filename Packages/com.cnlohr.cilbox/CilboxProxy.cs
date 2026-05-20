@@ -107,8 +107,7 @@ namespace Cilbox
 				if( StackElement.TypeToStackType.TryGetValue( underlying.GetType().ToString(), out st ) && st < StackType.Object )
 				{
 					spf.fieldType = (byte)ProxyFieldType.Primitive;
-					spf.stackType = (byte)st;
-					spf.primitiveValue = underlying;
+					spf.primitiveValue.Unbox( underlying, st );
 				}
 			}
 			// Not a proxiable script.
@@ -134,8 +133,7 @@ namespace Cilbox
 			else if( StackElement.TypeToStackType.TryGetValue( fv.GetType().ToString(), out st ) && st < StackType.Object )
 			{
 				spf.fieldType = (byte)ProxyFieldType.Primitive;
-				spf.stackType = (byte)st;
-				spf.primitiveValue = fv;
+				spf.primitiveValue.Unbox( fv, st );
 			}
 			else if( fv.GetType().IsArray )
 			{
@@ -309,6 +307,18 @@ namespace Cilbox
 
 					if( spf == null ) { /* Debug.Log( $"Skipping {i} {cls.instanceFieldNames[i]}" ); */ continue; }
 
+					// Primitive: expand the 16-byte PrimitivePayload into the 24-byte StackElement.
+					// `l` overlaps b/f/d/e in both structs, so a single 8-byte copy at offset 8
+					// captures the entire union. No boxing, no allocation.
+					if( (ProxyFieldType)spf.fieldType == ProxyFieldType.Primitive )
+					{
+						ref StackElement dst = ref fields[i];
+						dst.type = spf.primitiveValue.type;
+						dst.l    = spf.primitiveValue.l;   // entire 8-byte union
+						dst.o    = null;                   // clear any prior ref
+						continue;
+					}
+
 					object o;
 					bool bIsObject = LoadObjectFromProxyField( spf, out o, cls.instanceFieldNames[i], cls.instanceFieldTypes[i] );
 					if( bIsObject )
@@ -405,11 +415,37 @@ namespace Cilbox
 				int aLen = spf.arrayElements.Length;
 				Array arr = Array.CreateInstance( t, aLen );
 
-				for( int j = 0; j < aLen; j++ )
+				StackType elementSt = default;
+				bool isPrimArr = !isCilboxElementType
+					&& StackElement.TypeToStackType.TryGetValue(t.ToString(), out elementSt)
+					&& elementSt < StackType.Object;
+
+				if( isPrimArr )
 				{
-					object o;
-					LoadObjectFromProxyField( spf.arrayElements[j], out o, rootFieldName, t );
-					arr.SetValue( o, j );
+					// Typed array fill — one cast outside the loop, direct typed writes inside. Zero boxes.
+					switch( elementSt )
+					{
+					case StackType.Boolean: { var a = (bool   [])arr; for (int j = 0; j < aLen; j++) a[j] =         spf.arrayElements[j].primitiveValue.b;       break; }
+					case StackType.Sbyte:   { var a = (sbyte  [])arr; for (int j = 0; j < aLen; j++) a[j] = (sbyte )spf.arrayElements[j].primitiveValue.l;       break; }
+					case StackType.Byte:    { var a = (byte   [])arr; for (int j = 0; j < aLen; j++) a[j] = (byte  )spf.arrayElements[j].primitiveValue.e;       break; }
+					case StackType.Short:   { var a = (short  [])arr; for (int j = 0; j < aLen; j++) a[j] = (short )spf.arrayElements[j].primitiveValue.l;       break; }
+					case StackType.Ushort:  { var a = (ushort [])arr; for (int j = 0; j < aLen; j++) a[j] = (ushort)spf.arrayElements[j].primitiveValue.e;       break; }
+					case StackType.Int:     { var a = (int    [])arr; for (int j = 0; j < aLen; j++) a[j] = (int   )spf.arrayElements[j].primitiveValue.l;       break; }
+					case StackType.Uint:    { var a = (uint   [])arr; for (int j = 0; j < aLen; j++) a[j] = (uint  )spf.arrayElements[j].primitiveValue.e;       break; }
+					case StackType.Long:    { var a = (long   [])arr; for (int j = 0; j < aLen; j++) a[j] =         spf.arrayElements[j].primitiveValue.l;       break; }
+					case StackType.Ulong:   { var a = (ulong  [])arr; for (int j = 0; j < aLen; j++) a[j] =         spf.arrayElements[j].primitiveValue.e;       break; }
+					case StackType.Float:   { var a = (float  [])arr; for (int j = 0; j < aLen; j++) a[j] =         spf.arrayElements[j].primitiveValue.f;       break; }
+					case StackType.Double:  { var a = (double [])arr; for (int j = 0; j < aLen; j++) a[j] =         spf.arrayElements[j].primitiveValue.d;       break; }
+					}
+				}
+				else
+				{
+					for( int j = 0; j < aLen; j++ )
+					{
+						object o;
+						LoadObjectFromProxyField( spf.arrayElements[j], out o, rootFieldName, t );
+						arr.SetValue( o, j );
+					}
 				}
 
 				oOut = arr;
@@ -424,7 +460,24 @@ namespace Cilbox
 
 			case ProxyFieldType.Primitive:
 			{
-				oOut = spf.primitiveValue;
+				// Slow path — only reached if a caller didn't short-circuit. Re-boxes from the
+				// 16-byte PrimitivePayload (no object slot, so the StackElement.AsObject branches
+				// for Address/NativeHandle/Object don't apply here).
+				oOut = spf.primitiveValue.type switch
+				{
+					StackType.Boolean => spf.primitiveValue.b,
+					StackType.Sbyte => (sbyte)spf.primitiveValue.l,
+					StackType.Byte => (byte)spf.primitiveValue.e,
+					StackType.Short => (short)spf.primitiveValue.l,
+					StackType.Ushort => (ushort)spf.primitiveValue.e,
+					StackType.Int => (int)spf.primitiveValue.l,
+					StackType.Uint => (uint)spf.primitiveValue.e,
+					StackType.Long => spf.primitiveValue.l,
+					StackType.Ulong => spf.primitiveValue.e,
+					StackType.Float => spf.primitiveValue.f,
+					StackType.Double => spf.primitiveValue.d,
+					_ => throw new NotSupportedException($"PrimitivePayload cannot box StackType {spf.primitiveValue.type}")
+				};
 				return false;
 			}
 

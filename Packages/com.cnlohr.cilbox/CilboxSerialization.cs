@@ -3,6 +3,7 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace Cilbox
@@ -1039,6 +1040,42 @@ namespace Cilbox
 		Json        = 6,  // "j" — JsonUtility-serialized struct
 	}
 
+	// Primitive-only value payload. 16 bytes (no object slot). Wire format:
+	// [byte type][value bytes].  type is the StackType byte (0..10); reference-bearing
+	// StackType values (Object/Address/NativeHandle) are not representable here.
+	// NOTE: keep the value-slot field offsets in lockstep with StackElement (offset 8,
+	// same union layout) - the consume site copies the 8-byte `l` slot directly into
+	// StackElement.l, relying on identical bit layout for b/f/d/l/e.
+	[StructLayout(LayoutKind.Explicit)]
+	public struct PrimitivePayload
+	{
+		[FieldOffset(0)] public StackType type;
+		[FieldOffset(8)] public bool   b;
+		[FieldOffset(8)] public float  f;
+		[FieldOffset(8)] public double d;
+		[FieldOffset(8)] public long   l;
+		[FieldOffset(8)] public ulong  e;
+
+		public void Unbox( object i, StackType st )
+		{
+			type = st;
+			switch( st )
+			{
+				case StackType.Boolean: this.l = ((bool)i)?1:0; break;
+				case StackType.Sbyte:   this.l = (sbyte)i;      break;
+				case StackType.Byte:    this.e = (byte)i;       break;
+				case StackType.Short:   this.l = (short)i;      break;
+				case StackType.Ushort:  this.e = (ushort)i;     break;
+				case StackType.Int:     this.l = (int)i;        break;
+				case StackType.Uint:    this.e = (uint)i;       break;
+				case StackType.Long:    this.l = (long)i;       break;
+				case StackType.Ulong:   this.e = (ulong)i;      break;
+				case StackType.Float:   this.l = 0; this.f = (float)i;  break;
+				case StackType.Double:  this.d = (double)i;     break;
+			}
+		}
+	}
+
 	public class SerializedProxyField
 	{
 		public byte fieldType;            // ProxyFieldType
@@ -1048,8 +1085,7 @@ namespace Cilbox
 		// String / Json
 		public string data;               // value as string / JSON text
 		// Primitive
-		public object primitiveValue;     // boxed primitive value (int, float, bool, etc.)
-		public byte stackType;            // sub-discriminator for Primitive (StackType byte)
+		public PrimitivePayload primitiveValue;  // typed primitive value; primitiveValue.type holds the StackType
 
 		// CilboxRef / ObjectRef
 		public int fieldObjectIndex;      // index into fieldsObjects
@@ -1071,41 +1107,44 @@ namespace Cilbox
 		const byte T_ElementType = 8;		// Array / Json
 		const byte T_ArrayElements = 9;		// Array
 
-		private static object ReadPrimitiveValue(byte[] buf, ref int pos, byte stackType)
+		private static PrimitivePayload ReadPrimitiveValue(byte[] buf, ref int pos, byte stackType)
 		{
-			switch (stackType)
+			PrimitivePayload el = default;
+			el.type = (StackType)stackType;
+			switch ((StackType)stackType)
 			{
-			case 0:  return BinaryHelper.ReadBool(buf, ref pos);    // Boolean
-			case 1:  return BinaryHelper.ReadSByte(buf, ref pos);   // Sbyte
-			case 2:  return BinaryHelper.ReadByte(buf, ref pos);    // Byte
-			case 3:  return BinaryHelper.ReadShort(buf, ref pos);   // Short
-			case 4:  return BinaryHelper.ReadUShort(buf, ref pos);  // Ushort
-			case 5:  return BinaryHelper.ReadInt(buf, ref pos);     // Int
-			case 6:  return BinaryHelper.ReadUInt(buf, ref pos);    // Uint
-			case 7:  return BinaryHelper.ReadLong(buf, ref pos);    // Long
-			case 8:  return BinaryHelper.ReadULong(buf, ref pos);   // Ulong
-			case 9:  return BinaryHelper.ReadFloat(buf, ref pos);   // Float
-			case 10: return BinaryHelper.ReadDouble(buf, ref pos);  // Double
+			case StackType.Boolean: el.b = BinaryHelper.ReadBool  (buf, ref pos); break;
+			case StackType.Sbyte:   el.l = BinaryHelper.ReadSByte (buf, ref pos); break;
+			case StackType.Byte:    el.e = BinaryHelper.ReadByte  (buf, ref pos); break;
+			case StackType.Short:   el.l = BinaryHelper.ReadShort (buf, ref pos); break;
+			case StackType.Ushort:  el.e = BinaryHelper.ReadUShort(buf, ref pos); break;
+			case StackType.Int:     el.l = BinaryHelper.ReadInt   (buf, ref pos); break;
+			case StackType.Uint:    el.e = BinaryHelper.ReadUInt  (buf, ref pos); break;
+			case StackType.Long:    el.l = BinaryHelper.ReadLong  (buf, ref pos); break;
+			case StackType.Ulong:   el.e = BinaryHelper.ReadULong (buf, ref pos); break;
+			case StackType.Float:   el.l = 0; el.f = BinaryHelper.ReadFloat (buf, ref pos); break;  // clear high bits
+			case StackType.Double:  el.d = BinaryHelper.ReadDouble(buf, ref pos); break;
 			default: throw new CilboxException($"Unknown primitive stackType {stackType}");
 			}
+			return el;
 		}
 
-		private static void WritePrimitiveValue(List<byte> buf, object value, byte stackType)
+		private static void WritePrimitiveValue(List<byte> buf, in PrimitivePayload value)
 		{
-			switch (stackType)
+			switch (value.type)
 			{
-			case 0:  BinaryHelper.WriteBool(buf, (bool)value);     break; // Boolean
-			case 1:  BinaryHelper.WriteSByte(buf, (sbyte)value);   break; // Sbyte
-			case 2:  BinaryHelper.WriteByte(buf, (byte)value);     break; // Byte
-			case 3:  BinaryHelper.WriteShort(buf, (short)value);   break; // Short
-			case 4:  BinaryHelper.WriteUShort(buf, (ushort)value); break; // Ushort
-			case 5:  BinaryHelper.WriteInt(buf, (int)value);       break; // Int
-			case 6:  BinaryHelper.WriteUInt(buf, (uint)value);     break; // Uint
-			case 7:  BinaryHelper.WriteLong(buf, (long)value);     break; // Long
-			case 8:  BinaryHelper.WriteULong(buf, (ulong)value);   break; // Ulong
-			case 9:  BinaryHelper.WriteFloat(buf, (float)value);   break; // Float
-			case 10: BinaryHelper.WriteDouble(buf, (double)value); break; // Double
-			default: throw new CilboxException($"Unknown primitive stackType {stackType}");
+			case StackType.Boolean: BinaryHelper.WriteBool  (buf, value.b);          break;
+			case StackType.Sbyte:   BinaryHelper.WriteSByte (buf, (sbyte)value.l);   break;
+			case StackType.Byte:    BinaryHelper.WriteByte  (buf, (byte)value.e);    break;
+			case StackType.Short:   BinaryHelper.WriteShort (buf, (short)value.l);   break;
+			case StackType.Ushort:  BinaryHelper.WriteUShort(buf, (ushort)value.e);  break;
+			case StackType.Int:     BinaryHelper.WriteInt   (buf, (int)value.l);     break;
+			case StackType.Uint:    BinaryHelper.WriteUInt  (buf, (uint)value.e);    break;
+			case StackType.Long:    BinaryHelper.WriteLong  (buf, value.l);          break;
+			case StackType.Ulong:   BinaryHelper.WriteULong (buf, value.e);          break;
+			case StackType.Float:   BinaryHelper.WriteFloat (buf, value.f);          break;
+			case StackType.Double:  BinaryHelper.WriteDouble(buf, value.d);          break;
+			default: throw new CilboxException($"Unknown primitive StackType {value.type}");
 			}
 		}
 
@@ -1126,9 +1165,11 @@ namespace Cilbox
 					case T_MatchingInstanceId: f.matchingInstanceId = BinaryHelper.ReadInt(buf, ref pos); break;
 					case T_Data: f.data = BinaryHelper.ReadString(buf, ref pos); break;
 					case T_PrimitivePayload:
-						f.stackType = BinaryHelper.ReadByte(buf, ref pos);
-						f.primitiveValue = ReadPrimitiveValue(buf, ref pos, f.stackType);
+					{
+						byte st = BinaryHelper.ReadByte(buf, ref pos);
+						f.primitiveValue = ReadPrimitiveValue(buf, ref pos, st);
 						break;
+					}
 					case T_FieldObjectIndex: f.fieldObjectIndex = BinaryHelper.ReadInt(buf, ref pos); break;
 					case T_ObjectRefIsNull: f.objectRefIsNull = BinaryHelper.ReadBool(buf, ref pos); break;
 					case T_ElementType: f.elementType = SerializedTypeDescriptor.Read(buf, ref pos, pool); break;
@@ -1159,8 +1200,8 @@ namespace Cilbox
 					case ProxyFieldType.Primitive:
 						BinaryHelper.WriteField(c.body, T_PrimitivePayload, b2 =>
 						{
-							BinaryHelper.WriteByte(b2, stackType);
-							WritePrimitiveValue(b2, primitiveValue, stackType);
+							BinaryHelper.WriteByte(b2, (byte)primitiveValue.type);
+							WritePrimitiveValue(b2, primitiveValue);
 						});
 						break;
 					case ProxyFieldType.CilboxRef:
