@@ -531,6 +531,12 @@ namespace TestCilbox
 			Validator.Set("CilOutVec3", outVec2.ToString() );
 			TestUtil.GetOutInt(out int outInt);
 			Validator.Set("NativeOutInt", outInt.ToString() );
+			TestUtil.GetOutNullableInt(out int? outNullableInt);
+			Validator.Set("NativeOutNullableIntHasValue", outNullableInt.HasValue.ToString() );
+			Validator.Set("NativeOutNullableIntValue", outNullableInt.GetValueOrDefault().ToString() );
+			TestUtil.GetOutNullableIntNull(out int? outNullableIntNull);
+			Validator.Set("NativeOutNullableIntNullHasValue", outNullableIntNull.HasValue.ToString() );
+			Validator.Set("NativeOutNullableIntNullValue", outNullableIntNull.GetValueOrDefault().ToString() );
 			TestOutInt(out int outInt2);
 			Validator.Set("CilOutInt", outInt2.ToString() );
 			Vector3 alreadyInit = new Vector3(5, 5, 5);

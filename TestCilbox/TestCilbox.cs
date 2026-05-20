@@ -49,6 +49,7 @@ namespace TestCilbox
 			"System.Numerics.Vector2",
 			"System.Object",
 			"System.Nullable",
+			"System.Nullable`1",
 			"System.Single",
 			"System.String",
 			"System.TimeSpan",
@@ -258,6 +259,16 @@ namespace TestCilbox
 		public static void GetOutInt(out int i)
 		{
 			i = 42;
+		}
+
+		public static void GetOutNullableInt(out int? i)
+		{
+			i = 42;
+		}
+
+		public static void GetOutNullableIntNull(out int? i)
+		{
+			i = null;
 		}
 
 		public static string NullablePrimitiveSummary(bool? flag, int? count, float? scale)
@@ -752,6 +763,10 @@ namespace TestCilbox
 			Validator.Validate("NativeOutVec3", "(12, 8, 0)");
 			Validator.Validate("CilOutVec3", "(1, 2, 3)");
 			Validator.Validate("NativeOutInt", "42");
+			Validator.Validate("NativeOutNullableIntHasValue", "True");
+			Validator.Validate("NativeOutNullableIntValue", "42");
+			Validator.Validate("NativeOutNullableIntNullHasValue", "False");
+			Validator.Validate("NativeOutNullableIntNullValue", "0");
 			Validator.Validate("CilOutInt", "22");
 			Validator.Validate("NativeOutVec3AlreadyInit", "(12, 8, 0)");
 			Validator.Validate("NullablePrimitiveCoerceValues", "True, 42, 1.5");
