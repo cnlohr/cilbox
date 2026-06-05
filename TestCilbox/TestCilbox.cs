@@ -704,6 +704,14 @@ namespace TestCilbox
 			Validator.Validate("Double Array With Data 1", "6.25");
 			Validator.Validate("Double Array With Data 2", "8.75");
 
+			Validator.Validate("Vector2 Array Assigned Length", "2");
+			Validator.Validate("Vector2 Array Assigned 0", "<1.5, 2.5>");
+			Validator.Validate("Vector2 Array Assigned 1", "<3.25, 4.25>");
+
+			Validator.Validate("Vector2 Array With Data Length", "2");
+			Validator.Validate("Vector2 Array With Data 0", "<5.5, 6.5>");
+			Validator.Validate("Vector2 Array With Data 1", "<6.25, 7.25>");
+
 			Validator.Validate("Static Readonly Vector2 Array Length", "2");
 			Validator.Validate("Static Readonly Vector2 Array 0", "<1, 2>");
 			Validator.Validate("Static Readonly Vector2 Array 1", "<3.5, 4.5>");
