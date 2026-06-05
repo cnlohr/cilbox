@@ -1341,6 +1341,36 @@ spiperf.Begin();
 						stackBuffer[++sp].LoadObject( a.GetValue(index) );
 						break;
 					}
+					case 0xa3: // ldelem <typeTok>
+					{
+						uint otyp = BytecodeAsU32( ref pc );
+						int index = stackBuffer[sp--].i;
+						StackElement arrSE = stackBuffer[sp--];
+
+						if (arrSE.o == null)
+						{
+							interpretedThrow(pc - 1, new NullReferenceException());
+							break;
+						}
+						Array array = (Array)arrSE.AsObject();
+						if (index < 0 || index >= array.Length)
+						{
+							interpretedThrow(pc - 1, new IndexOutOfRangeException());
+							break;
+						}
+
+						CilMetadataTokenInfo elemMeta = box.metadatas[otyp];
+						var value = array.GetValue( index );
+						var targetElementType = elemMeta.nativeType;
+
+						if( targetElementType != null && targetElementType != typeof(object) && value != null && !targetElementType.IsInstanceOfType( value ) )
+						{
+							value = Convert.ChangeType( value, targetElementType );
+						}
+
+						stackBuffer[++sp].LoadObject( value );
+						break;
+					}
 					case 0x9b: case 0x9c: case 0x9d: case 0x9e: case 0x9f: // stelem
 					case 0xa0: case 0xa1: case 0xa2:
 					{
