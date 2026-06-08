@@ -40,6 +40,7 @@ namespace TestCilbox
 			"System.Exception",
 			"System.IDisposable",
 			"System.IndexOutOfRangeException",
+			"System.InvalidOperationException",
 			"System.Int16",
 			"System.Int32",
 			"System.Int64",
@@ -771,6 +772,26 @@ namespace TestCilbox
 			Validator.Validate("NativeOutVec3AlreadyInit", "(12, 8, 0)");
 			Validator.Validate("NullablePrimitiveCoerceValues", "True, 42, 1.5");
 			Validator.Validate("NullablePrimitiveCoerceNulls", "null, null, null");
+			Validator.Validate("NullableLocalValueHasValue", "True");
+			Validator.Validate("NullableLocalValueValue", "5");
+			Validator.Validate("NullableLocalValueDefault", "5");
+			Validator.Validate("NullableLocalValueDefault123", "5");
+			Validator.Validate("NullableLocalNullHasValue", "False");
+			Validator.Validate("NullableLocalNullDefault", "0");
+			Validator.Validate("NullableLocalNullDefault123", "123");
+			Validator.Validate("NullableLocalNullValueThrows", "InvalidOperationException");
+			Validator.Validate("NullableArgumentValueHasValue", "True");
+			Validator.Validate("NullableArgumentValueDefault", "5");
+			Validator.Validate("NullableArgumentValueDefault123", "5");
+			Validator.Validate("NullableArgumentNullHasValue", "False");
+			Validator.Validate("NullableArgumentNullDefault", "0");
+			Validator.Validate("NullableArgumentNullDefault123", "123");
+			Validator.Validate("NullableReturnValue", "31");
+			Validator.Validate("NullableReturnNullHasValue", "False");
+			Validator.Validate("NullableFieldHasValue", "True");
+			Validator.Validate("NullableFieldValue", "77");
+			Validator.Validate("NullableFieldNullHasValue", "False");
+			Validator.Validate("NullableFieldNullDefault123", "123");
 			Validator.Validate("NullableReturnTypeIsNullable", "True");
 			Validator.Validate("NullableReturnTypeUnderlying", "System.Int32");
 			Validator.Validate("PrivateBoolOutSuccess", "True");

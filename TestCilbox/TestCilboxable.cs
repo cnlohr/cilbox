@@ -30,6 +30,7 @@ namespace TestCilbox
 		public TestEnum testEnumField = TestEnum.SecondValue;
 		private TestState testStateField = TestState.Playing;
 		private TestPayload testPayloadField = new TestPayload { Score = 123, Lives = 4 };
+		private int? nullableField = 77;
 
 		public enum MyEnum
 		{
@@ -544,6 +545,7 @@ namespace TestCilbox
 			Validator.Set("NativeOutVec3AlreadyInit", alreadyInit.ToString() );
 			Validator.Set("NullablePrimitiveCoerceValues", TestUtil.NullablePrimitiveSummary(true, 42, 1.5f) );
 			Validator.Set("NullablePrimitiveCoerceNulls", TestUtil.NullablePrimitiveSummary(null, null, null) );
+			RunNullableMemberTests();
 			Type nullableReturnType = TestUtil.GetNullableIntReturnType();
 			Type nullableUnderlyingType = Nullable.GetUnderlyingType(nullableReturnType);
 			Validator.Set("NullableReturnTypeIsNullable", (nullableUnderlyingType != null).ToString() );
@@ -628,6 +630,57 @@ namespace TestCilbox
 			for( int i = 0; i < 10000000; i++ ) result = System.Math.Sin( result ) * 10.0;
 			Validator.Set( "Throwaway", result.ToString() );
 			Validator.Set( "Overtime", "did not timed out" );
+		}
+
+		private int? GetInterpretedNullable(bool hasValue)
+		{
+			return hasValue ? 31 : null;
+		}
+
+		private void RecordNullableArgument(string prefix, int? value)
+		{
+			Validator.Set(prefix + "HasValue", value.HasValue.ToString());
+			Validator.Set(prefix + "Default", value.GetValueOrDefault().ToString());
+			Validator.Set(prefix + "Default123", value.GetValueOrDefault(123).ToString());
+		}
+
+		private void RunNullableMemberTests()
+		{
+			int? localValue = 5;
+			Validator.Set("NullableLocalValueHasValue", localValue.HasValue.ToString());
+			Validator.Set("NullableLocalValueValue", localValue.Value.ToString());
+			Validator.Set("NullableLocalValueDefault", localValue.GetValueOrDefault().ToString());
+			Validator.Set("NullableLocalValueDefault123", localValue.GetValueOrDefault(123).ToString());
+
+			int? localNull = null;
+			Validator.Set("NullableLocalNullHasValue", localNull.HasValue.ToString());
+			Validator.Set("NullableLocalNullDefault", localNull.GetValueOrDefault().ToString());
+			Validator.Set("NullableLocalNullDefault123", localNull.GetValueOrDefault(123).ToString());
+			try
+			{
+#pragma warning disable CS8629
+				int ignored = localNull.Value;
+#pragma warning restore CS8629
+				Validator.Set("NullableLocalNullValueThrows", ignored.ToString());
+			}
+			catch(InvalidOperationException)
+			{
+				Validator.Set("NullableLocalNullValueThrows", "InvalidOperationException");
+			}
+
+			RecordNullableArgument("NullableArgumentValue", localValue);
+			RecordNullableArgument("NullableArgumentNull", localNull);
+
+			int? returnedValue = GetInterpretedNullable(true);
+			int? returnedNull = GetInterpretedNullable(false);
+			Validator.Set("NullableReturnValue", returnedValue.GetValueOrDefault().ToString());
+			Validator.Set("NullableReturnNullHasValue", returnedNull.HasValue.ToString());
+
+			Validator.Set("NullableFieldHasValue", nullableField.HasValue.ToString());
+			Validator.Set("NullableFieldValue", nullableField.GetValueOrDefault().ToString());
+			nullableField = null;
+			Validator.Set("NullableFieldNullHasValue", nullableField.HasValue.ToString());
+			Validator.Set("NullableFieldNullDefault123", nullableField.GetValueOrDefault(123).ToString());
 		}
 
 

@@ -5,17 +5,58 @@ using System.Collections.Specialized;
 using System.Collections;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Reflection;
 using System.Text;
 
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.Callbacks;
-using System.Reflection;
 using System.IO;
 #endif
 
 namespace Cilbox
 {
+	public static class CilboxNullable
+	{
+		public const byte NullableCallOpcode = 0x24;
+		public const string LegacyNullableCallMessage = "Legacy serialized nullable call encountered. Rebuild serialized assembly data.";
+
+		private static bool IsNullableType(Type type)
+		{
+			return type != null && type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>);
+		}
+
+		public static bool IsSupportedNullableMethod(MethodBase method)
+		{
+			if( method == null )
+				return false;
+
+			Type declaringType = method.DeclaringType;
+			if( !IsNullableType(declaringType) )
+				return false;
+
+			switch( method.Name )
+			{
+			case "get_HasValue":
+			case "get_Value":
+				return method.GetParameters().Length == 0;
+			case "GetValueOrDefault":
+				ParameterInfo[] parameters = method.GetParameters();
+				return parameters.Length == 0 || parameters.Length == 1;
+			default:
+				return false;
+			}
+		}
+
+		public static Type GetUnderlyingTypeOrThrow(MethodBase method)
+		{
+			if( !IsSupportedNullableMethod(method) )
+				throw new InvalidOperationException("Unsupported nullable method: " + method);
+
+			return Nullable.GetUnderlyingType(method.DeclaringType);
+		}
+	}
+
 	///////////////////////////////////////////////////////////////////////////
 	//  STACK ELEMENT CONTAINER  //////////////////////////////////////////////
 	///////////////////////////////////////////////////////////////////////////
@@ -1475,6 +1516,7 @@ namespace Cilbox
 				Sizeof,
 				Refanytype,
 				Readonly,
+				Cbx_Nullable_Call,
 			}
 			public struct OpCode : IEquatable<OpCode> {
 
@@ -1753,6 +1795,10 @@ namespace Cilbox
 			public static readonly OpCode Ldc_R8 = new OpCode (
 				0xff << 0 | 0x23 << 8 | (byte) Code.Ldc_R8 << 16 | (byte) FlowControl.Next << 24,
 				(byte) OpCodeType.Primitive << 0 | (byte) OperandType.InlineR << 8 | (byte) StackBehaviour.Pop0 << 16 | (byte) StackBehaviour.Pushr8 << 24);
+
+			public static readonly OpCode Cbx_Nullable_Call = new OpCode (
+				0xff << 0 | 0x24 << 8 | (byte) Code.Cbx_Nullable_Call << 16 | (byte) FlowControl.Call << 24,
+				(byte) OpCodeType.Primitive << 0 | (byte) OperandType.InlineMethod << 8 | (byte) StackBehaviour.Varpop << 16 | (byte) StackBehaviour.Varpush << 24);
 
 			public static readonly OpCode Dup = new OpCode (
 				0xff << 0 | 0x25 << 8 | (byte) Code.Dup << 16 | (byte) FlowControl.Next << 24,
@@ -2712,9 +2758,10 @@ namespace Cilbox
 					6, 115, 105, 122, 101, 111, 102,
 					10, 114, 101, 102, 97, 110, 121, 116, 121, 112, 101,
 					9, 114, 101, 97, 100, 111, 110, 108, 121, 46,
+					17, 99, 98, 120, 46, 110, 117, 108, 108, 97, 98, 108, 101, 46, 99, 97, 108, 108,
 				};
 
-				names = new string [219];
+				names = new string [220];
 
 				for (int i = 0, p = 0; i < names.Length; i++) {
 					var buffer = new char [table [p++]];
