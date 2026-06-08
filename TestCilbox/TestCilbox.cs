@@ -280,6 +280,16 @@ namespace TestCilbox
 			return flagText + ", " + countText + ", " + scaleText;
 		}
 
+		public static int PlainBoundaryKernel(int count, float scale, bool flag)
+		{
+			return flag ? count + (int)scale : count - (int)scale;
+		}
+
+		public static int NullableBoundaryKernel(int? count, float? scale, bool? flag)
+		{
+			return flag.GetValueOrDefault() ? count.GetValueOrDefault() + (int)scale.GetValueOrDefault() : count.GetValueOrDefault() - (int)scale.GetValueOrDefault();
+		}
+
 		public static int? GetNullableInt()
 		{
 			return 42;
@@ -328,6 +338,8 @@ namespace TestCilbox
 				$"Perf.{rootClass}.TrigUs",
 				$"Perf.{rootClass}.MatrixUs",
 				$"Perf.{rootClass}.PeerCallsUs",
+				$"Perf.{rootClass}.PlainBoundaryUs",
+				$"Perf.{rootClass}.NullableBoundaryUs",
 			};
 			foreach( string key in taskKeys )
 			{
@@ -355,6 +367,8 @@ namespace TestCilbox
 			Validator.ValidatePositiveLong($"Perf.{rootClass}.TrigUs");
 			Validator.ValidatePositiveLong($"Perf.{rootClass}.MatrixUs");
 			Validator.ValidatePositiveLong($"Perf.{rootClass}.PeerCallsUs");
+			Validator.ValidatePositiveLong($"Perf.{rootClass}.PlainBoundaryUs");
+			Validator.ValidatePositiveLong($"Perf.{rootClass}.NullableBoundaryUs");
 			Validator.ValidatePositiveLong($"Perf.{rootClass}.TotalUs");
 			Validator.ValidatePositiveLong($"Perf.{peerClass}.TotalUs");
 

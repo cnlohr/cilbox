@@ -965,6 +965,7 @@ namespace TestCilbox
 		private const int MatrixSize = 20;
 		private const int MatrixRepeats = 8;
 		private const int PeerCallCount = 2500;
+		private const int BoundaryCallCount = 50000;
 
 		public PerfPeerBehaviour peer;
 
@@ -979,11 +980,17 @@ namespace TestCilbox
 			long peerUs = RunPeerTask();
 
 			totalSw.Stop();
+			// Stopping watch to keep the same testing between versions.
+			long plainBoundaryUs = RunPlainBoundaryTask();
+			long nullableBoundaryUs = RunNullableBoundaryTask();
+
 			Validator.Set($"Perf.{ClassName}.RecursiveUs", recursiveUs.ToString());
 			Validator.Set($"Perf.{ClassName}.FourierUs", dftUs.ToString());
 			Validator.Set($"Perf.{ClassName}.TrigUs", trigUs.ToString());
 			Validator.Set($"Perf.{ClassName}.MatrixUs", matrixUs.ToString());
 			Validator.Set($"Perf.{ClassName}.PeerCallsUs", peerUs.ToString());
+			Validator.Set($"Perf.{ClassName}.PlainBoundaryUs", plainBoundaryUs.ToString());
+			Validator.Set($"Perf.{ClassName}.NullableBoundaryUs", nullableBoundaryUs.ToString());
 			Validator.Set($"Perf.{ClassName}.TotalUs", PerfUtility.StopwatchToUs(totalSw).ToString());
 		}
 
@@ -1128,6 +1135,32 @@ namespace TestCilbox
 			}
 			sw.Stop();
 			Validator.Set($"Perf.{ClassName}.PeerChecksum", value.ToString());
+			return PerfUtility.StopwatchToUs(sw);
+		}
+
+		private long RunPlainBoundaryTask()
+		{
+			System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+			int checksum = 0;
+			for (int i = 0; i < BoundaryCallCount; i++)
+			{
+				checksum += TestUtil.PlainBoundaryKernel(i, i * 0.25f, (i & 1) == 0);
+			}
+			sw.Stop();
+			Validator.Set($"Perf.{ClassName}.PlainBoundaryChecksum", checksum.ToString());
+			return PerfUtility.StopwatchToUs(sw);
+		}
+
+		private long RunNullableBoundaryTask()
+		{
+			System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+			int checksum = 0;
+			for (int i = 0; i < BoundaryCallCount; i++)
+			{
+				checksum += TestUtil.NullableBoundaryKernel(i, i * 0.25f, (i & 1) == 0);
+			}
+			sw.Stop();
+			Validator.Set($"Perf.{ClassName}.NullableBoundaryChecksum", checksum.ToString());
 			return PerfUtility.StopwatchToUs(sw);
 		}
 	}

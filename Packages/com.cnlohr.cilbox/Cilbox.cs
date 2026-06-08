@@ -503,6 +503,7 @@ spiperf.Begin();
 							}
 							object callthis = null;
 							Type[] paTypes = dt.nativeParameterTypes;
+							Type[] nullablePaTypes = dt.nativeParameterNullableUnderlyingTypes;
 							int numFields = paTypes.Length;
 							object [] callpar = new object[numFields];
 							StackElement [] callpar_se = new StackElement[numFields];
@@ -513,7 +514,8 @@ spiperf.Begin();
 								StackElement se = stackBuffer[sp--];
 								callpar_se[numFields-ik-1] = se;
 								object o = se.AsObject(box);
-								Type t = paTypes[numFields-ik-1];
+								int parameterIndex = numFields-ik-1;
+								Type t = paTypes[parameterIndex];
 
 								if( t.IsByRef )
 								{
@@ -533,10 +535,10 @@ spiperf.Begin();
 									if( o != null && t.IsValueType && o.GetType() != t )
 									{
 										//o = Convert.ChangeType( o, t );
-										o = se.CoerceToObject( t );
+										o = se.CoerceToObject( t, nullablePaTypes?[parameterIndex] );
 									}
 								}
-								callpar[numFields-ik-1] = o;
+								callpar[parameterIndex] = o;
 							}
 							if( st.IsConstructor )
 							{
@@ -1127,7 +1129,7 @@ spiperf.Begin();
 							break;
 						}
 
-						ldfldMeta.nativeField.SetValue( opths, se.CoerceToObject( ldfldMeta.nativeType ) );
+						ldfldMeta.nativeField.SetValue( opths, se.CoerceToObject( ldfldMeta.nativeType, ldfldMeta.nativeTypeNullableUnderlyingType ) );
 						break;
 					}
 					case 0x46: case 0x47: case 0x48: case 0x49: case 0x4a: // ldind
@@ -1281,7 +1283,9 @@ spiperf.Begin();
 						}
 						if( stsm.isFieldWhiteListed && stsm.nativeField != null )
 						{
-							stsm.nativeField.SetValue( null, obj );
+							StackElement se = new StackElement();
+							se.Load( obj );
+							stsm.nativeField.SetValue( null, se.CoerceToObject( stsm.nativeType, stsm.nativeTypeNullableUnderlyingType ) );
 						}
 						else
 						{
@@ -1296,7 +1300,7 @@ spiperf.Begin();
 						StackElement value = stackBuffer[sp--];
 						StackElement addr = stackBuffer[sp--];
 						object obj = ( stobjMeta.nativeType != null && value.type < StackType.Object ) ?
-							value.CoerceToObject( stobjMeta.nativeType ) :
+							value.CoerceToObject( stobjMeta.nativeType, stobjMeta.nativeTypeNullableUnderlyingType ) :
 							value.AsObject( box );
 
 						if( addr.type == StackType.Address )
@@ -2070,6 +2074,7 @@ spiperf.End();
 		public bool fieldIsStatic;
 
 		public Type nativeType; // Used for types.
+		public Type nativeTypeNullableUnderlyingType;
 		public bool nativeTypeIsStackType;
 		public bool nativeTypeIsCilboxProxy;
 		public StackType nativeTypeStackType;
@@ -2080,6 +2085,7 @@ spiperf.End();
 		public bool isNative;
 		public MethodBase nativeMethod;
 		public Type[] nativeParameterTypes;
+		public Type[] nativeParameterNullableUnderlyingTypes;
 		public bool nativeIsVoid;
 		public bool nativeIsSupportedNullableMethod;
 		public int interpretiveMethod; // If nativeToken is 0, then it's a interpreted call.
@@ -2285,6 +2291,7 @@ spiperf.End();
 						t.isFieldWhiteListed = true;
 						t.fieldIsStatic = f.IsStatic;
 						t.nativeType = f.FieldType;
+						t.nativeTypeNullableUnderlyingType = Nullable.GetUnderlyingType(t.nativeType);
 						t.nativeField = f;
 						t.isValid = true;
 
@@ -2312,6 +2319,7 @@ spiperf.End();
 				{
 					Serializee typ = st["dt"];
 					t.nativeType = usage.GetNativeTypeFromSerializee( typ );
+					t.nativeTypeNullableUnderlyingType = t.nativeType == null ? null : Nullable.GetUnderlyingType(t.nativeType);
 					StackType seType = StackElement.StackTypeFromType( t.nativeType );
 					if( seType < StackType.Object )
 					{
@@ -2426,11 +2434,14 @@ spiperf.End();
 							t.isValid = true;
 							ParameterInfo[] mp = m.GetParameters();
 							Type[] mpt = new Type[mp.Length];
+							Type[] nullableUnderlyingTypes = new Type[mp.Length];
 							for( int mpi = 0; mpi < mp.Length; mpi++ )
 							{
 								mpt[mpi] = mp[mpi].ParameterType;
+								nullableUnderlyingTypes[mpi] = Nullable.GetUnderlyingType(mpt[mpi]);
 							}
 							t.nativeParameterTypes = mpt;
+							t.nativeParameterNullableUnderlyingTypes = nullableUnderlyingTypes;
 							t.nativeIsVoid = (m is MethodInfo mInfo) && mInfo.ReturnType == typeof(void);
 							t.nativeIsSupportedNullableMethod = CilboxNullable.IsSupportedNullableMethod(m);
 						} else if( !t.isNative )

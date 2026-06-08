@@ -219,15 +219,6 @@ namespace Cilbox
 
 		public object CoerceToObject( Type t )
 		{
-			Type nullableUnderlyingType = Nullable.GetUnderlyingType(t);
-			if( nullableUnderlyingType != null )
-			{
-				if( type == StackType.Object && o == null )
-				{
-					return null;
-				}
-				t = nullableUnderlyingType;
-			}
 
 			StackType rt = StackTypeFromType( t );
 
@@ -320,6 +311,18 @@ namespace Cilbox
 			}
 
 			throw new Exception( "Error invalid type conversion from " + type + " to " + t );
+		}
+		public object CoerceToObject( Type t, Type nullableUnderlyingType)
+		{
+			if( nullableUnderlyingType != null )
+			{
+				if( type == StackType.Object && o == null )
+				{
+					return null;
+				}
+				t = nullableUnderlyingType;
+			}
+			return CoerceToObject(t);
 		}
 
 		public object DereferenceAddress()
