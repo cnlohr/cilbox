@@ -333,7 +333,62 @@ spiperf.Begin();
 					case 0x21: stackBuffer[++sp].LoadLong( (long)BytecodeAs64( ref pc ) ); break; // ldc.i8 <int64>
 					case 0x22: stackBuffer[++sp].LoadFloat( CilboxUtil.IntFloatConverter.ConvertUtoF(BytecodeAsU32( ref pc ) ) ); break; // ldc.r4 <float32 (num)>
 					case 0x23: stackBuffer[++sp].LoadDouble( CilboxUtil.IntFloatConverter.ConvertEtoD(BytecodeAs64( ref pc ) ) ); break; // ldc.r8 <float64 (num)>
-					// 0x24 does not exist.
+					case CilboxNullable.NullableCallOpcode: // cbx.nullable.call
+					{
+						int currentInstruction = pc - 1;
+						uint bc = BytecodeAsU32( ref pc );
+						CilMetadataTokenInfo dt = box.metadatas[bc];
+						if( dt == null || !dt.isValid || !dt.isNative || dt.nativeMethod == null || !dt.nativeIsSupportedNullableMethod )
+						{
+							throw new CilboxInterpreterRuntimeException("Invalid cbx.nullable.call target.", parentClass.className, methodName, currentInstruction);
+						}
+
+						MethodBase st = dt.nativeMethod;
+						MethodInfo mi = (MethodInfo)st;
+						Type nullableUnderlyingType = CilboxNullable.GetUnderlyingTypeOrThrow(mi);
+						Type[] paTypes = dt.nativeParameterTypes;
+						object fallbackValue = null;
+						if( paTypes.Length == 1 )
+						{
+							StackElement fallbackSe = stackBuffer[sp--];
+							fallbackValue = fallbackSe.AsObject(box);
+							if( fallbackValue != null && nullableUnderlyingType.IsValueType && fallbackValue.GetType() != nullableUnderlyingType )
+								fallbackValue = fallbackSe.CoerceToObject( nullableUnderlyingType );
+						}
+						else if( paTypes.Length != 0 )
+						{
+							throw new CilboxInterpreterRuntimeException("Invalid cbx.nullable.call parameter count.", parentClass.className, methodName, currentInstruction);
+						}
+
+						StackElement seorig = stackBuffer[sp--];
+						StackElement se = StackElement.ResolveToStackElement( seorig );
+						object nullableValue = se.AsObject(box);
+						if( nullableValue != null && se.type < StackType.Object )
+							nullableValue = se.CoerceToObject( nullableUnderlyingType );
+
+						bool hasValue = nullableValue != null;
+						switch( mi.Name )
+						{
+						case "get_HasValue":
+							stackBuffer[++sp].LoadInt( hasValue ? 1 : 0 );
+							break;
+						case "get_Value":
+							if( !hasValue )
+							{
+								interpretedThrow(currentInstruction, new InvalidOperationException("Nullable object must have a value."));
+								break;
+							}
+							stackBuffer[++sp].Load( nullableValue );
+							break;
+						case "GetValueOrDefault":
+							stackBuffer[++sp].Load( hasValue ? nullableValue : (paTypes.Length == 0 ? Activator.CreateInstance(nullableUnderlyingType) : fallbackValue) );
+							break;
+						default:
+							throw new CilboxInterpreterRuntimeException("Unsupported cbx.nullable.call target.", parentClass.className, methodName, currentInstruction);
+						}
+						constrainedMeta = null;
+						break;
+					}
 					case 0x25: stackBuffer[sp+1] = stackBuffer[sp]; sp++; break; // dup TODO: Does dup potentially duplicate objects somehow?
 					case 0x26: sp--; break; // pop
 
@@ -442,8 +497,13 @@ spiperf.Begin();
 						{
 							st = dt.nativeMethod;
 							isVoid = dt.nativeIsVoid;
+							if( dt.nativeIsSupportedNullableMethod )
+							{
+								throw new CilboxInterpreterRuntimeException(CilboxNullable.LegacyNullableCallMessage, parentClass.className, methodName, currentInstruction);
+							}
 							object callthis = null;
 							Type[] paTypes = dt.nativeParameterTypes;
+							Type[] nullablePaTypes = dt.nativeParameterNullableUnderlyingTypes;
 							int numFields = paTypes.Length;
 							object [] callpar = new object[numFields];
 							StackElement [] callpar_se = new StackElement[numFields];
@@ -454,7 +514,8 @@ spiperf.Begin();
 								StackElement se = stackBuffer[sp--];
 								callpar_se[numFields-ik-1] = se;
 								object o = se.AsObject(box);
-								Type t = paTypes[numFields-ik-1];
+								int parameterIndex = numFields-ik-1;
+								Type t = paTypes[parameterIndex];
 
 								if( t.IsByRef )
 								{
@@ -474,10 +535,10 @@ spiperf.Begin();
 									if( o != null && t.IsValueType && o.GetType() != t )
 									{
 										//o = Convert.ChangeType( o, t );
-										o = se.CoerceToObject( t );
+										o = se.CoerceToObject( t, nullablePaTypes?[parameterIndex] );
 									}
 								}
-								callpar[numFields-ik-1] = o;
+								callpar[parameterIndex] = o;
 							}
 							if( st.IsConstructor )
 							{
@@ -498,6 +559,15 @@ spiperf.Begin();
 									}
 
 									Type ctorDeclaringType = ctor.DeclaringType;
+									if( ctorDeclaringType != null && Nullable.GetUnderlyingType(ctorDeclaringType) != null )
+									{
+										if( ctorThisSe.type == StackType.Address )
+											ctorThisSe.DereferenceLoadAddress( callpar.Length == 0 ? null : callpar[0] );
+										else if( ctorThisSe.type == StackType.NativeHandle )
+											ctorThisSe.DereferenceLoadNativeHandle( box, callpar.Length == 0 ? null : callpar[0] );
+										isVoid = true;
+										break;
+									}
 									if( ctorDeclaringType == null || ( ctorDeclaringType != typeof(object) && ctorDeclaringType != typeof(MonoBehaviour) ) )
 									{
 										throw new CilboxInterpreterRuntimeException(
@@ -543,8 +613,10 @@ spiperf.Begin();
 									interpretedThrow(pc - 1, new NullReferenceException());
 									break;
 								}
-
-								iko = st.Invoke( callthis, callpar );
+								else
+								{
+									iko = st.Invoke( callthis, callpar );
+								}
 								if( seorig.type == StackType.Address  && callthis is not BoxedCilboxEnum ) // enums are immutable
 								{
 									seorig.DereferenceLoadAddress( callthis );
@@ -1057,7 +1129,7 @@ spiperf.Begin();
 							break;
 						}
 
-						ldfldMeta.nativeField.SetValue( opths, se.CoerceToObject( ldfldMeta.nativeType ) );
+						ldfldMeta.nativeField.SetValue( opths, se.CoerceToObject( ldfldMeta.nativeType, ldfldMeta.nativeTypeNullableUnderlyingType ) );
 						break;
 					}
 					case 0x46: case 0x47: case 0x48: case 0x49: case 0x4a: // ldind
@@ -1211,7 +1283,9 @@ spiperf.Begin();
 						}
 						if( stsm.isFieldWhiteListed && stsm.nativeField != null )
 						{
-							stsm.nativeField.SetValue( null, obj );
+							StackElement se = new StackElement();
+							se.Load( obj );
+							stsm.nativeField.SetValue( null, se.CoerceToObject( stsm.nativeType, stsm.nativeTypeNullableUnderlyingType ) );
 						}
 						else
 						{
@@ -1226,7 +1300,7 @@ spiperf.Begin();
 						StackElement value = stackBuffer[sp--];
 						StackElement addr = stackBuffer[sp--];
 						object obj = ( stobjMeta.nativeType != null && value.type < StackType.Object ) ?
-							value.CoerceToObject( stobjMeta.nativeType ) :
+							value.CoerceToObject( stobjMeta.nativeType, stobjMeta.nativeTypeNullableUnderlyingType ) :
 							value.AsObject( box );
 
 						if( addr.type == StackType.Address )
@@ -2000,6 +2074,7 @@ spiperf.End();
 		public bool fieldIsStatic;
 
 		public Type nativeType; // Used for types.
+		public Type nativeTypeNullableUnderlyingType;
 		public bool nativeTypeIsStackType;
 		public bool nativeTypeIsCilboxProxy;
 		public StackType nativeTypeStackType;
@@ -2010,7 +2085,9 @@ spiperf.End();
 		public bool isNative;
 		public MethodBase nativeMethod;
 		public Type[] nativeParameterTypes;
+		public Type[] nativeParameterNullableUnderlyingTypes;
 		public bool nativeIsVoid;
+		public bool nativeIsSupportedNullableMethod;
 		public int interpretiveMethod; // If nativeToken is 0, then it's a interpreted call.
 		public int interpretiveMethodClass; // If nativeToken is 0, then it's a interpreted call class
 
@@ -2214,6 +2291,7 @@ spiperf.End();
 						t.isFieldWhiteListed = true;
 						t.fieldIsStatic = f.IsStatic;
 						t.nativeType = f.FieldType;
+						t.nativeTypeNullableUnderlyingType = Nullable.GetUnderlyingType(t.nativeType);
 						t.nativeField = f;
 						t.isValid = true;
 
@@ -2241,6 +2319,7 @@ spiperf.End();
 				{
 					Serializee typ = st["dt"];
 					t.nativeType = usage.GetNativeTypeFromSerializee( typ );
+					t.nativeTypeNullableUnderlyingType = t.nativeType == null ? null : Nullable.GetUnderlyingType(t.nativeType);
 					StackType seType = StackElement.StackTypeFromType( t.nativeType );
 					if( seType < StackType.Object )
 					{
@@ -2355,12 +2434,16 @@ spiperf.End();
 							t.isValid = true;
 							ParameterInfo[] mp = m.GetParameters();
 							Type[] mpt = new Type[mp.Length];
+							Type[] nullableUnderlyingTypes = new Type[mp.Length];
 							for( int mpi = 0; mpi < mp.Length; mpi++ )
 							{
 								mpt[mpi] = mp[mpi].ParameterType;
+								nullableUnderlyingTypes[mpi] = Nullable.GetUnderlyingType(mpt[mpi]);
 							}
 							t.nativeParameterTypes = mpt;
+							t.nativeParameterNullableUnderlyingTypes = nullableUnderlyingTypes;
 							t.nativeIsVoid = (m is MethodInfo mInfo) && mInfo.ReturnType == typeof(void);
+							t.nativeIsSupportedNullableMethod = CilboxNullable.IsSupportedNullableMethod(m);
 						} else if( !t.isNative )
 						{
 							throw new CilboxException( "Error: Could not find reference to: [" + useAssembly + "][" + declaringType.FullName + "][" + fullSignature + "] Type from:" + declaringTypeName );
@@ -2860,6 +2943,12 @@ spiperf.End();
 											i = backupi;
 											assemblyMetadataReverseOriginal[(proxyAssembly, (int)operand)] = writebackToken;
 											CilboxUtil.BytecodeReplaceLiteral( ref byteCode, ref i, opLen, writebackToken );
+										}
+										if( (oc == CilboxUtil.OpCodes.Call || oc == CilboxUtil.OpCodes.Callvirt) && ot == CilboxUtil.OpCodes.OperandType.InlineMethod )
+										{
+											MethodBase targetMethod = proxyAssembly.ManifestModule.ResolveMethod( (int)operand );
+											if( CilboxNullable.IsSupportedNullableMethod(targetMethod) )
+												byteCode[starti] = CilboxNullable.NullableCallOpcode;
 										}
 										if( i >= byteCode.Length ) break;
 									} while( true );

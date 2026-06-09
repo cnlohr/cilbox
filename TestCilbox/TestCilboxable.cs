@@ -30,6 +30,7 @@ namespace TestCilbox
 		public TestEnum testEnumField = TestEnum.SecondValue;
 		private TestState testStateField = TestState.Playing;
 		private TestPayload testPayloadField = new TestPayload { Score = 123, Lives = 4 };
+		private int? nullableField = 77;
 
 		public enum MyEnum
 		{
@@ -531,11 +532,24 @@ namespace TestCilbox
 			Validator.Set("CilOutVec3", outVec2.ToString() );
 			TestUtil.GetOutInt(out int outInt);
 			Validator.Set("NativeOutInt", outInt.ToString() );
+			TestUtil.GetOutNullableInt(out int? outNullableInt);
+			Validator.Set("NativeOutNullableIntHasValue", outNullableInt.HasValue.ToString() );
+			Validator.Set("NativeOutNullableIntValue", outNullableInt.GetValueOrDefault().ToString() );
+			TestUtil.GetOutNullableIntNull(out int? outNullableIntNull);
+			Validator.Set("NativeOutNullableIntNullHasValue", outNullableIntNull.HasValue.ToString() );
+			Validator.Set("NativeOutNullableIntNullValue", outNullableIntNull.GetValueOrDefault().ToString() );
 			TestOutInt(out int outInt2);
 			Validator.Set("CilOutInt", outInt2.ToString() );
 			Vector3 alreadyInit = new Vector3(5, 5, 5);
 			TestUtil.GetOutVec3(out alreadyInit);
 			Validator.Set("NativeOutVec3AlreadyInit", alreadyInit.ToString() );
+			Validator.Set("NullablePrimitiveCoerceValues", TestUtil.NullablePrimitiveSummary(true, 42, 1.5f) );
+			Validator.Set("NullablePrimitiveCoerceNulls", TestUtil.NullablePrimitiveSummary(null, null, null) );
+			RunNullableMemberTests();
+			Type nullableReturnType = TestUtil.GetNullableIntReturnType();
+			Type nullableUnderlyingType = Nullable.GetUnderlyingType(nullableReturnType);
+			Validator.Set("NullableReturnTypeIsNullable", (nullableUnderlyingType != null).ToString() );
+			Validator.Set("NullableReturnTypeUnderlying", nullableUnderlyingType.FullName );
 			bool privateOutSuccess = TryGetPrivateOutInt(out int privateOutInt);
 			Validator.Set("PrivateBoolOutSuccess", privateOutSuccess.ToString() );
 			Validator.Set("PrivateBoolOutInt", privateOutInt.ToString() );
@@ -616,6 +630,57 @@ namespace TestCilbox
 			for( int i = 0; i < 10000000; i++ ) result = System.Math.Sin( result ) * 10.0;
 			Validator.Set( "Throwaway", result.ToString() );
 			Validator.Set( "Overtime", "did not timed out" );
+		}
+
+		private int? GetInterpretedNullable(bool hasValue)
+		{
+			return hasValue ? 31 : null;
+		}
+
+		private void RecordNullableArgument(string prefix, int? value)
+		{
+			Validator.Set(prefix + "HasValue", value.HasValue.ToString());
+			Validator.Set(prefix + "Default", value.GetValueOrDefault().ToString());
+			Validator.Set(prefix + "Default123", value.GetValueOrDefault(123).ToString());
+		}
+
+		private void RunNullableMemberTests()
+		{
+			int? localValue = 5;
+			Validator.Set("NullableLocalValueHasValue", localValue.HasValue.ToString());
+			Validator.Set("NullableLocalValueValue", localValue.Value.ToString());
+			Validator.Set("NullableLocalValueDefault", localValue.GetValueOrDefault().ToString());
+			Validator.Set("NullableLocalValueDefault123", localValue.GetValueOrDefault(123).ToString());
+
+			int? localNull = null;
+			Validator.Set("NullableLocalNullHasValue", localNull.HasValue.ToString());
+			Validator.Set("NullableLocalNullDefault", localNull.GetValueOrDefault().ToString());
+			Validator.Set("NullableLocalNullDefault123", localNull.GetValueOrDefault(123).ToString());
+			try
+			{
+#pragma warning disable CS8629
+				int ignored = localNull.Value;
+#pragma warning restore CS8629
+				Validator.Set("NullableLocalNullValueThrows", ignored.ToString());
+			}
+			catch(InvalidOperationException)
+			{
+				Validator.Set("NullableLocalNullValueThrows", "InvalidOperationException");
+			}
+
+			RecordNullableArgument("NullableArgumentValue", localValue);
+			RecordNullableArgument("NullableArgumentNull", localNull);
+
+			int? returnedValue = GetInterpretedNullable(true);
+			int? returnedNull = GetInterpretedNullable(false);
+			Validator.Set("NullableReturnValue", returnedValue.GetValueOrDefault().ToString());
+			Validator.Set("NullableReturnNullHasValue", returnedNull.HasValue.ToString());
+
+			Validator.Set("NullableFieldHasValue", nullableField.HasValue.ToString());
+			Validator.Set("NullableFieldValue", nullableField.GetValueOrDefault().ToString());
+			nullableField = null;
+			Validator.Set("NullableFieldNullHasValue", nullableField.HasValue.ToString());
+			Validator.Set("NullableFieldNullDefault123", nullableField.GetValueOrDefault(123).ToString());
 		}
 
 
@@ -900,6 +965,7 @@ namespace TestCilbox
 		private const int MatrixSize = 20;
 		private const int MatrixRepeats = 8;
 		private const int PeerCallCount = 2500;
+		private const int BoundaryCallCount = 50000;
 
 		public PerfPeerBehaviour peer;
 
@@ -914,11 +980,17 @@ namespace TestCilbox
 			long peerUs = RunPeerTask();
 
 			totalSw.Stop();
+			// Stopping watch to keep the same testing between versions.
+			long plainBoundaryUs = RunPlainBoundaryTask();
+			long nullableBoundaryUs = RunNullableBoundaryTask();
+
 			Validator.Set($"Perf.{ClassName}.RecursiveUs", recursiveUs.ToString());
 			Validator.Set($"Perf.{ClassName}.FourierUs", dftUs.ToString());
 			Validator.Set($"Perf.{ClassName}.TrigUs", trigUs.ToString());
 			Validator.Set($"Perf.{ClassName}.MatrixUs", matrixUs.ToString());
 			Validator.Set($"Perf.{ClassName}.PeerCallsUs", peerUs.ToString());
+			Validator.Set($"Perf.{ClassName}.PlainBoundaryUs", plainBoundaryUs.ToString());
+			Validator.Set($"Perf.{ClassName}.NullableBoundaryUs", nullableBoundaryUs.ToString());
 			Validator.Set($"Perf.{ClassName}.TotalUs", PerfUtility.StopwatchToUs(totalSw).ToString());
 		}
 
@@ -1063,6 +1135,32 @@ namespace TestCilbox
 			}
 			sw.Stop();
 			Validator.Set($"Perf.{ClassName}.PeerChecksum", value.ToString());
+			return PerfUtility.StopwatchToUs(sw);
+		}
+
+		private long RunPlainBoundaryTask()
+		{
+			System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+			int checksum = 0;
+			for (int i = 0; i < BoundaryCallCount; i++)
+			{
+				checksum += TestUtil.PlainBoundaryKernel(i, i * 0.25f, (i & 1) == 0);
+			}
+			sw.Stop();
+			Validator.Set($"Perf.{ClassName}.PlainBoundaryChecksum", checksum.ToString());
+			return PerfUtility.StopwatchToUs(sw);
+		}
+
+		private long RunNullableBoundaryTask()
+		{
+			System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+			int checksum = 0;
+			for (int i = 0; i < BoundaryCallCount; i++)
+			{
+				checksum += TestUtil.NullableBoundaryKernel(i, i * 0.25f, (i & 1) == 0);
+			}
+			sw.Stop();
+			Validator.Set($"Perf.{ClassName}.NullableBoundaryChecksum", checksum.ToString());
 			return PerfUtility.StopwatchToUs(sw);
 		}
 	}

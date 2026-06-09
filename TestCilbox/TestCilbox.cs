@@ -40,6 +40,7 @@ namespace TestCilbox
 			"System.Exception",
 			"System.IDisposable",
 			"System.IndexOutOfRangeException",
+			"System.InvalidOperationException",
 			"System.Int16",
 			"System.Int32",
 			"System.Int64",
@@ -48,9 +49,12 @@ namespace TestCilbox
 			"System.NullReferenceException",
 			"System.Numerics.Vector2",
 			"System.Object",
+			"System.Nullable",
+			"System.Nullable`1",
 			"System.Single",
 			"System.String",
 			"System.TimeSpan",
+			"System.Type",
 			"System.UInt16",
 			"System.UInt32",
 			"System.ValueTuple",
@@ -257,6 +261,44 @@ namespace TestCilbox
 		{
 			i = 42;
 		}
+
+		public static void GetOutNullableInt(out int? i)
+		{
+			i = 42;
+		}
+
+		public static void GetOutNullableIntNull(out int? i)
+		{
+			i = null;
+		}
+
+		public static string NullablePrimitiveSummary(bool? flag, int? count, float? scale)
+		{
+			string flagText = flag.HasValue ? flag.Value.ToString() : "null";
+			string countText = count.HasValue ? count.Value.ToString() : "null";
+			string scaleText = scale.HasValue ? scale.Value.ToString() : "null";
+			return flagText + ", " + countText + ", " + scaleText;
+		}
+
+		public static int PlainBoundaryKernel(int count, float scale, bool flag)
+		{
+			return flag ? count + (int)scale : count - (int)scale;
+		}
+
+		public static int NullableBoundaryKernel(int? count, float? scale, bool? flag)
+		{
+			return flag.GetValueOrDefault() ? count.GetValueOrDefault() + (int)scale.GetValueOrDefault() : count.GetValueOrDefault() - (int)scale.GetValueOrDefault();
+		}
+
+		public static int? GetNullableInt()
+		{
+			return 42;
+		}
+
+		public static Type GetNullableIntReturnType()
+		{
+			return typeof(TestUtil).GetMethod(nameof(GetNullableInt)).ReturnType;
+		}
 	}
 
 
@@ -296,6 +338,8 @@ namespace TestCilbox
 				$"Perf.{rootClass}.TrigUs",
 				$"Perf.{rootClass}.MatrixUs",
 				$"Perf.{rootClass}.PeerCallsUs",
+				$"Perf.{rootClass}.PlainBoundaryUs",
+				$"Perf.{rootClass}.NullableBoundaryUs",
 			};
 			foreach( string key in taskKeys )
 			{
@@ -323,6 +367,8 @@ namespace TestCilbox
 			Validator.ValidatePositiveLong($"Perf.{rootClass}.TrigUs");
 			Validator.ValidatePositiveLong($"Perf.{rootClass}.MatrixUs");
 			Validator.ValidatePositiveLong($"Perf.{rootClass}.PeerCallsUs");
+			Validator.ValidatePositiveLong($"Perf.{rootClass}.PlainBoundaryUs");
+			Validator.ValidatePositiveLong($"Perf.{rootClass}.NullableBoundaryUs");
 			Validator.ValidatePositiveLong($"Perf.{rootClass}.TotalUs");
 			Validator.ValidatePositiveLong($"Perf.{peerClass}.TotalUs");
 
@@ -732,8 +778,36 @@ namespace TestCilbox
 			Validator.Validate("NativeOutVec3", "(12, 8, 0)");
 			Validator.Validate("CilOutVec3", "(1, 2, 3)");
 			Validator.Validate("NativeOutInt", "42");
+			Validator.Validate("NativeOutNullableIntHasValue", "True");
+			Validator.Validate("NativeOutNullableIntValue", "42");
+			Validator.Validate("NativeOutNullableIntNullHasValue", "False");
+			Validator.Validate("NativeOutNullableIntNullValue", "0");
 			Validator.Validate("CilOutInt", "22");
 			Validator.Validate("NativeOutVec3AlreadyInit", "(12, 8, 0)");
+			Validator.Validate("NullablePrimitiveCoerceValues", "True, 42, 1.5");
+			Validator.Validate("NullablePrimitiveCoerceNulls", "null, null, null");
+			Validator.Validate("NullableLocalValueHasValue", "True");
+			Validator.Validate("NullableLocalValueValue", "5");
+			Validator.Validate("NullableLocalValueDefault", "5");
+			Validator.Validate("NullableLocalValueDefault123", "5");
+			Validator.Validate("NullableLocalNullHasValue", "False");
+			Validator.Validate("NullableLocalNullDefault", "0");
+			Validator.Validate("NullableLocalNullDefault123", "123");
+			Validator.Validate("NullableLocalNullValueThrows", "InvalidOperationException");
+			Validator.Validate("NullableArgumentValueHasValue", "True");
+			Validator.Validate("NullableArgumentValueDefault", "5");
+			Validator.Validate("NullableArgumentValueDefault123", "5");
+			Validator.Validate("NullableArgumentNullHasValue", "False");
+			Validator.Validate("NullableArgumentNullDefault", "0");
+			Validator.Validate("NullableArgumentNullDefault123", "123");
+			Validator.Validate("NullableReturnValue", "31");
+			Validator.Validate("NullableReturnNullHasValue", "False");
+			Validator.Validate("NullableFieldHasValue", "True");
+			Validator.Validate("NullableFieldValue", "77");
+			Validator.Validate("NullableFieldNullHasValue", "False");
+			Validator.Validate("NullableFieldNullDefault123", "123");
+			Validator.Validate("NullableReturnTypeIsNullable", "True");
+			Validator.Validate("NullableReturnTypeUnderlying", "System.Int32");
 			Validator.Validate("PrivateBoolOutSuccess", "True");
 			Validator.Validate("PrivateBoolOutInt", "1111");
 			Validator.Validate("PrivateBoolOutAlreadyInitSuccess", "True");
