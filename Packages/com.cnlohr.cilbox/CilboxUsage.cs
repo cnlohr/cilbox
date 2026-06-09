@@ -6,7 +6,7 @@
 // Security Checking:
 //   For Methods:
 //     1. HandleEarlyMethodRewrite() -- This can rewrite declaring type + method.
-//     2. GetNativeTypeNameFromSerializee on declaring type
+//     2. GetNativeTypeNameFromDescriptor on declaring type
 //     3. GetNativeMethodFromTypeAndName - Sometimes swap-out stuff
 //        a. If rewritten, overrides all further security and fast-paths.
 //     4. InternalGetNativeMethodFromTypeAndNameNoSecurity
@@ -17,14 +17,14 @@
 //     8. If disallowed, abort.  If allowed, and overridden, bypass any further checks.
 //
 //
-//   GetNativeTypeFromSerializee (can only be used on non-templated types)
+//   GetNativeTypeFromDescriptor (can only be used on non-templated types)
 //     1. Checks to see if it's a type from within this cilbox.  If so GO!
 //     2. CheckReplaceTypeNotRecursive ON BASE TYPE ONLY
-//     3. Recursively check all template types through GetNativeTypeFromSerializee
+//     3. Recursively check all template types through GetNativeTypeFromDescriptor
 //     4. Type.GetType
 //     5. MakeGenericType
 //
-//   GetNativeTypeNameFromSerializee mimics GetNativeTypeFromSerializee
+//   GetNativeTypeNameFromDescriptor mimics GetNativeTypeFromDescriptor
 //
 //   CheckTypeSecurity calls CheckTypeAllowed on the specific cilbox.
 //    If it is allowed, continue normal checks.  If it is disallowed, abort.
@@ -60,7 +60,7 @@ namespace Cilbox
 			return false;
 		}
 
-		public MethodBase GetNativeMethodFromTypeAndName( Type declaringType, String name, Serializee [] parametersIn, Serializee [] genericArgumentsIn, String fullSignature )
+		public MethodBase GetNativeMethodFromTypeAndName( Type declaringType, String name, SerializedTypeDescriptor [] parametersIn, SerializedTypeDescriptor [] genericArgumentsIn, String fullSignature )
 		{
 			MethodInfo mi = null;
 			if(!box.CheckMethodAllowed( out mi, declaringType, name, parametersIn, genericArgumentsIn, fullSignature ))
@@ -80,8 +80,8 @@ namespace Cilbox
 				return mi;
 			}
 
-			Type[] parameters = TypeNamesToArrayOfNativeTypes( parametersIn );
-			Type[] genericArguments = TypeNamesToArrayOfNativeTypes( genericArgumentsIn );
+			Type[] parameters = DescriptorsToArrayOfNativeTypes( parametersIn );
+			Type[] genericArguments = DescriptorsToArrayOfNativeTypes( genericArgumentsIn );
 
 			MethodBase m = InternalGetNativeMethodFromTypeAndNameNoSecurity( declaringType, name, parameters, genericArguments, fullSignature );
 
@@ -90,7 +90,7 @@ namespace Cilbox
 			{
 				if( !CheckTypeSecurityRecursive(parameters[i]) )
 				{
-                    string typeName = genericArgumentsIn[i].AsMap()["n"].AsString();
+					string typeName = parametersIn[i].typeName;
 					Debug.LogError( $"Privilege failed for {declaringType}.{name} parameter {i} type {typeName}" );
 					return null;
 				}
@@ -99,7 +99,7 @@ namespace Cilbox
 			{
 				if( !CheckTypeSecurityRecursive(genericArguments[i]) )
 				{
-                    string typeName = genericArgumentsIn[i].AsMap()["n"].AsString();
+					string typeName = genericArgumentsIn[i].typeName;
 					Debug.LogError( $"Privilege failed for {declaringType}.{name} generic argument {i} type {typeName}" );
 					return null;
 				}
@@ -241,10 +241,9 @@ namespace Cilbox
 		// REWRITERS ///////////////////////////////////////////////////////////////////////
 		////////////////////////////////////////////////////////////////////////////////////
 
-		public (String, Serializee) HandleEarlyMethodRewrite( String name, Serializee declaringType, Serializee [] genericArguments )
+		public (String, SerializedTypeDescriptor) HandleEarlyMethodRewrite( String name, SerializedTypeDescriptor declaringType, SerializedTypeDescriptor [] genericArguments )
 		{
-			Dictionary< String, Serializee > ses = declaringType.AsMap();
-			String typeName = ses["n"].AsString();
+			String typeName = declaringType.typeName;
 
 // This is no longer done here, but stands as an example of how you could use this function.
 //			if( typeName == "<PrivateImplementationDetails>" && name == "ComputeStringHash" )
@@ -258,18 +257,16 @@ namespace Cilbox
 			return ( name, declaringType );
 		}
 
-		public bool OptionallyOverride( String name, Serializee declaringType, String fullSignature, bool isStatic, Serializee [] genericArguments, ref CilMetadataTokenInfo t )
+		public bool OptionallyOverride( String name, SerializedTypeDescriptor declaringType, String fullSignature, bool isStatic, SerializedTypeDescriptor [] genericArguments, ref CilMetadataTokenInfo t )
 		{
-			Dictionary< String, Serializee > ses = declaringType.AsMap();
-			String typeName = ses["n"].AsString();
+			String typeName = declaringType.typeName;
 
 			// We want to allow GetComponent and TryGetComponent.
 
 			if( (typeName == "UnityEngine.GameObject" || typeName == "UnityEngine.Component") && name == "GetComponent" && genericArguments.Length == 1 )
 			{
-				Type tTemplate = GetNativeTypeFromSerializee( genericArguments[0] );
-				Dictionary< String, Serializee > gatype = genericArguments[0].AsMap();
-				String genericTypeName = gatype["n"].AsString();
+				Type tTemplate = GetNativeTypeFromDescriptor( genericArguments[0] );
+				String genericTypeName = genericArguments[0].typeName;
 				int cilboxClassId = -1;
 				if( tTemplate != null || box.classes.TryGetValue( genericTypeName, out cilboxClassId ) )
 				{
@@ -293,9 +290,8 @@ namespace Cilbox
 			}
 			if( (typeName == "UnityEngine.GameObject" || typeName == "UnityEngine.Component") && name == "TryGetComponent" && genericArguments.Length == 1 )
 			{
-				Type tTemplate = GetNativeTypeFromSerializee( genericArguments[0] );
-				Dictionary< String, Serializee > gatype = genericArguments[0].AsMap();
-				String genericTypeName = gatype["n"].AsString();
+				Type tTemplate = GetNativeTypeFromDescriptor( genericArguments[0] );
+				String genericTypeName = genericArguments[0].typeName;
 				int cilboxClassId = -1;
 				if( tTemplate != null || box.classes.TryGetValue( genericTypeName, out cilboxClassId ) )
 				{
@@ -395,33 +391,29 @@ namespace Cilbox
 			return false;
 		}
 
-		public Type GetNativeTypeFromSerializee( Serializee s )
+		public Type GetNativeTypeFromDescriptor( SerializedTypeDescriptor td )
 		{
-			Dictionary< String, Serializee > ses = s.AsMap();
-			Serializee utSer;
-			if( ses.TryGetValue( "ut", out utSer ) ) return GetNativeTypeFromSerializee( utSer );
-			String typeName = ses["n"].AsString();
-			String assemblyName = ses["a"].AsString();
+			if( td.HasUnderlyingType ) return GetNativeTypeFromDescriptor( td.underlyingType );
+			String typeName = td.typeName;
+			String assemblyName = td.assemblyName;
 			if( IsCilboxInternalType( typeName ) ) return null;
 			if(box.GetTypeOverride( typeName, out Type overrideType )) {
-				Debug.Log( $"GetNativeTypeFromSerializee: Override {typeName} with {overrideType.FullName}" );
 				typeName = overrideType.FullName;
 				assemblyName = overrideType.Assembly.GetName().Name;
 			}
 			typeName = CheckReplaceTypeNotRecursive( typeName );
 			if( typeName == null ) return null;
 
-			Serializee g;
 			Type [] ga = null;
-			if( ses.TryGetValue( "g", out g ) )
+			if( td.IsGeneric )
 			{
-				// If there are generics (stored in g) then use the serialized generic name instead of stripped type name
-				// n = Namespace.Outer+Middle+Inner		gn = Namespace.Outer`1+Middle`2+Inner`1
-				typeName = ses["gn"].AsString();
-				Serializee [] gs = g.AsArray();
-				ga = new Type[gs.Length];
-				for( int i = 0; i < gs.Length; i++ ) {
-					Type gt = GetNativeTypeFromSerializee( gs[i] );
+				// If there are generics then use the serialized generic name instead of stripped type name
+				// typeName = Namespace.Outer+Middle+Inner		genericName = Namespace.Outer`1+Middle`2+Inner`1
+				typeName = td.genericName;
+				ga = new Type[td.genericArgs.Length];
+				for( int i = 0; i < td.genericArgs.Length; i++ )
+				{
+					Type gt = GetNativeTypeFromDescriptor( td.genericArgs[i] );
 					if( gt == null ) return null;
 					ga[i] = gt;
 				}
@@ -455,27 +447,22 @@ namespace Cilbox
 			return ret;
 		}
 
-		public String GetNativeTypeNameFromSerializee( Serializee s )
+		public String GetNativeTypeNameFromDescriptor( SerializedTypeDescriptor td )
 		{
-			Dictionary< String, Serializee > ses = s.AsMap();
-			Serializee utSer;
-			if( ses.TryGetValue( "ut", out utSer ) ) return GetNativeTypeNameFromSerializee( utSer );
-			String typeName = ses["n"].AsString();
+			if( td.HasUnderlyingType ) return GetNativeTypeNameFromDescriptor( td.underlyingType );
+			String typeName = td.typeName;
 			if( IsCilboxInternalType( typeName ) ) return typeName;
 			if(box.GetTypeOverride( typeName, out Type overrideType )) {
-				Debug.Log( $"GetNativeTypeFromSerializee: Override {typeName} with {overrideType.FullName}" );
 				typeName = overrideType.FullName;
 			}
 			typeName = CheckReplaceTypeNotRecursive( typeName );
 			if( typeName == null ) return null;
 
-			Serializee g;
-			if( ses.TryGetValue( "g", out g ) )
+			if( td.IsGeneric )
 			{
 				String ret = typeName + "`[";
-				Serializee [] gs = g.AsArray();
-				for( int i = 0; i < gs.Length; i++ )
-					ret += (i==0?"":",") + GetNativeTypeNameFromSerializee( gs[i] );
+				for( int i = 0; i < td.genericArgs.Length; i++ )
+					ret += (i==0?"":",") + GetNativeTypeNameFromDescriptor( td.genericArgs[i] );
 				return ret + "]";
 			}
 			else
@@ -484,11 +471,11 @@ namespace Cilbox
 			}
 		}
 
-		public Type [] TypeNamesToArrayOfNativeTypes( Serializee [] sa )
+		public Type [] DescriptorsToArrayOfNativeTypes( SerializedTypeDescriptor [] descs )
 		{
-			Type [] ret = new Type[sa.Length];
-			for( int i = 0; i < sa.Length; i++ )
-				ret[i] = GetNativeTypeFromSerializee( sa[i] );
+			Type [] ret = new Type[descs.Length];
+			for( int i = 0; i < descs.Length; i++ )
+				ret[i] = GetNativeTypeFromDescriptor( descs[i] );
 			return ret;
 		}
 
