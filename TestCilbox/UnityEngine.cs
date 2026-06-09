@@ -123,6 +123,7 @@ namespace UnityEngine
 	class EditorUtility
 	{
 		public static void SetDirty( MonoBehaviour m ) { }
+		public static bool IsPersistent( Object t ) { return false; }
 	}
 
 	namespace SceneManagement
@@ -226,6 +227,7 @@ namespace UnityEngine
 		public HideFlags hideFlags;
 		private readonly Transform _transform = new Transform();
 		public Transform transform => _transform;
+		public SceneManagement.Scene scene => new SceneManagement.Scene();
 
 		public T[] GetComponentsInChildren<T>( bool something ) { return AllComponents.ToArray().OfType<T>().ToArray(); }
 

@@ -2493,7 +2493,10 @@ spiperf.End();
 			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing(scene);
 			Debug.Log( $"Postprocessing scene. Cilbox scripts to do: {allBehavioursThatNeedCilboxing.Length}" );
 			if( allBehavioursThatNeedCilboxing.Length == 0 )
-					return;
+			{
+				perf.End();
+				return;
+			}
 
 
 			List< SerializedMetadataToken > assemblyMetadata = new List< SerializedMetadataToken >();
@@ -2982,10 +2985,17 @@ spiperf.End();
 			perf.End(); perf = new ProfilerMarker( "Checking If Assembly Changed" ); perf.Begin();
 
 			Cilbox [] cilboxInstances = Resources.FindObjectsOfTypeAll(typeof(Cilbox)) as Cilbox [];
-			Cilbox tac;
-			if( cilboxInstances.Length != 0 )
+			Cilbox tac = null;
+
+			foreach ( var tacCandidate in cilboxInstances ) {
+				if ( tacCandidate.gameObject.scene.IsValid() && !EditorUtility.IsPersistent(tacCandidate) ) {
+					tac = tacCandidate;
+					break;
+				}
+			}
+
+			if( tac != null )
 			{
-				tac = cilboxInstances[0];
 				bool changed = false;
 				if( tac.assemblyBytes == null || tac.assemblyBytes.Length != newAssemblyBytes.Length )
 					changed = true;
