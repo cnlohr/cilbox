@@ -644,7 +644,7 @@ namespace TestCilbox
 			Validator.Validate("TestPayload Array Lives 0", "1");
 			Validator.Validate("TestPayload Array Score 1", "20");
 			Validator.Validate("TestPayload Array Lives 1", "3");
-            Validator.Validate("TestPayload Array Element Access Score 0", "10");
+			Validator.Validate("TestPayload Array Element Access Score 0", "10");
 			Validator.Validate("TestPayload Array Element Access Lives 0", "1");
 			Validator.Validate("TestPayload Array Element Access Score 1", "20");
 			Validator.Validate("TestPayload Array Element Access Lives 1", "3");
@@ -730,7 +730,7 @@ namespace TestCilbox
 			Validator.Validate("Object Array With Data 1", "64");
 			Validator.Validate("Object Array With Data 2", "delta");
 
-            Validator.Validate("Object Array Element Access With Data 0", "beta");
+			Validator.Validate("Object Array Element Access With Data 0", "beta");
 			Validator.Validate("Object Array Element Access With Data 1", "64");
 			Validator.Validate("Object Array Element Access With Data 2", "delta");
 

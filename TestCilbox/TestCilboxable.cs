@@ -396,8 +396,8 @@ namespace TestCilbox
 			{
 				Validator.Set("TestPayload Array Score " + j, payloadArr[j].Score.ToString() );
 				Validator.Set("TestPayload Array Lives " + j, payloadArr[j].Lives.ToString() );
-                Validator.Set("TestPayload Array Element Access Lives " + j, TestPayloadArrayElem(payloadArr, j).Lives.ToString() );
-                Validator.Set("TestPayload Array Element Access Score " + j, TestPayloadArrayElem(payloadArr, j).Score.ToString() );
+				Validator.Set("TestPayload Array Element Access Lives " + j, TestPayloadArrayElem(payloadArr, j).Lives.ToString() );
+				Validator.Set("TestPayload Array Element Access Score " + j, TestPayloadArrayElem(payloadArr, j).Score.ToString() );
 			}
 			ushort[] ushortAssigned = new ushort[3];
 			ushortAssigned[0] = 7;
@@ -526,9 +526,9 @@ namespace TestCilbox
 			Validator.Set("Object Array With Data 0", objectWithData[0].ToString() );
 			Validator.Set("Object Array With Data 1", objectWithData[1].ToString() );
 			Validator.Set("Object Array With Data 2", objectWithData[2].ToString() );
-            Validator.Set("Object Array Element Access With Data 0", ObjectArrayElem(objectWithData, 0).ToString());
-            Validator.Set("Object Array Element Access With Data 1", ObjectArrayElem(objectWithData, 1).ToString());
-            Validator.Set("Object Array Element Access With Data 2", ObjectArrayElem(objectWithData, 2).ToString());
+			Validator.Set("Object Array Element Access With Data 0", ObjectArrayElem(objectWithData, 0).ToString());
+			Validator.Set("Object Array Element Access With Data 1", ObjectArrayElem(objectWithData, 1).ToString());
+			Validator.Set("Object Array Element Access With Data 2", ObjectArrayElem(objectWithData, 2).ToString());
 
 			object boxedMyEnum = MyEnum.Value2;
 			MyEnum castMyEnum = (MyEnum)boxedMyEnum;
@@ -818,15 +818,15 @@ namespace TestCilbox
 			return array[index];
 		}
 
-        public object ObjectArrayElem(object[] array, int index)
-        {
-            return array[index];
-        }
+		public object ObjectArrayElem(object[] array, int index)
+		{
+			return array[index];
+		}
 
-        TestPayload TestPayloadArrayElem(TestPayload[] array, int index)
-        {
-            return array[index];
-        }
+		TestPayload TestPayloadArrayElem(TestPayload[] array, int index)
+		{
+			return array[index];
+		}
 	}
 
 
