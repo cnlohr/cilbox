@@ -2570,7 +2570,10 @@ spiperf.End();
 			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing(scene);
 			Debug.Log( $"Postprocessing scene. Cilbox scripts to do: {allBehavioursThatNeedCilboxing.Length}" );
 			if( allBehavioursThatNeedCilboxing.Length == 0 )
-					return;
+			{
+				perf.End();
+				return;
+			}
 
 
 			Dictionary< String, Serializee > assemblyMetadata = new Dictionary< String, Serializee >();
@@ -3055,10 +3058,17 @@ spiperf.End();
 			perf.End(); perf = new ProfilerMarker( "Checking If Assembly Changed" ); perf.Begin();
 
 			Cilbox [] se = Resources.FindObjectsOfTypeAll(typeof(Cilbox)) as Cilbox [];
-			Cilbox tac;
-			if( se.Length != 0 )
+			Cilbox tac = null;
+
+			foreach ( var tacCandidate in se ) {
+				if ( tacCandidate.gameObject.scene.IsValid() && !EditorUtility.IsPersistent(tacCandidate) ) {
+					tac = tacCandidate;
+					break;
+				}
+			}
+
+			if( tac != null )
 			{
-				tac = se[0];
 				if( tac.assemblyData != sAllAssemblyData ) EditorUtility.SetDirty( tac );
 			}
 			else
