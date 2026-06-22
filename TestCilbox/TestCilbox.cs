@@ -48,9 +48,12 @@ namespace TestCilbox
 			"System.NullReferenceException",
 			"System.Numerics.Vector2",
 			"System.Object",
+			"System.Nullable",
+			"System.Nullable`1",
 			"System.Single",
 			"System.String",
 			"System.TimeSpan",
+			"System.Type",
 			"System.UInt16",
 			"System.UInt32",
 			"System.ValueTuple",
@@ -256,6 +259,34 @@ namespace TestCilbox
 		public static void GetOutInt(out int i)
 		{
 			i = 42;
+		}
+
+		public static void GetOutNullableInt(out int? i)
+		{
+			i = 42;
+		}
+
+		public static void GetOutNullableIntNull(out int? i)
+		{
+			i = null;
+		}
+
+		public static string NullablePrimitiveSummary(bool? flag, int? count, float? scale)
+		{
+			string flagText = flag.HasValue ? flag.Value.ToString() : "null";
+			string countText = count.HasValue ? count.Value.ToString() : "null";
+			string scaleText = scale.HasValue ? scale.Value.ToString() : "null";
+			return flagText + ", " + countText + ", " + scaleText;
+		}
+
+		public static int? GetNullableInt()
+		{
+			return 42;
+		}
+
+		public static Type GetNullableIntReturnType()
+		{
+			return typeof(TestUtil).GetMethod(nameof(GetNullableInt)).ReturnType;
 		}
 	}
 
@@ -732,8 +763,16 @@ namespace TestCilbox
 			Validator.Validate("NativeOutVec3", "(12, 8, 0)");
 			Validator.Validate("CilOutVec3", "(1, 2, 3)");
 			Validator.Validate("NativeOutInt", "42");
+			Validator.Validate("NativeOutNullableIntHasValue", "True");
+			Validator.Validate("NativeOutNullableIntValue", "42");
+			Validator.Validate("NativeOutNullableIntNullHasValue", "False");
+			Validator.Validate("NativeOutNullableIntNullValue", "0");
 			Validator.Validate("CilOutInt", "22");
 			Validator.Validate("NativeOutVec3AlreadyInit", "(12, 8, 0)");
+			Validator.Validate("NullablePrimitiveCoerceValues", "True, 42, 1.5");
+			Validator.Validate("NullablePrimitiveCoerceNulls", "null, null, null");
+			Validator.Validate("NullableReturnTypeIsNullable", "True");
+			Validator.Validate("NullableReturnTypeUnderlying", "System.Int32");
 			Validator.Validate("PrivateBoolOutSuccess", "True");
 			Validator.Validate("PrivateBoolOutInt", "1111");
 			Validator.Validate("PrivateBoolOutAlreadyInitSuccess", "True");

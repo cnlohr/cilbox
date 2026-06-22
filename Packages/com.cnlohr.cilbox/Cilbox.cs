@@ -540,11 +540,35 @@ spiperf.Begin();
 
 								if (callthis == null)
 								{
-									interpretedThrow(pc - 1, new NullReferenceException());
-									break;
+									Type nullableUnderlyingType = Nullable.GetUnderlyingType(t);
+									if( nullableUnderlyingType != null )
+									{
+										switch( mi.Name )
+										{
+										case "get_HasValue":
+											iko = false;
+											break;
+										case "GetValueOrDefault":
+											iko = callpar.Length == 0 ? Activator.CreateInstance(nullableUnderlyingType) : callpar[0];
+											break;
+										case "get_Value":
+											interpretedThrow(pc - 1, new InvalidOperationException("Nullable object must have a value."));
+											break;
+										default:
+											interpretedThrow(pc - 1, new NullReferenceException());
+											break;
+										}
+									}
+									else
+									{
+										interpretedThrow(pc - 1, new NullReferenceException());
+									}
+									if( iko == null ) break;
 								}
-
-								iko = st.Invoke( callthis, callpar );
+								else
+								{
+									iko = st.Invoke( callthis, callpar );
+								}
 								if( seorig.type == StackType.Address  && callthis is not BoxedCilboxEnum ) // enums are immutable
 								{
 									seorig.DereferenceLoadAddress( callthis );
