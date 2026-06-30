@@ -13,7 +13,8 @@ namespace Unity
 		{
 			public ProfilerMarker( String s ) { }
 			public void Begin() { }
-			public void Auto() { }
+			public AutoScope Auto() { return new AutoScope(); }
+			public struct AutoScope : IDisposable { public void Dispose() { } }
 			public void End() { }
 		}
 	}

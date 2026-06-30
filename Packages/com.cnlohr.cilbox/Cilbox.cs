@@ -2102,7 +2102,7 @@ spiperf.End();
 		{
 #if UNITY_EDITOR
 			var pfm = new ProfilerMarker( "Initialize Cilbox" );
-			pfm.Auto();
+			using var pfmScope = pfm.Auto();
 #endif
 
 			if( initialized ) return;
