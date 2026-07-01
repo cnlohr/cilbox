@@ -379,6 +379,15 @@ namespace TestCilbox
 				perfRoot.peer = perfPeer;
 			}
 
+			GameObject getCompRowGo = new GameObject("GetComponentRowToProxy");
+			GetComponentRow getCompRow = getCompRowGo.CreateComponent<GetComponentRow>();
+			GameObject getCompDriverGo = new GameObject("GetComponentDriverToProxy");
+			GetComponentDriver getCompDriver = getCompDriverGo.CreateComponent<GetComponentDriver>();
+			getCompDriver.rowHolder = getCompRowGo;
+
+			GameObject secInheritsGo = new GameObject("SecInheritsProhibitedToProxy");
+			SecInheritsProhibited secInherits = secInheritsGo.CreateComponent<SecInheritsProhibited>();
+
 			GameObject cbobj = new GameObject("BasicCilbox");
 			Cilbox.Cilbox cb = cbobj.AddComponent<CilboxTester>();
 			cb.exportDebuggingData = true;
@@ -792,6 +801,17 @@ namespace TestCilbox
 			Validator.Validate( "Empty String Field Length", "0" );
 
 			Validator.Validate( "StargClamp", "210" );
+
+			Cilbox.CilboxProxy getCompDriverProxy = getCompDriverGo.GetComponents<Cilbox.CilboxProxy>()[0];
+			InvokeProxyMethod( getCompDriverProxy, "Start" );
+			Validator.Validate( "GetComponent Polymorphic Tag", "100" );
+
+			// Security (PR #98): the baked base-class chain records the [Cilboxable] ancestor but NOT the prohibited (non-[Cilboxable]) one.
+			Cilbox.CilboxClass secInheritsCls = cb.GetClass("TestCilbox.SecInheritsProhibited");
+			Validator.Set("Sec BaseClasses Has Cilboxable Ancestor", (secInheritsCls != null && System.Array.IndexOf(secInheritsCls.baseClassNames, "TestCilbox.SecCilboxableMid") >= 0).ToString());
+			Validator.Set("Sec BaseClasses Omits Prohibited Ancestor", (secInheritsCls != null && System.Array.IndexOf(secInheritsCls.baseClassNames, "TestCilbox.SecProhibitedBase") < 0).ToString());
+			Validator.Validate("Sec BaseClasses Has Cilboxable Ancestor", "True");
+			Validator.Validate("Sec BaseClasses Omits Prohibited Ancestor", "True");
 
 			return -1 * Validator.NumValidationErrors();
 		}

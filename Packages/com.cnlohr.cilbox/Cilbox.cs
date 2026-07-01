@@ -1900,12 +1900,23 @@ spiperf.End();
 
 		public uint [] importFunctionToId; // from ImportFunctionID
 
+		public String [] baseClassNames = new String[0];
+
 		public bool LoadCilboxClass( Cilbox box, String className, Serializee classData )
 		{
 			this.box = box;
 			this.className = className;
 
 			Dictionary<String, Serializee> classProps = classData.AsMap();
+
+			if( classProps.TryGetValue( "baseClasses", out Serializee baseClassesSer ) )
+			{
+				// deserialize the cilboxable base-class name list (for polymorphic GetComponent<Base> matching)
+				Serializee [] bcArr = baseClassesSer.AsArray();
+				baseClassNames = new String[bcArr.Length];
+				for( int bci = 0; bci < bcArr.Length; bci++ )
+					baseClassNames[bci] = bcArr[bci].AsString();
+			}
 
 			uint id = 0;
 			Serializee [] staticFields = classProps["staticFields"].AsArray();
@@ -3010,6 +3021,14 @@ spiperf.End();
 					}
 
 					classProps["methods"] = allClassMethods[type.FullName];
+
+					// Only [Cilboxable] ancestors are recorded: a native/prohibited base is never emitted, so GetComponent<T>
+					// base-matching can never name a non-sandboxed class (and a match only ever yields an interpreted proxy).
+					List< Serializee > baseClassChain = new List< Serializee >();
+					for( Type bt = type.BaseType; bt != null && bt != typeof( UnityEngine.MonoBehaviour ) && bt != typeof( object ); bt = bt.BaseType )
+						if( CilboxUtil.HasCilboxableAttribute( bt ) )
+							baseClassChain.Add( new Serializee( bt.FullName ) );
+					classProps["baseClasses"] = new Serializee( baseClassChain.ToArray() );
 					classes[type.FullName] = new Serializee( classProps );
 					perfType.End();
 				}

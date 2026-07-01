@@ -164,8 +164,11 @@ namespace Cilbox
 				CilboxProxy [] comps = ((GameObject)o).GetComponents<CilboxProxy>();
 				foreach( CilboxProxy p in comps )
 				{
-					if( p.className == compName )
+					CilboxClass pcls = p.cls != null ? p.cls : cls.box.GetClass( p.className );
+					if( p.className == compName || ( pcls != null && pcls.baseClassNames != null && System.Array.IndexOf( pcls.baseClassNames, compName ) >= 0 ) )
 					{
+						// force-load the matched proxy so it's usable when returned; RuntimeProxyLoad no-ops if already loaded (guards on proxyWasSetup)
+						p.RuntimeProxyLoad();
 						ret.Load( p );
 						break;
 					}
@@ -225,8 +228,11 @@ namespace Cilbox
 				CilboxProxy [] comps = ((GameObject)o).GetComponents<CilboxProxy>();
 				foreach( CilboxProxy p in comps )
 				{
-					if( p.className == compName && parameters[1].type == StackType.Address )
+					CilboxClass pcls = p.cls != null ? p.cls : cls.box.GetClass( p.className );
+					if( ( p.className == compName || ( pcls != null && pcls.baseClassNames != null && System.Array.IndexOf( pcls.baseClassNames, compName ) >= 0 ) ) && parameters[1].type == StackType.Address )
 					{
+						// force-load the matched proxy so it's usable when returned; RuntimeProxyLoad no-ops if already loaded (guards on proxyWasSetup)
+						p.RuntimeProxyLoad();
 						ret.Load( true );
 						parameters[1].DereferenceLoadAddress( p );
 						break;

@@ -1115,4 +1115,44 @@ namespace TestCilbox
 			return PerfUtility.StopwatchToUs(sw);
 		}
 	}
+	[Cilboxable]
+	public class GetComponentRowBase : MonoBehaviour
+	{
+		public int baseTag = 100;
+	}
+
+	[Cilboxable]
+	public class GetComponentRow : GetComponentRowBase
+	{
+	}
+
+	[Cilboxable]
+	public class GetComponentDriver : MonoBehaviour
+	{
+		public GameObject rowHolder;
+		public void Start()
+		{
+			GetComponentRowBase row = rowHolder.GetComponent<GetComponentRowBase>();
+			int tag = -1;
+			try { tag = row.baseTag; } catch (NullReferenceException) { tag = -2; }
+			Validator.Set("GetComponent Polymorphic Tag", tag.ToString());
+		}
+	}
+	// Security (PR #98): a [Cilboxable] class that derives through a NON-[Cilboxable] base must not record
+	// that base in its baseClasses chain, so polymorphic GetComponent<Base> can never name / back-call into it.
+	public class SecProhibitedBase : MonoBehaviour
+	{
+		public int prohibitedTag = 999;
+	}
+
+	[Cilboxable]
+	public class SecCilboxableMid : SecProhibitedBase
+	{
+	}
+
+	[Cilboxable]
+	public class SecInheritsProhibited : SecCilboxableMid
+	{
+		public int derivedTag = 5;
+	}
 }
