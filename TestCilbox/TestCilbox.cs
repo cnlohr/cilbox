@@ -791,6 +791,8 @@ namespace TestCilbox
 			Validator.Validate( "Empty String Field Null", "False" );
 			Validator.Validate( "Empty String Field Length", "0" );
 
+			Validator.Validate( "StargClamp", "210" );
+
 			return -1 * Validator.NumValidationErrors();
 		}
 	}

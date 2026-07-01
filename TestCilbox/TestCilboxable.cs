@@ -627,6 +627,8 @@ namespace TestCilbox
 
 			Validator.Set("Empty String Field Null", (emptyStringField == null).ToString());
 			Validator.Set("Empty String Field Length", emptyStringField != null ? emptyStringField.Length.ToString() : "null");
+
+			Validator.Set("StargClamp", StargClamp(5).ToString());
 		}
 
 		public void Update()
@@ -826,6 +828,14 @@ namespace TestCilbox
 		{
 			i = 22;
 		}
+
+		public int StargClamp(int y)
+		{
+			y += 100;
+			y *= 2;
+			return y;
+		}
+
 	}
 
 
