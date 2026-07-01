@@ -767,6 +767,9 @@ namespace TestCilbox
 				RunPerfSuite(cb, perfRootProxy, perfPeerProxy);
 			}
 
+			Validator.Validate( "Empty String Field Null", "False" );
+			Validator.Validate( "Empty String Field Length", "0" );
+
 			return -1 * Validator.NumValidationErrors();
 		}
 	}
