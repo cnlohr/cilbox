@@ -490,23 +490,39 @@ spiperf.Begin();
 								else
 								{
 									StackElement ctorThisSe = stackBuffer[sp--];
-									object ctorThis = ctorThisSe.AsObject(box);
-									if (ctorThis == null)
-									{
-										interpretedThrow(pc - 1, new NullReferenceException());
-										break;
-									}
-
 									Type ctorDeclaringType = ctor.DeclaringType;
-									if( ctorDeclaringType == null || ( ctorDeclaringType != typeof(object) && ctorDeclaringType != typeof(MonoBehaviour) ) )
-									{
-										throw new CilboxInterpreterRuntimeException(
-											$"Unsupported native constructor call on existing instance: {ctor.DeclaringType?.FullName}",
-											parentClass.className, methodName, pc);
-									}
 
-									// Base constructors for Object/MonoBehaviour are no-ops in interpreter mode.
-									isVoid = true;
+									if( ctorDeclaringType != null && ctorDeclaringType.IsValueType )
+									{
+										object newStruct = ctor.Invoke( callpar );
+										if( ctorThisSe.type == StackType.Address )
+											ctorThisSe.DereferenceLoadAddress( newStruct );
+										else if( ctorThisSe.type == StackType.NativeHandle )
+											ctorThisSe.DereferenceLoadNativeHandle( box, newStruct );
+										else
+											throw new CilboxInterpreterRuntimeException(
+												$"Unsupported target for native value-type constructor: {ctorDeclaringType.FullName}",
+												parentClass.className, methodName, pc);
+										isVoid = true;
+									}
+									else
+									{
+										object ctorThis = ctorThisSe.AsObject(box);
+										if (ctorThis == null)
+										{
+											interpretedThrow(pc - 1, new NullReferenceException());
+											break;
+										}
+
+										if( ctorDeclaringType == null || ( ctorDeclaringType != typeof(object) && ctorDeclaringType != typeof(MonoBehaviour) ) )
+										{
+											throw new CilboxInterpreterRuntimeException(
+												$"Unsupported native constructor call on existing instance: {ctorDeclaringType?.FullName}",
+												parentClass.className, methodName, pc);
+										}
+
+										isVoid = true;
+									}
 								}
 							}
 							else if( !st.IsStatic )

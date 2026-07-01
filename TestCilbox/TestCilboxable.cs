@@ -565,6 +565,17 @@ namespace TestCilbox
 			Validator.Set("PrivateComplexOutAlreadyInitLives", complexOutAlreadyInit.Payload.Lives.ToString() );
 			Validator.Set("PrivateComplexOutAlreadyInitPeer", complexOutAlreadyInit.Peer.pubsettee.ToString() );
 
+			System.Numerics.Vector2 nativeCtorVec = new System.Numerics.Vector2(1.5f, 2.5f);
+			nativeCtorVec = new System.Numerics.Vector2(3.5f, 4.5f);
+			Validator.Set( "NativeStructCtor Vector2", nativeCtorVec.ToString() );
+
+			Quaternion nativeCtorQuat = Quaternion.identity;
+			nativeCtorQuat = new Quaternion(0.5f, 0.25f, 0.75f, 1.0f);
+			Validator.Set( "NativeStructCtor Quaternion x", nativeCtorQuat.x.ToString() );
+			Validator.Set( "NativeStructCtor Quaternion y", nativeCtorQuat.y.ToString() );
+			Validator.Set( "NativeStructCtor Quaternion z", nativeCtorQuat.z.ToString() );
+			Validator.Set( "NativeStructCtor Quaternion w", nativeCtorQuat.w.ToString() );
+
 			behaviour2.Behaviour2Test();
 			myBehaviour3Arr = new TestCilboxBehaviour3[] { new TestCilboxBehaviour3(123), new TestCilboxBehaviour3(456)};
 			Validator.Set("myBehaviour3Arr Length", myBehaviour3Arr.Length.ToString());

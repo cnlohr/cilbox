@@ -84,12 +84,17 @@ namespace TestCilbox
 			"UnityEngine.Transform",
 			"UnityEngine.Vector4",
 			"UnityEngine.Vector3",
+			"UnityEngine.Quaternion",
 		};
 
 		static HashSet<String> whiteListField = new HashSet<String>(){
 			"UnityEngine.Vector3.x",
 			"UnityEngine.Vector3.y",
 			"UnityEngine.Vector3.z",
+			"UnityEngine.Quaternion.x",
+			"UnityEngine.Quaternion.y",
+			"UnityEngine.Quaternion.z",
+			"UnityEngine.Quaternion.w",
 			"TestCilbox.TestUtil.StaticFloat",
 		};
 
@@ -759,6 +764,12 @@ namespace TestCilbox
 			Validator.Validate("ThrowFromOtherBehaviour2", "caught");
 			Validator.Validate("ThrowFromOtherBehaviour2Finally", "finally");
 			Validator.Validate("ThrowFromOtherConstructor", "caught");
+
+			Validator.Validate( "NativeStructCtor Vector2", "<3.5, 4.5>" );
+			Validator.Validate( "NativeStructCtor Quaternion x", "0.5" );
+			Validator.Validate( "NativeStructCtor Quaternion y", "0.25" );
+			Validator.Validate( "NativeStructCtor Quaternion z", "0.75" );
+			Validator.Validate( "NativeStructCtor Quaternion w", "1" );
 
 			Validator.ValidateCount($"CilboxDisabled_{cb.GetType().FullName}", 1 );
 
