@@ -370,6 +370,9 @@ namespace TestCilbox
 			cycleRoot.child = cycleChild;
 			cycleChild.root = cycleRoot;
 
+			GameObject virtualGo = new GameObject("VirtualDispatchToProxy");
+			VirtualDispatchDerived virtualDerived = virtualGo.CreateComponent<VirtualDispatchDerived>();
+
 			GameObject perfRootGo = null;
 			GameObject perfPeerGo = null;
 			if( runPerf )
@@ -809,6 +812,10 @@ namespace TestCilbox
 			Validator.Validate( "NativeStructCtor Quaternion y", "0.25" );
 			Validator.Validate( "NativeStructCtor Quaternion z", "0.75" );
 			Validator.Validate( "NativeStructCtor Quaternion w", "1" );
+
+			Cilbox.CilboxProxy virtualProxy = virtualGo.GetComponents<Cilbox.CilboxProxy>()[0];
+			InvokeProxyMethod( virtualProxy, "Start" );
+			Validator.Validate( "Virtual Dispatch", "derived" );
 
 			Validator.Validate( "Char Trailing Eq", "2" );
 			Validator.Validate( "Char Code A", "65" );
