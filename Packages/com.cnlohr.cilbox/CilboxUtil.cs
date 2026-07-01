@@ -1002,6 +1002,21 @@ namespace Cilbox
 			}
 			CLog.Close();
 		}
+
+		// Layout enumeration only -- field TYPES are not gated here. Every field type (inherited privates included) is
+		// validated at load in CilboxClass.LoadCilboxClass (GetNativeTypeFromSerializee -> CheckTypeAllowed), the real boundary.
+		public static FieldInfo[] GetInstanceFieldsBaseFirst( Type type )
+		{
+			List< FieldInfo > ordered = new List< FieldInfo >();
+			AddInstanceFieldsBaseFirst( type, ordered );
+			return ordered.ToArray();
+		}
+		static void AddInstanceFieldsBaseFirst( Type t, List< FieldInfo > into )
+		{
+			if( t == null || t == typeof( UnityEngine.MonoBehaviour ) || t == typeof( object ) ) return;
+			AddInstanceFieldsBaseFirst( t.BaseType, into );
+			into.AddRange( t.GetFields( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly ) );
+		}
 #endif
 
 		///////////////////////////////////////////////////////////////////////////

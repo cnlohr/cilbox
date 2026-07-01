@@ -43,7 +43,7 @@ namespace Cilbox
 			cls = box.GetClass( className );
 
 			fieldsObjects = new List< UnityEngine.Object >();
-			FieldInfo[] fi = mToSteal.GetType().GetFields( BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance );
+			FieldInfo[] fi = CilboxUtil.GetInstanceFieldsBaseFirst( mToSteal.GetType() );
 
 			List< Serializee > lstObjects = new List< Serializee >();
 
