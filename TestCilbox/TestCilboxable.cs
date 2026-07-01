@@ -618,6 +618,24 @@ namespace TestCilbox
 			Validator.Set( "Overtime", "did not timed out" );
 		}
 
+		// Lifecycle forwarders added by CilboxProxy: LateUpdate/OnRenderObject/OnWillRenderObject are
+		// mapped to the interpreter by name via the ImportFunctionID enum, so invoking the proxy's
+		// matching Unity callback must reach these payload methods.
+		public void LateUpdate()
+		{
+			Validator.Set( "LateUpdate", "called" );
+		}
+
+		public void OnRenderObject()
+		{
+			Validator.Set( "OnRenderObject", "called" );
+		}
+
+		public void OnWillRenderObject()
+		{
+			Validator.Set( "OnWillRenderObject", "called" );
+		}
+
 
 		public void FixedUpdate()
 		{

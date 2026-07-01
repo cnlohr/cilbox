@@ -430,6 +430,13 @@ namespace TestCilbox
 				Validator.Validate( "string concatenation", "it works" );
 				Validator.Validate( "MathF.Sin", "-0.058374193" );
 
+				proxy.GetType().GetMethod("LateUpdate",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
+				Validator.Validate( "LateUpdate", "called" );
+				proxy.GetType().GetMethod("OnRenderObject",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
+				Validator.Validate( "OnRenderObject", "called" );
+				proxy.GetType().GetMethod("OnWillRenderObject",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
+				Validator.Validate( "OnWillRenderObject", "called" );
+
 				// Make sure CI can fail.
 				//Validator.Validate( "Test Fail Check", "This will fail" );
 			}
