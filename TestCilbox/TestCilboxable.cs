@@ -14,6 +14,7 @@ namespace TestCilbox
 	public class TestCilboxBehaviour : MonoBehaviour
 	{
 		private int ipriviateinance = 555;
+		public string emptyStringField = "";
 		public int ipublicinstance = 556;
 		static private int iprivatestatic = 557;
 		static public int ipublicstatic = 558;
@@ -623,6 +624,9 @@ namespace TestCilbox
 			{
 				Validator.Set("ThrowFromOtherConstructor", "caught");
 			}
+
+			Validator.Set("Empty String Field Null", (emptyStringField == null).ToString());
+			Validator.Set("Empty String Field Length", emptyStringField != null ? emptyStringField.Length.ToString() : "null");
 		}
 
 		public void Update()

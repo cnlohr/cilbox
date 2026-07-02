@@ -690,10 +690,9 @@ namespace Cilbox
 				return TypeDescriptor.GetConverter(t).ConvertFrom(sInitialize);
 			else
 			{
-				if( !t.IsPrimitive )
-					return null;
-				else
+				if( t.IsValueType )
 					return Activator.CreateInstance(t);
+				return t == typeof(string) ? string.Empty : null;
 			}
 		}
 
