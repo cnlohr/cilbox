@@ -204,7 +204,7 @@ namespace Cilbox
 				bool verboseLogging = box.verboseLogging;
 
 #if UNITY_EDITOR
-				new ProfilerMarker($"Initialize {className}").Auto();
+				using var initMarker = new ProfilerMarker($"Initialize {className}").Auto();
 #endif
 				var sb = new System.Text.StringBuilder("/" + transform.name);
 				Transform aparent = transform.parent;
