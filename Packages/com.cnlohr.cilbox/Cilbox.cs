@@ -201,6 +201,7 @@ namespace Cilbox
 
 				if (e is CilboxUnhandledInterpretedException uhe)
 				{
+					CilboxFault.Report( uhe );
 					// strip the throwee just in case, and re-throw a normal runtime exception
 					string exceptionTypeName = uhe.Throwee?.GetType().FullName ?? "null";
 					string reason = $"Exception of type {exceptionTypeName} was unhandled in interpreted code";
@@ -409,7 +410,7 @@ spiperf.Begin();
 									}
 									catch (CilboxUnhandledInterpretedException e)
 									{
-										interpretedThrow(currentInstruction, e.Throwee);
+										interpretedThrow(currentInstruction, e.Throwee, e.Frames);
 									}
 									stackBuffer[++sp].LoadObject( newObj );
 								}
@@ -427,7 +428,7 @@ spiperf.Begin();
 									}
 									catch (CilboxUnhandledInterpretedException e)
 									{
-										interpretedThrow(currentInstruction, e.Throwee);
+										interpretedThrow(currentInstruction, e.Throwee, e.Frames);
 									}
 								}
 
@@ -1761,13 +1762,15 @@ spiperf.End();
 				return newObj;
 			}
 
-			void interpretedThrow(int currentInstruction, object thrownObj)
+			void interpretedThrow(int currentInstruction, object thrownObj, System.Collections.Generic.List<string> priorFrames = null)
 			{
 				sp = -1;
 				exceptionRegister = new StackElement() { type = StackType.Object, o = thrownObj };
+				System.Collections.Generic.List<string> frames = priorFrames != null ? new System.Collections.Generic.List<string>(priorFrames) : new System.Collections.Generic.List<string>();
+				frames.Add(parentClass.className + "|" + methodName + "|" + currentInstruction);
 				if (!hasExceptionClauses)
 				{
-					throw new CilboxUnhandledInterpretedException("Exception thrown with no handlers: " + (thrownObj?.ToString() ?? "(null)"), thrownObj, parentClass.className, methodName, currentInstruction);
+					throw new CilboxUnhandledInterpretedException("Exception thrown with no handlers: " + (thrownObj?.ToString() ?? "(null)"), thrownObj, parentClass.className, methodName, currentInstruction, frames);
 				}
 
 				CilboxExceptionHandlingClause found = null;
@@ -1822,7 +1825,7 @@ spiperf.End();
 
 				if (found == null)
 				{
-					throw new CilboxUnhandledInterpretedException("No handlers matched exception: " + (thrownObj?.ToString() ?? "(null)"), thrownObj, parentClass.className, methodName, currentInstruction);
+					throw new CilboxUnhandledInterpretedException("No handlers matched exception: " + (thrownObj?.ToString() ?? "(null)"), thrownObj, parentClass.className, methodName, currentInstruction, frames);
 				}
 
 				leaveRegionEnqueueFinallys(currentInstruction, found.HandlerOffset, true);

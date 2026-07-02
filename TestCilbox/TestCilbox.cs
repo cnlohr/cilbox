@@ -381,6 +381,9 @@ namespace TestCilbox
 				perfRoot.peer = perfPeer;
 			}
 
+			GameObject frameFaultGo = new GameObject("FrameFaultToProxy");
+			FrameFaultBehaviour frameFault = frameFaultGo.CreateComponent<FrameFaultBehaviour>();
+
 			GameObject cbobj = new GameObject("BasicCilbox");
 			Cilbox.Cilbox cb = cbobj.AddComponent<CilboxTester>();
 			cb.exportDebuggingData = true;
@@ -813,6 +816,28 @@ namespace TestCilbox
 			Validator.Validate( "Empty String Field Length", "0" );
 
 			Validator.Validate( "StargClamp", "210" );
+
+			Cilbox.CilboxProxy frameFaultProxy = frameFaultGo.GetComponents<Cilbox.CilboxProxy>()[0];
+			frameFaultProxy.RuntimeProxyLoad();
+			List<string> capturedFrames = null;
+			Cilbox.CilboxFault.InterpretedReporter = uhe => { capturedFrames = uhe.Frames; };
+			try { InvokeProxyMethod( frameFaultProxy, "Start" ); }
+			catch( TargetInvocationException ) { }
+			Cilbox.CilboxFault.InterpretedReporter = null;
+			string frameOrder = "";
+			if( capturedFrames != null )
+			{
+				foreach( string f in capturedFrames )
+				{
+					string[] parts = f.Split('|');
+					if( frameOrder.Length > 0 ) frameOrder += ">";
+					frameOrder += parts.Length > 1 ? parts[1] : f;
+				}
+			}
+			Validator.Set( "Frames Count", capturedFrames != null ? capturedFrames.Count.ToString() : "null" );
+			Validator.Set( "Frames Order", frameOrder );
+			Validator.Validate( "Frames Count", "3" );
+			Validator.Validate( "Frames Order", "Level2>Level1>Start" );
 
 			return -1 * Validator.NumValidationErrors();
 		}

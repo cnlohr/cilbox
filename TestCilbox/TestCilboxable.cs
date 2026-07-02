@@ -1168,4 +1168,21 @@ namespace TestCilbox
 			return PerfUtility.StopwatchToUs(sw);
 		}
 	}
+	[Cilboxable]
+	public class FrameFaultBehaviour : MonoBehaviour
+	{
+		public void Start()
+		{
+			Level1();
+		}
+		public void Level1()
+		{
+			Level2();
+		}
+		public void Level2()
+		{
+			throw new Exception("deep interpreted fault");
+		}
+	}
+
 }
