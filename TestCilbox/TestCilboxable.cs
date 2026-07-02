@@ -397,6 +397,8 @@ namespace TestCilbox
 			{
 				Validator.Set("TestPayload Array Score " + j, payloadArr[j].Score.ToString() );
 				Validator.Set("TestPayload Array Lives " + j, payloadArr[j].Lives.ToString() );
+				Validator.Set("TestPayload Array Element Access Lives " + j, TestPayloadArrayElem(payloadArr, j).Lives.ToString() );
+				Validator.Set("TestPayload Array Element Access Score " + j, TestPayloadArrayElem(payloadArr, j).Score.ToString() );
 			}
 			ushort[] ushortAssigned = new ushort[3];
 			ushortAssigned[0] = 7;
@@ -488,6 +490,23 @@ namespace TestCilbox
 			Validator.Set("Double Array With Data 1", doubleWithData[1].ToString() );
 			Validator.Set("Double Array With Data 2", doubleWithData[2].ToString() );
 
+			System.Numerics.Vector2[] vector2Assigned = new System.Numerics.Vector2[2];
+			vector2Assigned[0] = new System.Numerics.Vector2(1.5f, 2.5f);
+			vector2Assigned[1] = new System.Numerics.Vector2(3.25f, 4.25f);
+			Validator.Set("Vector2 Array Assigned Length", vector2Assigned.Length.ToString() );
+			Validator.Set("Vector2 Array Assigned 0", Vector2ArrayElem(vector2Assigned, 0).ToString());
+			Validator.Set("Vector2 Array Assigned 1", Vector2ArrayElem(vector2Assigned, 1).ToString());
+
+			System.Numerics.Vector2[] vector2WithData = new System.Numerics.Vector2[]
+			{
+				new System.Numerics.Vector2(5.5f, 6.5f),
+				new System.Numerics.Vector2(6.25f, 7.25f)
+			};
+
+			Validator.Set("Vector2 Array With Data Length", vector2Assigned.Length.ToString() );
+			Validator.Set("Vector2 Array With Data 0", Vector2ArrayElem(vector2WithData, 0).ToString());
+			Validator.Set("Vector2 Array With Data 1", Vector2ArrayElem(vector2WithData, 1).ToString());
+
 			Validator.Set("Static Readonly Vector2 Array Length", staticReadonlyVector2Array.Length.ToString() );
 			for (int j = 0; j < staticReadonlyVector2Array.Length; j++)
 			{
@@ -508,6 +527,9 @@ namespace TestCilbox
 			Validator.Set("Object Array With Data 0", objectWithData[0].ToString() );
 			Validator.Set("Object Array With Data 1", objectWithData[1].ToString() );
 			Validator.Set("Object Array With Data 2", objectWithData[2].ToString() );
+			Validator.Set("Object Array Element Access With Data 0", ObjectArrayElem(objectWithData, 0).ToString());
+			Validator.Set("Object Array Element Access With Data 1", ObjectArrayElem(objectWithData, 1).ToString());
+			Validator.Set("Object Array Element Access With Data 2", ObjectArrayElem(objectWithData, 2).ToString());
 
 			object boxedMyEnum = MyEnum.Value2;
 			MyEnum castMyEnum = (MyEnum)boxedMyEnum;
@@ -829,13 +851,30 @@ namespace TestCilbox
 			i = 22;
 		}
 
+		public System.Numerics.Vector2 Vector2ArrayElem(System.Numerics.Vector2[] array, int index)
+		{
+			// NOTE: This method was written for ldelm<typeTok>.
+			// In most cases, the compiler avoids emitting ldelm<typeTok>.
+			// We can prevent this optimization by indexing the array and immediately returning its value.
+			return array[index];
+		}
+
+		public object ObjectArrayElem(object[] array, int index)
+		{
+			return array[index];
+		}
+
+		TestPayload TestPayloadArrayElem(TestPayload[] array, int index)
+		{
+			return array[index];
+		}
+
 		public int StargClamp(int y)
 		{
 			y += 100;
 			y *= 2;
 			return y;
 		}
-
 	}
 
 
