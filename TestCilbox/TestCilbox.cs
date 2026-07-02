@@ -771,6 +771,9 @@ namespace TestCilbox
 			Validator.Validate( "NativeStructCtor Quaternion z", "0.75" );
 			Validator.Validate( "NativeStructCtor Quaternion w", "1" );
 
+			Validator.Validate( "Char Trailing Eq", "2" );
+			Validator.Validate( "Char Code A", "65" );
+
 			Validator.ValidateCount($"CilboxDisabled_{cb.GetType().FullName}", 1 );
 
 			if( runPerf )

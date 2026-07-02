@@ -576,6 +576,12 @@ namespace TestCilbox
 			Validator.Set( "NativeStructCtor Quaternion z", nativeCtorQuat.z.ToString() );
 			Validator.Set( "NativeStructCtor Quaternion w", nativeCtorQuat.w.ToString() );
 
+			string trailStr = "ab==";
+			int trailingEq = 0;
+			for( int ci = trailStr.Length - 1; ci >= 0 && trailStr[ci] == '='; ci-- ) trailingEq++;
+			Validator.Set( "Char Trailing Eq", trailingEq.ToString() );
+			Validator.Set( "Char Code A", ((int)"A"[0]).ToString() );
+
 			behaviour2.Behaviour2Test();
 			myBehaviour3Arr = new TestCilboxBehaviour3[] { new TestCilboxBehaviour3(123), new TestCilboxBehaviour3(456)};
 			Validator.Set("myBehaviour3Arr Length", myBehaviour3Arr.Length.ToString());

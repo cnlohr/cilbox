@@ -591,7 +591,10 @@ spiperf.Begin();
 
 							if( !isVoid )
 							{
-								stackBuffer[++sp].Load( iko );
+								if( iko is char retChar )
+									stackBuffer[++sp].LoadUshort( (ushort)retChar );
+								else
+									stackBuffer[++sp].Load( iko );
 							}
 							if( isJmp )
 							{
