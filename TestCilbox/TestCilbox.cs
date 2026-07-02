@@ -84,12 +84,17 @@ namespace TestCilbox
 			"UnityEngine.Transform",
 			"UnityEngine.Vector4",
 			"UnityEngine.Vector3",
+			"UnityEngine.Quaternion",
 		};
 
 		static HashSet<String> whiteListField = new HashSet<String>(){
 			"UnityEngine.Vector3.x",
 			"UnityEngine.Vector3.y",
 			"UnityEngine.Vector3.z",
+			"UnityEngine.Quaternion.x",
+			"UnityEngine.Quaternion.y",
+			"UnityEngine.Quaternion.z",
+			"UnityEngine.Quaternion.w",
 			"TestCilbox.TestUtil.StaticFloat",
 		};
 
@@ -429,6 +434,13 @@ namespace TestCilbox
 				Validator.Validate( "recursive function", "511" );
 				Validator.Validate( "string concatenation", "it works" );
 				Validator.Validate( "MathF.Sin", "-0.058374193" );
+
+				proxy.GetType().GetMethod("LateUpdate",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
+				Validator.Validate( "LateUpdate", "called" );
+				proxy.GetType().GetMethod("OnRenderObject",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
+				Validator.Validate( "OnRenderObject", "called" );
+				proxy.GetType().GetMethod("OnWillRenderObject",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
+				Validator.Validate( "OnWillRenderObject", "called" );
 
 				// Make sure CI can fail.
 				//Validator.Validate( "Test Fail Check", "This will fail" );
@@ -776,12 +788,26 @@ namespace TestCilbox
 			Validator.Validate("ThrowFromOtherBehaviour2Finally", "finally");
 			Validator.Validate("ThrowFromOtherConstructor", "caught");
 
+			Validator.Validate( "NativeStructCtor Vector2", "<3.5, 4.5>" );
+			Validator.Validate( "NativeStructCtor Quaternion x", "0.5" );
+			Validator.Validate( "NativeStructCtor Quaternion y", "0.25" );
+			Validator.Validate( "NativeStructCtor Quaternion z", "0.75" );
+			Validator.Validate( "NativeStructCtor Quaternion w", "1" );
+
+			Validator.Validate( "Char Trailing Eq", "2" );
+			Validator.Validate( "Char Code A", "65" );
+
 			Validator.ValidateCount($"CilboxDisabled_{cb.GetType().FullName}", 1 );
 
 			if( runPerf )
 			{
 				RunPerfSuite(cb, perfRootProxy, perfPeerProxy);
 			}
+
+			Validator.Validate( "Empty String Field Null", "False" );
+			Validator.Validate( "Empty String Field Length", "0" );
+
+			Validator.Validate( "StargClamp", "210" );
 
 			return -1 * Validator.NumValidationErrors();
 		}

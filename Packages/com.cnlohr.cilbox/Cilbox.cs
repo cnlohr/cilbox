@@ -308,6 +308,7 @@ spiperf.Begin();
 					case 0x0d: stackBuffer[localVarsHead+3] = stackBuffer[sp--]; break; //stloc.3
 					case 0x0e: stackBuffer[++sp] = parameters[byteCode[pc++]]; break; // ldarg.s <uint8 (argNum)>
 					case 0x0f: stackBuffer[++sp] = StackElement.CreateAddressReference( parametersIn.Array, (uint)parametersIn.Offset + (uint)byteCode[pc++] ); break; // ldarga.s <uint8 (argNum)>
+					case 0x10: parameters[byteCode[pc++]] = stackBuffer[sp--]; break; // starg.s <uint8 (argNum)> -- mirror of stloc.s (0x13) but stores into a parameter slot
 					case 0x11: stackBuffer[++sp] = stackBuffer[localVarsHead+byteCode[pc++]]; break; //ldloc.s
 					case 0x12:
 					{
@@ -490,23 +491,39 @@ spiperf.Begin();
 								else
 								{
 									StackElement ctorThisSe = stackBuffer[sp--];
-									object ctorThis = ctorThisSe.AsObject(box);
-									if (ctorThis == null)
-									{
-										interpretedThrow(pc - 1, new NullReferenceException());
-										break;
-									}
-
 									Type ctorDeclaringType = ctor.DeclaringType;
-									if( ctorDeclaringType == null || ( ctorDeclaringType != typeof(object) && ctorDeclaringType != typeof(MonoBehaviour) ) )
-									{
-										throw new CilboxInterpreterRuntimeException(
-											$"Unsupported native constructor call on existing instance: {ctor.DeclaringType?.FullName}",
-											parentClass.className, methodName, pc);
-									}
 
-									// Base constructors for Object/MonoBehaviour are no-ops in interpreter mode.
-									isVoid = true;
+									if( ctorDeclaringType != null && ctorDeclaringType.IsValueType )
+									{
+										object newStruct = ctor.Invoke( callpar );
+										if( ctorThisSe.type == StackType.Address )
+											ctorThisSe.DereferenceLoadAddress( newStruct );
+										else if( ctorThisSe.type == StackType.NativeHandle )
+											ctorThisSe.DereferenceLoadNativeHandle( box, newStruct );
+										else
+											throw new CilboxInterpreterRuntimeException(
+												$"Unsupported target for native value-type constructor: {ctorDeclaringType.FullName}",
+												parentClass.className, methodName, pc);
+										isVoid = true;
+									}
+									else
+									{
+										object ctorThis = ctorThisSe.AsObject(box);
+										if (ctorThis == null)
+										{
+											interpretedThrow(pc - 1, new NullReferenceException());
+											break;
+										}
+
+										if( ctorDeclaringType == null || ( ctorDeclaringType != typeof(object) && ctorDeclaringType != typeof(MonoBehaviour) ) )
+										{
+											throw new CilboxInterpreterRuntimeException(
+												$"Unsupported native constructor call on existing instance: {ctorDeclaringType?.FullName}",
+												parentClass.className, methodName, pc);
+										}
+
+										isVoid = true;
+									}
 								}
 							}
 							else if( !st.IsStatic )
@@ -575,7 +592,10 @@ spiperf.Begin();
 
 							if( !isVoid )
 							{
-								stackBuffer[++sp].Load( iko );
+								if( iko is char retChar )
+									stackBuffer[++sp].LoadUshort( (ushort)retChar );
+								else
+									stackBuffer[++sp].Load( iko );
 							}
 							if( isJmp )
 							{
@@ -2132,7 +2152,7 @@ spiperf.End();
 		{
 #if UNITY_EDITOR
 			var pfm = new ProfilerMarker( "Initialize Cilbox" );
-			pfm.Auto();
+			using var pfmScope = pfm.Auto();
 #endif
 
 			if( initialized ) return;
@@ -3230,6 +3250,11 @@ spiperf.End();
 		OnTriggerEnter,
 		OnTriggerExit,
 		OnCollisionEnter,
-		OnCollisionExit
+		OnCollisionExit,
+		LateUpdate,
+		OnTriggerStay,
+		OnCollisionStay,
+		OnRenderObject,
+		OnWillRenderObject
 	}
 }

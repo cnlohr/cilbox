@@ -14,6 +14,7 @@ namespace TestCilbox
 	public class TestCilboxBehaviour : MonoBehaviour
 	{
 		private int ipriviateinance = 555;
+		public string emptyStringField = "";
 		public int ipublicinstance = 556;
 		static private int iprivatestatic = 557;
 		static public int ipublicstatic = 558;
@@ -587,6 +588,23 @@ namespace TestCilbox
 			Validator.Set("PrivateComplexOutAlreadyInitLives", complexOutAlreadyInit.Payload.Lives.ToString() );
 			Validator.Set("PrivateComplexOutAlreadyInitPeer", complexOutAlreadyInit.Peer.pubsettee.ToString() );
 
+			System.Numerics.Vector2 nativeCtorVec = new System.Numerics.Vector2(1.5f, 2.5f);
+			nativeCtorVec = new System.Numerics.Vector2(3.5f, 4.5f);
+			Validator.Set( "NativeStructCtor Vector2", nativeCtorVec.ToString() );
+
+			Quaternion nativeCtorQuat = Quaternion.identity;
+			nativeCtorQuat = new Quaternion(0.5f, 0.25f, 0.75f, 1.0f);
+			Validator.Set( "NativeStructCtor Quaternion x", nativeCtorQuat.x.ToString() );
+			Validator.Set( "NativeStructCtor Quaternion y", nativeCtorQuat.y.ToString() );
+			Validator.Set( "NativeStructCtor Quaternion z", nativeCtorQuat.z.ToString() );
+			Validator.Set( "NativeStructCtor Quaternion w", nativeCtorQuat.w.ToString() );
+
+			string trailStr = "ab==";
+			int trailingEq = 0;
+			for( int ci = trailStr.Length - 1; ci >= 0 && trailStr[ci] == '='; ci-- ) trailingEq++;
+			Validator.Set( "Char Trailing Eq", trailingEq.ToString() );
+			Validator.Set( "Char Code A", ((int)"A"[0]).ToString() );
+
 			behaviour2.Behaviour2Test();
 			myBehaviour3Arr = new TestCilboxBehaviour3[] { new TestCilboxBehaviour3(123), new TestCilboxBehaviour3(456)};
 			Validator.Set("myBehaviour3Arr Length", myBehaviour3Arr.Length.ToString());
@@ -628,6 +646,11 @@ namespace TestCilbox
 			{
 				Validator.Set("ThrowFromOtherConstructor", "caught");
 			}
+
+			Validator.Set("Empty String Field Null", (emptyStringField == null).ToString());
+			Validator.Set("Empty String Field Length", emptyStringField != null ? emptyStringField.Length.ToString() : "null");
+
+			Validator.Set("StargClamp", StargClamp(5).ToString());
 		}
 
 		public void Update()
@@ -638,6 +661,24 @@ namespace TestCilbox
 			for( int i = 0; i < 10000000; i++ ) result = System.Math.Sin( result ) * 10.0;
 			Validator.Set( "Throwaway", result.ToString() );
 			Validator.Set( "Overtime", "did not timed out" );
+		}
+
+		// Lifecycle forwarders added by CilboxProxy: LateUpdate/OnRenderObject/OnWillRenderObject are
+		// mapped to the interpreter by name via the ImportFunctionID enum, so invoking the proxy's
+		// matching Unity callback must reach these payload methods.
+		public void LateUpdate()
+		{
+			Validator.Set( "LateUpdate", "called" );
+		}
+
+		public void OnRenderObject()
+		{
+			Validator.Set( "OnRenderObject", "called" );
+		}
+
+		public void OnWillRenderObject()
+		{
+			Validator.Set( "OnWillRenderObject", "called" );
 		}
 
 
@@ -826,6 +867,13 @@ namespace TestCilbox
 		TestPayload TestPayloadArrayElem(TestPayload[] array, int index)
 		{
 			return array[index];
+		}
+
+		public int StargClamp(int y)
+		{
+			y += 100;
+			y *= 2;
+			return y;
 		}
 	}
 
