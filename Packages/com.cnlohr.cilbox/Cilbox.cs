@@ -2618,14 +2618,18 @@ spiperf.End();
 		}
 	}
 	public class CilboxScenePostprocessor {
+
+		public static string AnalysisAssemblyData;
+
 		//[PostProcessSceneAttribute (2)] This is actually called by IProcessSceneWithReport
-		public static void OnPostprocessScene(UnityEngine.SceneManagement.Scene? scene) {
+		public static void OnPostprocessScene(UnityEngine.SceneManagement.Scene? scene, bool serializeForAnalysisOnly = false) {
 
 			ProfilerMarker perf = new ProfilerMarker("Initial Setup"); perf.Begin();
 
 			MonoBehaviour [] allBehavioursThatNeedCilboxing = CilboxUtil.GetAllBehavioursThatNeedCilboxing(scene);
-			Debug.Log( $"Postprocessing scene. Cilbox scripts to do: {allBehavioursThatNeedCilboxing.Length}" );
-			if( allBehavioursThatNeedCilboxing.Length == 0 )
+			if( !serializeForAnalysisOnly )
+				Debug.Log( $"Postprocessing scene. Cilbox scripts to do: {allBehavioursThatNeedCilboxing.Length}" );
+			if( allBehavioursThatNeedCilboxing.Length == 0 && !serializeForAnalysisOnly )
 			{
 				perf.End();
 				return;
@@ -3110,6 +3114,13 @@ spiperf.End();
 			perf.End(); perf = new ProfilerMarker( "Serializing" ); perf.Begin();
 
 			String sAllAssemblyData = Convert.ToBase64String(assemblySerializee.DumpAsMemory().ToArray() );
+
+			if( serializeForAnalysisOnly )
+			{
+				AnalysisAssemblyData = sAllAssemblyData;
+				perf.End();
+				return;
+			}
 
 			perf.End(); perf = new ProfilerMarker( "Checking If Assembly Changed" ); perf.Begin();
 
