@@ -236,6 +236,17 @@ namespace TestCilbox
 				Validator.Set("PositiveIndexAccess", "caught");
 			}
 
+			try
+			{
+				Validator.Set("NativeParseException", "try");
+				int.Parse("not an int");
+				Validator.Set("NativeParseException", "didn't throw");
+			}
+			catch (Exception)
+			{
+				Validator.Set("NativeParseException", "caught");
+			}
+
 			// stfld on null
 			try
 			{

@@ -519,6 +519,7 @@ namespace TestCilbox
 
 			Validator.Validate("NegativeIndexAccess", "caught");
 			Validator.Validate("PositiveIndexAccess", "caught");
+			Validator.Validate("NativeParseException", "caught");
 
 			Validator.Validate("StfldNullRef", "caught");
 			Validator.Validate("LdfldaNullRef", "caught");
