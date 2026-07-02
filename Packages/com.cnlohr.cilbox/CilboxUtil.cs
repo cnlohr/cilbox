@@ -423,11 +423,24 @@ namespace Cilbox
 	public class CilboxUnhandledInterpretedException : CilboxInterpreterRuntimeException
 	{
 		public readonly object Throwee;
+		public readonly System.Collections.Generic.List<string> Frames;
 
-		public CilboxUnhandledInterpretedException(string msg, object throwee, string className, string methodName, int pc) :
+		public CilboxUnhandledInterpretedException(string msg, object throwee, string className, string methodName, int pc, System.Collections.Generic.List<string> frames = null) :
 			base(msg, className, methodName, pc)
 		{
 			Throwee = throwee;
+			Frames = frames;
+		}
+	}
+
+	public static class CilboxFault
+	{
+		public static System.Action< CilboxUnhandledInterpretedException > InterpretedReporter;
+
+		public static void Report( System.Exception e )
+		{
+			if( e is CilboxUnhandledInterpretedException u && InterpretedReporter != null )
+				InterpretedReporter( u );
 		}
 	}
 
