@@ -20,22 +20,24 @@ namespace Cilbox
 	//  STACK ELEMENT CONTAINER  //////////////////////////////////////////////
 	///////////////////////////////////////////////////////////////////////////
 
-	public enum StackType
+	// StackType is re-used for serialization of primitives, so don't change
+	// any of the enum values
+	public enum StackType : byte
 	{
-		Boolean,
-		Sbyte,
-		Byte,
-		Short,
-		Ushort,
-		Int,
-		Uint,
-		Long,
-		Ulong,
-		Float,
-		Double,
-		Object,
-		Address,
-		NativeHandle,
+		Boolean      = 0,
+		Sbyte        = 1,
+		Byte         = 2,
+		Short        = 3,
+		Ushort       = 4,
+		Int          = 5,
+		Uint         = 6,
+		Long         = 7,
+		Ulong        = 8,
+		Float        = 9,
+		Double       = 10,
+		Object       = 11,
+		Address      = 12,
+		NativeHandle = 13,
 	}
 
 	[StructLayout(LayoutKind.Explicit)]
@@ -758,32 +760,14 @@ namespace Cilbox
 				b.assemblyData = assemblyData;
 				b.BoxInitialize( true );
 
-				Dictionary< String, int > classes;
-				CilboxClass [] classesList;
+				SerializedAssembly asm = SerializedAssembly.Deserialize( assemblyData );
 
-				Dictionary< String, Serializee > assemblyRoot = new Serializee( Convert.FromBase64String( assemblyData ), Serializee.ElementType.Map ).AsMap();
-				Dictionary< String, Serializee > classData = assemblyRoot["classes"].AsMap();
-				Dictionary< String, Serializee > metaData = assemblyRoot["metadata"].AsMap();
-
-				int clsid = 0;
-				classes = new Dictionary< String, int >();
-				classesList = new CilboxClass[classData.Count];
-				foreach( var v in classData )
+				for( int ci = 0; ci < asm.classes.Length; ci++ )
 				{
-					CilboxClass cls = new CilboxClass();
-					classesList[clsid] = cls;
-					classes[(String)v.Key] = clsid;
-					clsid++;
-				}
+					SerializedClass sc = asm.classes[ci];
+					CilboxClass c = b.classesList[ci];
 
-				clsid = 0;
-				foreach( var v in classData )
-				{
-					CilboxClass c = classesList[clsid++];
-
-					c.LoadCilboxClass( b, v.Key, v.Value );
-
-					CLog.WriteLine( $"Class: {c.className}" );
+					CLog.WriteLine( $"Class: {sc.className}" );
 
 					String imports = "";
 					int numImportFunctions = Enum.GetNames(typeof(ImportFunctionID)).Length;
@@ -798,7 +782,7 @@ namespace Cilbox
 
 					CLog.WriteLine( "Static Fields:" );
 					for( int i = 0; i < c.staticFieldNames.Length; i++ )
-						CLog.WriteLine( $"\t{c.staticFieldTypes[i]} {c.staticFieldNames}[i]" );
+						CLog.WriteLine( $"\t{c.staticFieldTypes[i]} {c.staticFieldNames[i]}" );
 
 					CLog.WriteLine( "Instance Fields:" );
 					for( int i = 0; i < c.instanceFieldNames.Length; i++ )
@@ -822,7 +806,6 @@ namespace Cilbox
 						byte[] byteCode = m.byteCode;
 
 						int i = 0;
-						i = 0;
 						try {
 							do
 							{
@@ -924,38 +907,32 @@ namespace Cilbox
 					}
 				}
 
-				foreach( var v in metaData )
+				for( int mid = 0; mid < asm.metadata.Length; mid++ )
 				{
-					int mid = Convert.ToInt32((String)v.Key);
-					Dictionary< String, Serializee > st = v.Value.AsMap();
-					MetaTokenType metatype = (MetaTokenType)Convert.ToInt32(st["mt"].AsString());
-					//CilMetadataTokenInfo t = metadatas[mid] = new CilMetadataTokenInfo( metatype );
+					SerializedMetadataToken st = asm.metadata[mid];
+					MetaTokenType metatype = (MetaTokenType)st.metaTokenType;
 
-					//t.type = metatype;
-					//t.Name = "<UNKNOWN>";
-
-					String metaLine = $"\t{mid.ToString("X4")} {metatype.ToString().Substring(2),-7} ";
+					String metaLine = $"\t{(mid+1).ToString("X4")} {metatype.ToString().Substring(2),-7} ";
 
 					switch( metatype )
 					{
 					case MetaTokenType.mtString:
-						metaLine += st["s"].AsString();
+						metaLine += st.stringValue;
 						break;
 					case MetaTokenType.mtArrayInitializer:
-						metaLine += Convert.ToBase64String( st["data"].AsBlob() );
+						metaLine += Convert.ToBase64String( st.arrayInitData );
 						break;
 					case MetaTokenType.mtField:
-						Type t = b.usage.GetNativeTypeFromSerializee( st["dt"] );
-						if( Int32.Parse( st["isStatic"].AsString() ) > 0 ) metaLine += "static ";
+						Type t = b.usage.GetNativeTypeFromDescriptor( st.fieldDeclaringType );
+						if( st.fieldIsStatic ) metaLine += "static ";
 						String tname = t?.ToString();
 						if( t == null )
-							tname = "NR:" + st["dt"].AsMap()["n"].AsString() + " ";
-						metaLine += tname + st["name"].AsString();
+							tname = "NR:" + st.fieldDeclaringType.typeName + " ";
+						metaLine += tname + st.fieldName;
 						break;
 					case MetaTokenType.mtType:
 					{
-						Serializee typ = st["dt"];
-						Type nt = b.usage.GetNativeTypeFromSerializee( typ );
+						Type nt = b.usage.GetNativeTypeFromDescriptor( st.typeDescriptor );
 						StackType seType = StackElement.StackTypeFromType( nt );
 						if( seType < StackType.Object )
 						{
@@ -968,7 +945,7 @@ namespace Cilbox
 								bool bFound = false;
 								foreach( CilboxClass c in b.classesList )
 								{
-									if( c.className == typ.AsMap()["n"].AsString() )
+									if( c.className == st.typeDescriptor.typeName )
 									{
 										metaLine += $"PROXY: {c.className}";
 										bFound = true;
@@ -976,7 +953,7 @@ namespace Cilbox
 								}
 
 								if( !bFound )
-									throw new Exception( $"Type {typ.AsMap()["n"].AsString()} not available." );
+									throw new Exception( $"Type {st.typeDescriptor.typeName} not available." );
 							}
 							else
 							{
@@ -987,7 +964,7 @@ namespace Cilbox
 					}
 					case MetaTokenType.mtMethod:
 					{
-						metaLine += $"{st["name"].AsString()} {st["fullSignature"].AsString()} {st["assembly"].AsString()}";
+						metaLine += $"{st.methodName} {st.methodFullSignature} {st.methodAssembly}";
 						break;
 					}
 					}
@@ -1014,7 +991,7 @@ namespace Cilbox
 				UnityEngine.SceneManagement.Scene _scene = (UnityEngine.SceneManagement.Scene)scene;
 				if( !_scene.IsValid())
 				{
-					Debug.LogWarning($"Scene {_scene.name} is not valid. Returning empty MonoBehaviour array.");					
+					Debug.LogWarning($"Scene {_scene.name} is not valid. Returning empty MonoBehaviour array.");
 					return Array.Empty<MonoBehaviour>();
 				}
 
@@ -1078,55 +1055,6 @@ namespace Cilbox
 			}
 			return false;
 		}
-
-		// This does not check any rules, so it can be static.
-		public static Serializee GetSerializeeFromNativeType( Type t )
-		{
-			Dictionary< String, Serializee > ret = new Dictionary< String, Serializee >();
-			// Originally I did this to try to narrow down the search.  Now it is not as practical.
-			ret["a"] = new Serializee( t.Assembly.GetName().Name );
-			if( t.IsGenericType )
-			{
-				String genericDefName = t.GetGenericTypeDefinition().FullName;
-				StringBuilder typeNameBuilder = new StringBuilder();
-
-				// The following section strips out arity (`1, `2, etc) from the generic type definition name.
-				// This way we do not need to whitelist each generic arity of a type; We just need to whitelist the base name.
-				// Extreme example: Namespace.Outer`1+Middle`2+Inner`1 would be stripped to Namespace.Outer+Middle+Inner
-				for (int i = 0; i < genericDefName.Length; i++)
-				{
-					if (genericDefName[i] != '`')
-					{
-						typeNameBuilder.Append(genericDefName[i]);
-						continue;
-					}
-
-					int j = i + 1;
-					while (j < genericDefName.Length && char.IsDigit(genericDefName[j]))
-						j++;
-
-					if (j == genericDefName.Length || genericDefName[j] == '+' || genericDefName[j] == '[')
-						i = j - 1;
-				}
-				string baseName = typeNameBuilder.ToString();
-
-				ret["n"] = new Serializee( baseName );
-				ret["gn"] = new Serializee( genericDefName ); // Store the generic name so it does not have to be rebuilt
-				Type [] ta = t.GenericTypeArguments;
-				Serializee [] sg = new Serializee[ta.Length];
-				for( int i = 0; i < ta.Length; i++ )
-					sg[i] = GetSerializeeFromNativeType( ta[i] );
-				ret["g"] = new Serializee( sg );
-			}
-			else
-			{
-				ret["n"] = new Serializee( t.FullName );
-				if( t.IsEnum && HasCilboxableAttribute(t) )
-					ret["ut"] = GetSerializeeFromNativeType( t.GetEnumUnderlyingType() );
-			}
-			return new Serializee( ret );
-		}
-
 
 		///////////////////////////////////////////////////////////////////////////
 		//  DEFS FROM CECIL FOR PARSING CIL  //////////////////////////////////////

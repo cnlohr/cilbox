@@ -110,7 +110,7 @@ namespace TestCilbox
 			return whiteListField.Contains( sType + "." + sFieldName );
 		}
 
-		override public bool CheckMethodAllowed( out MethodInfo mi, Type declaringType, String name, Serializee [] parametersIn, Serializee [] genericArgumentsIn, String fullSignature )
+		override public bool CheckMethodAllowed( out MethodInfo mi, Type declaringType, String name, SerializedTypeDescriptor [] parametersIn, SerializedTypeDescriptor [] genericArgumentsIn, String fullSignature )
 		{
 			mi = null;
 
@@ -894,13 +894,12 @@ namespace TestCilbox
 			Cilbox.CilboxProxy proxy = new Cilbox.CilboxProxy();
 			proxy.fieldsObjects = new List<UnityEngine.Object>();
 
-			Dictionary<string, Serializee> dict = new Dictionary<string, Serializee>();
-			dict["t"] = new Serializee("obj");
-			dict["fo"] = new Serializee("-1");
-			Serializee serialized = new Serializee(dict);
+			Cilbox.SerializedProxyField spf = new Cilbox.SerializedProxyField();
+			spf.fieldType = (byte)Cilbox.ProxyFieldType.ObjectRef;
+			spf.fieldObjectIndex = -1;
 
 			MethodInfo method = typeof(Cilbox.CilboxProxy).GetMethod(
-				"LoadObjectFromSerializee",
+				"LoadObjectFromProxyField",
 				BindingFlags.Instance | BindingFlags.NonPublic);
 			if( method == null )
 			{
@@ -910,7 +909,7 @@ namespace TestCilbox
 
 			try
 			{
-				object[] args = new object[] { serialized, null, "badField", typeof(UnityEngine.Object), true, null };
+				object[] args = new object[] { spf, null, "badField", typeof(UnityEngine.Object) };
 				object result = method.Invoke(proxy, args);
 				bool loaded = result is bool b && b;
 				Validator.Set("Negative fieldsObjects index", loaded ? "loaded" : "ignored");
