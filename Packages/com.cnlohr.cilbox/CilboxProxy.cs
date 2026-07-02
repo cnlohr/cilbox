@@ -180,7 +180,7 @@ namespace Cilbox
 				bool verboseLogging = box.verboseLogging;
 
 #if UNITY_EDITOR
-				new ProfilerMarker($"Initialize {className}").Auto();
+				using var initMarker = new ProfilerMarker($"Initialize {className}").Auto();
 #endif
 				var sb = new System.Text.StringBuilder("/" + transform.name);
 				Transform aparent = transform.parent;
@@ -289,6 +289,13 @@ namespace Cilbox
 							Debug.LogWarning( $"[CilboxProxy:{gameObject.name}] Failed to create default value for {cls.instanceFieldNames[i]} ({fieldType}): {e.Message}" );
 						}
 					}
+					else if( fieldType == typeof(string) )
+					{
+						// Empty/unset string fields default to string.Empty (matches Unity), not null.
+						fields[i].LoadObject( string.Empty );
+						if (verboseLogging)
+							ProxyDebugLog( $"Default field init {cls.instanceFieldNames[i]} <- string.Empty" );
+					}
 					else
 					{
 						fields[i].LoadObject( null );
@@ -353,7 +360,7 @@ namespace Cilbox
 			case ProxyFieldType.ObjectRef:
 			{
 				int iFO = spf.fieldObjectIndex;
-				if( iFO < objectSlots.Count )
+				if( iFO >= 0 && iFO < objectSlots.Count )
 				{
 					if( spf.objectRefIsNull )
 					{
@@ -508,6 +515,7 @@ namespace Cilbox
 		}
 		void FixedUpdate() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.FixedUpdate, null ); }
 		void Update() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.Update, null ); }
+		void LateUpdate() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.LateUpdate, null ); }
 		void OnEnable() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.OnEnable, null ); }
 		void OnDisable() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.OnDisable, null ); }
 		void OnDestroy() { if( proxyWasSetup ) box.InterpretIID( cls, this, ImportFunctionID.OnDestroy, null ); }
@@ -515,6 +523,10 @@ namespace Cilbox
 		void OnTriggerExit(Collider c) { if (proxyWasSetup) box.InterpretIID(cls, this, ImportFunctionID.OnTriggerExit, new object[] { c }); }
 		void OnCollisionEnter(Collision c) { if (proxyWasSetup) box.InterpretIID(cls, this, ImportFunctionID.OnCollisionEnter, new object[] { c }); }
 		void OnCollisionExit(Collision c) { if (proxyWasSetup) box.InterpretIID(cls, this, ImportFunctionID.OnCollisionExit, new object[] { c }); }
+		void OnTriggerStay(Collider c) { if (proxyWasSetup) box.InterpretIID(cls, this, ImportFunctionID.OnTriggerStay, new object[] { c }); }
+		void OnCollisionStay(Collision c) { if (proxyWasSetup) box.InterpretIID(cls, this, ImportFunctionID.OnCollisionStay, new object[] { c }); }
+		void OnRenderObject() { if (proxyWasSetup) box.InterpretIID(cls, this, ImportFunctionID.OnRenderObject, null); }
+		void OnWillRenderObject() { if (proxyWasSetup) box.InterpretIID(cls, this, ImportFunctionID.OnWillRenderObject, null); }
 	}
 }
 

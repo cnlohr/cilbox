@@ -13,7 +13,8 @@ namespace Unity
 		{
 			public ProfilerMarker( String s ) { }
 			public void Begin() { }
-			public void Auto() { }
+			public AutoScope Auto() { return new AutoScope(); }
+			public struct AutoScope : IDisposable { public void Dispose() { } }
 			public void End() { }
 		}
 	}
@@ -195,6 +196,18 @@ namespace UnityEngine
 		public override string ToString()
 		{
 			return $"({x}, {y}, {z})";
+		}
+	}
+
+	public struct Quaternion
+	{
+		public float x, y, z, w;
+		public Quaternion( float x, float y, float z, float w ) { this.x = x; this.y = y; this.z = z; this.w = w; }
+		public static Quaternion identity => new Quaternion( 0, 0, 0, 1 );
+
+		public override string ToString()
+		{
+			return $"({x}, {y}, {z}, {w})";
 		}
 	}
 

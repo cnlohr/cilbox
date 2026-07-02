@@ -84,12 +84,17 @@ namespace TestCilbox
 			"UnityEngine.Transform",
 			"UnityEngine.Vector4",
 			"UnityEngine.Vector3",
+			"UnityEngine.Quaternion",
 		};
 
 		static HashSet<String> whiteListField = new HashSet<String>(){
 			"UnityEngine.Vector3.x",
 			"UnityEngine.Vector3.y",
 			"UnityEngine.Vector3.z",
+			"UnityEngine.Quaternion.x",
+			"UnityEngine.Quaternion.y",
+			"UnityEngine.Quaternion.z",
+			"UnityEngine.Quaternion.w",
 			"TestCilbox.TestUtil.StaticFloat",
 		};
 
@@ -347,6 +352,8 @@ namespace TestCilbox
 				Validator.AddCount($"CilboxDisabled_{box.GetType().FullName}");
 			};
 
+			ValidateNegativeFieldsObjectIndex();
+
 			GameObject go = new GameObject("MyObjectToProxy");
 			TestCilboxBehaviour b = go.CreateComponent<TestCilboxBehaviour>();
 
@@ -416,6 +423,7 @@ namespace TestCilbox
 				Validator.Validate( "Cycle Root Has Child", "True" );
 				Validator.Validate( "Cycle Child Has Root", "True" );
 				Validator.Validate( "Cycle Child BackRef Same", "True" );
+				Validator.Validate( "Negative fieldsObjects index", "ignored" );
 
 				Validator.Validate( "private instance filed", "555");
 				Validator.Validate( "public instance field", "556" );
@@ -429,6 +437,13 @@ namespace TestCilbox
 				Validator.Validate( "recursive function", "511" );
 				Validator.Validate( "string concatenation", "it works" );
 				Validator.Validate( "MathF.Sin", "-0.058374193" );
+
+				proxy.GetType().GetMethod("LateUpdate",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
+				Validator.Validate( "LateUpdate", "called" );
+				proxy.GetType().GetMethod("OnRenderObject",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
+				Validator.Validate( "OnRenderObject", "called" );
+				proxy.GetType().GetMethod("OnWillRenderObject",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
+				Validator.Validate( "OnWillRenderObject", "called" );
 
 				// Make sure CI can fail.
 				//Validator.Validate( "Test Fail Check", "This will fail" );
@@ -504,6 +519,7 @@ namespace TestCilbox
 
 			Validator.Validate("NegativeIndexAccess", "caught");
 			Validator.Validate("PositiveIndexAccess", "caught");
+			Validator.Validate("NativeParseException", "caught");
 
 			Validator.Validate("StfldNullRef", "caught");
 			Validator.Validate("LdfldaNullRef", "caught");
@@ -644,6 +660,10 @@ namespace TestCilbox
 			Validator.Validate("TestPayload Array Lives 0", "1");
 			Validator.Validate("TestPayload Array Score 1", "20");
 			Validator.Validate("TestPayload Array Lives 1", "3");
+			Validator.Validate("TestPayload Array Element Access Score 0", "10");
+			Validator.Validate("TestPayload Array Element Access Lives 0", "1");
+			Validator.Validate("TestPayload Array Element Access Score 1", "20");
+			Validator.Validate("TestPayload Array Element Access Lives 1", "3");
 			Validator.Validate("Ushort Array Assigned Length", "3");
 			Validator.Validate("Ushort Array Assigned 0", "7");
 			Validator.Validate("Ushort Array Assigned 1", "1234");
@@ -704,6 +724,14 @@ namespace TestCilbox
 			Validator.Validate("Double Array With Data 1", "6.25");
 			Validator.Validate("Double Array With Data 2", "8.75");
 
+			Validator.Validate("Vector2 Array Assigned Length", "2");
+			Validator.Validate("Vector2 Array Assigned 0", "<1.5, 2.5>");
+			Validator.Validate("Vector2 Array Assigned 1", "<3.25, 4.25>");
+
+			Validator.Validate("Vector2 Array With Data Length", "2");
+			Validator.Validate("Vector2 Array With Data 0", "<5.5, 6.5>");
+			Validator.Validate("Vector2 Array With Data 1", "<6.25, 7.25>");
+
 			Validator.Validate("Static Readonly Vector2 Array Length", "2");
 			Validator.Validate("Static Readonly Vector2 Array 0", "<1, 2>");
 			Validator.Validate("Static Readonly Vector2 Array 1", "<3.5, 4.5>");
@@ -718,6 +746,10 @@ namespace TestCilbox
 			Validator.Validate("Object Array With Data 1", "64");
 			Validator.Validate("Object Array With Data 2", "delta");
 
+			Validator.Validate("Object Array Element Access With Data 0", "beta");
+			Validator.Validate("Object Array Element Access With Data 1", "64");
+			Validator.Validate("Object Array Element Access With Data 2", "delta");
+
 			// Boxing enums
 			Validator.Validate("Boxed MyEnum", "Value2");
 			Validator.Validate("Boxed TestEnum", "SecondValue");
@@ -728,6 +760,7 @@ namespace TestCilbox
 			Validator.Validate("WriteFloat_2", "99");
 			Validator.Validate("NativeStaticFloat ref written", "99");
 			Validator.Validate("ReadInt_2", "1114");
+			Validator.Validate("Cross Class Static Field", "321");
 
 			Validator.Validate("NativeOutVec3", "(12, 8, 0)");
 			Validator.Validate("CilOutVec3", "(1, 2, 3)");
@@ -760,6 +793,15 @@ namespace TestCilbox
 			Validator.Validate("ThrowFromOtherBehaviour2Finally", "finally");
 			Validator.Validate("ThrowFromOtherConstructor", "caught");
 
+			Validator.Validate( "NativeStructCtor Vector2", "<3.5, 4.5>" );
+			Validator.Validate( "NativeStructCtor Quaternion x", "0.5" );
+			Validator.Validate( "NativeStructCtor Quaternion y", "0.25" );
+			Validator.Validate( "NativeStructCtor Quaternion z", "0.75" );
+			Validator.Validate( "NativeStructCtor Quaternion w", "1" );
+
+			Validator.Validate( "Char Trailing Eq", "2" );
+			Validator.Validate( "Char Code A", "65" );
+
 			Validator.ValidateCount($"CilboxDisabled_{cb.GetType().FullName}", 1 );
 
 			if( runPerf )
@@ -767,7 +809,43 @@ namespace TestCilbox
 				RunPerfSuite(cb, perfRootProxy, perfPeerProxy);
 			}
 
+			Validator.Validate( "Empty String Field Null", "False" );
+			Validator.Validate( "Empty String Field Length", "0" );
+
+			Validator.Validate( "StargClamp", "210" );
+
 			return -1 * Validator.NumValidationErrors();
+		}
+
+		private static void ValidateNegativeFieldsObjectIndex()
+		{
+			Cilbox.CilboxProxy proxy = new Cilbox.CilboxProxy();
+			proxy.fieldsObjects = new List<UnityEngine.Object>();
+
+			Cilbox.SerializedProxyField spf = new Cilbox.SerializedProxyField();
+			spf.fieldType = (byte)Cilbox.ProxyFieldType.ObjectRef;
+			spf.fieldObjectIndex = -1;
+
+			MethodInfo method = typeof(Cilbox.CilboxProxy).GetMethod(
+				"LoadObjectFromProxyField",
+				BindingFlags.Instance | BindingFlags.NonPublic);
+			if( method == null )
+			{
+				Validator.Set("Negative fieldsObjects index", "missing method");
+				return;
+			}
+
+			try
+			{
+				object[] args = new object[] { spf, null, "badField", typeof(UnityEngine.Object) };
+				object result = method.Invoke(proxy, args);
+				bool loaded = result is bool b && b;
+				Validator.Set("Negative fieldsObjects index", loaded ? "loaded" : "ignored");
+			}
+			catch (Exception e)
+			{
+				Validator.Set("Negative fieldsObjects index", e.GetType().Name);
+			}
 		}
 	}
 }

@@ -14,6 +14,7 @@ namespace TestCilbox
 	public class TestCilboxBehaviour : MonoBehaviour
 	{
 		private int ipriviateinance = 555;
+		public string emptyStringField = "";
 		public int ipublicinstance = 556;
 		static private int iprivatestatic = 557;
 		static public int ipublicstatic = 558;
@@ -235,6 +236,17 @@ namespace TestCilbox
 				Validator.Set("PositiveIndexAccess", "caught");
 			}
 
+			try
+			{
+				Validator.Set("NativeParseException", "try");
+				int.Parse("not an int");
+				Validator.Set("NativeParseException", "didn't throw");
+			}
+			catch (Exception)
+			{
+				Validator.Set("NativeParseException", "caught");
+			}
+
 			// stfld on null
 			try
 			{
@@ -396,6 +408,8 @@ namespace TestCilbox
 			{
 				Validator.Set("TestPayload Array Score " + j, payloadArr[j].Score.ToString() );
 				Validator.Set("TestPayload Array Lives " + j, payloadArr[j].Lives.ToString() );
+				Validator.Set("TestPayload Array Element Access Lives " + j, TestPayloadArrayElem(payloadArr, j).Lives.ToString() );
+				Validator.Set("TestPayload Array Element Access Score " + j, TestPayloadArrayElem(payloadArr, j).Score.ToString() );
 			}
 			ushort[] ushortAssigned = new ushort[3];
 			ushortAssigned[0] = 7;
@@ -487,6 +501,23 @@ namespace TestCilbox
 			Validator.Set("Double Array With Data 1", doubleWithData[1].ToString() );
 			Validator.Set("Double Array With Data 2", doubleWithData[2].ToString() );
 
+			System.Numerics.Vector2[] vector2Assigned = new System.Numerics.Vector2[2];
+			vector2Assigned[0] = new System.Numerics.Vector2(1.5f, 2.5f);
+			vector2Assigned[1] = new System.Numerics.Vector2(3.25f, 4.25f);
+			Validator.Set("Vector2 Array Assigned Length", vector2Assigned.Length.ToString() );
+			Validator.Set("Vector2 Array Assigned 0", Vector2ArrayElem(vector2Assigned, 0).ToString());
+			Validator.Set("Vector2 Array Assigned 1", Vector2ArrayElem(vector2Assigned, 1).ToString());
+
+			System.Numerics.Vector2[] vector2WithData = new System.Numerics.Vector2[]
+			{
+				new System.Numerics.Vector2(5.5f, 6.5f),
+				new System.Numerics.Vector2(6.25f, 7.25f)
+			};
+
+			Validator.Set("Vector2 Array With Data Length", vector2Assigned.Length.ToString() );
+			Validator.Set("Vector2 Array With Data 0", Vector2ArrayElem(vector2WithData, 0).ToString());
+			Validator.Set("Vector2 Array With Data 1", Vector2ArrayElem(vector2WithData, 1).ToString());
+
 			Validator.Set("Static Readonly Vector2 Array Length", staticReadonlyVector2Array.Length.ToString() );
 			for (int j = 0; j < staticReadonlyVector2Array.Length; j++)
 			{
@@ -507,6 +538,9 @@ namespace TestCilbox
 			Validator.Set("Object Array With Data 0", objectWithData[0].ToString() );
 			Validator.Set("Object Array With Data 1", objectWithData[1].ToString() );
 			Validator.Set("Object Array With Data 2", objectWithData[2].ToString() );
+			Validator.Set("Object Array Element Access With Data 0", ObjectArrayElem(objectWithData, 0).ToString());
+			Validator.Set("Object Array Element Access With Data 1", ObjectArrayElem(objectWithData, 1).ToString());
+			Validator.Set("Object Array Element Access With Data 2", ObjectArrayElem(objectWithData, 2).ToString());
 
 			object boxedMyEnum = MyEnum.Value2;
 			MyEnum castMyEnum = (MyEnum)boxedMyEnum;
@@ -524,6 +558,8 @@ namespace TestCilbox
 			WriteFloat(ref TestUtil.StaticFloat, 99.0f);
 			Validator.Set("NativeStaticFloat ref written", TestUtil.StaticFloat.ToString());
 			ReadInt(ref iprivatestatic);
+			TestCilboxBehaviour2.sharedValue = 321;
+			Validator.Set("Cross Class Static Field", TestCilboxBehaviour2.sharedValue.ToString());
 
 			TestUtil.GetOutVec3(out Vector3 outVec);
 			Validator.Set("NativeOutVec3", outVec.ToString() );
@@ -564,6 +600,23 @@ namespace TestCilbox
 			Validator.Set("PrivateComplexOutAlreadyInitScore", complexOutAlreadyInit.Payload.Score.ToString() );
 			Validator.Set("PrivateComplexOutAlreadyInitLives", complexOutAlreadyInit.Payload.Lives.ToString() );
 			Validator.Set("PrivateComplexOutAlreadyInitPeer", complexOutAlreadyInit.Peer.pubsettee.ToString() );
+
+			System.Numerics.Vector2 nativeCtorVec = new System.Numerics.Vector2(1.5f, 2.5f);
+			nativeCtorVec = new System.Numerics.Vector2(3.5f, 4.5f);
+			Validator.Set( "NativeStructCtor Vector2", nativeCtorVec.ToString() );
+
+			Quaternion nativeCtorQuat = Quaternion.identity;
+			nativeCtorQuat = new Quaternion(0.5f, 0.25f, 0.75f, 1.0f);
+			Validator.Set( "NativeStructCtor Quaternion x", nativeCtorQuat.x.ToString() );
+			Validator.Set( "NativeStructCtor Quaternion y", nativeCtorQuat.y.ToString() );
+			Validator.Set( "NativeStructCtor Quaternion z", nativeCtorQuat.z.ToString() );
+			Validator.Set( "NativeStructCtor Quaternion w", nativeCtorQuat.w.ToString() );
+
+			string trailStr = "ab==";
+			int trailingEq = 0;
+			for( int ci = trailStr.Length - 1; ci >= 0 && trailStr[ci] == '='; ci-- ) trailingEq++;
+			Validator.Set( "Char Trailing Eq", trailingEq.ToString() );
+			Validator.Set( "Char Code A", ((int)"A"[0]).ToString() );
 
 			behaviour2.Behaviour2Test();
 			myBehaviour3Arr = new TestCilboxBehaviour3[] { new TestCilboxBehaviour3(123), new TestCilboxBehaviour3(456)};
@@ -606,6 +659,11 @@ namespace TestCilbox
 			{
 				Validator.Set("ThrowFromOtherConstructor", "caught");
 			}
+
+			Validator.Set("Empty String Field Null", (emptyStringField == null).ToString());
+			Validator.Set("Empty String Field Length", emptyStringField != null ? emptyStringField.Length.ToString() : "null");
+
+			Validator.Set("StargClamp", StargClamp(5).ToString());
 		}
 
 		public void Update()
@@ -616,6 +674,24 @@ namespace TestCilbox
 			for( int i = 0; i < 10000000; i++ ) result = System.Math.Sin( result ) * 10.0;
 			Validator.Set( "Throwaway", result.ToString() );
 			Validator.Set( "Overtime", "did not timed out" );
+		}
+
+		// Lifecycle forwarders added by CilboxProxy: LateUpdate/OnRenderObject/OnWillRenderObject are
+		// mapped to the interpreter by name via the ImportFunctionID enum, so invoking the proxy's
+		// matching Unity callback must reach these payload methods.
+		public void LateUpdate()
+		{
+			Validator.Set( "LateUpdate", "called" );
+		}
+
+		public void OnRenderObject()
+		{
+			Validator.Set( "OnRenderObject", "called" );
+		}
+
+		public void OnWillRenderObject()
+		{
+			Validator.Set( "OnWillRenderObject", "called" );
 		}
 
 
@@ -787,12 +863,38 @@ namespace TestCilbox
 		{
 			i = 22;
 		}
+
+		public System.Numerics.Vector2 Vector2ArrayElem(System.Numerics.Vector2[] array, int index)
+		{
+			// NOTE: This method was written for ldelm<typeTok>.
+			// In most cases, the compiler avoids emitting ldelm<typeTok>.
+			// We can prevent this optimization by indexing the array and immediately returning its value.
+			return array[index];
+		}
+
+		public object ObjectArrayElem(object[] array, int index)
+		{
+			return array[index];
+		}
+
+		TestPayload TestPayloadArrayElem(TestPayload[] array, int index)
+		{
+			return array[index];
+		}
+
+		public int StargClamp(int y)
+		{
+			y += 100;
+			y *= 2;
+			return y;
+		}
 	}
 
 
 	[Cilboxable]
 	public class TestCilboxBehaviour2 : MonoBehaviour
 	{
+		public static int sharedValue = 123;
 		public int pubsettee = 35254;
 		public void Behaviour2Test()
 		{

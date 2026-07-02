@@ -289,6 +289,7 @@ spiperf.Begin();
 					case 0x0d: stackBuffer[localVarsHead+3] = stackBuffer[sp--]; break; //stloc.3
 					case 0x0e: stackBuffer[++sp] = parameters[byteCode[pc++]]; break; // ldarg.s <uint8 (argNum)>
 					case 0x0f: stackBuffer[++sp] = StackElement.CreateAddressReference( parametersIn.Array, (uint)parametersIn.Offset + (uint)byteCode[pc++] ); break; // ldarga.s <uint8 (argNum)>
+					case 0x10: parameters[byteCode[pc++]] = stackBuffer[sp--]; break; // starg.s <uint8 (argNum)> -- mirror of stloc.s (0x13) but stores into a parameter slot
 					case 0x11: stackBuffer[++sp] = stackBuffer[localVarsHead+byteCode[pc++]]; break; //ldloc.s
 					case 0x12:
 					{
@@ -465,29 +466,53 @@ spiperf.Begin();
 								ConstructorInfo ctor = (ConstructorInfo)st;
 								if( isNewObj )
 								{
-									iko = ctor.Invoke( callpar );
+									try
+									{
+										iko = ctor.Invoke( callpar );
+									}
+									catch( TargetInvocationException e )
+									{
+										interpretedThrow(pc - 1, e.InnerException ?? e);
+										break;
+									}
 									isVoid = false; // newobj always pushes a reference/value.
 								}
 								else
 								{
 									StackElement ctorThisSe = stackBuffer[sp--];
-									object ctorThis = ctorThisSe.AsObject(box);
-									if (ctorThis == null)
-									{
-										interpretedThrow(pc - 1, new NullReferenceException());
-										break;
-									}
-
 									Type ctorDeclaringType = ctor.DeclaringType;
-									if( ctorDeclaringType == null || ( ctorDeclaringType != typeof(object) && ctorDeclaringType != typeof(MonoBehaviour) ) )
-									{
-										throw new CilboxInterpreterRuntimeException(
-											$"Unsupported native constructor call on existing instance: {ctor.DeclaringType?.FullName}",
-											parentClass.className, methodName, pc);
-									}
 
-									// Base constructors for Object/MonoBehaviour are no-ops in interpreter mode.
-									isVoid = true;
+									if( ctorDeclaringType != null && ctorDeclaringType.IsValueType )
+									{
+										object newStruct = ctor.Invoke( callpar );
+										if( ctorThisSe.type == StackType.Address )
+											ctorThisSe.DereferenceLoadAddress( newStruct );
+										else if( ctorThisSe.type == StackType.NativeHandle )
+											ctorThisSe.DereferenceLoadNativeHandle( box, newStruct );
+										else
+											throw new CilboxInterpreterRuntimeException(
+												$"Unsupported target for native value-type constructor: {ctorDeclaringType.FullName}",
+												parentClass.className, methodName, pc);
+										isVoid = true;
+									}
+									else
+									{
+										object ctorThis = ctorThisSe.AsObject(box);
+										if (ctorThis == null)
+										{
+											interpretedThrow(pc - 1, new NullReferenceException());
+											break;
+										}
+
+										if( ctorDeclaringType == null || ( ctorDeclaringType != typeof(object) && ctorDeclaringType != typeof(MonoBehaviour) ) )
+										{
+											throw new CilboxInterpreterRuntimeException(
+												$"Unsupported native constructor call on existing instance: {ctorDeclaringType?.FullName}",
+												parentClass.className, methodName, pc);
+										}
+
+										isVoid = true;
+									}
 								}
 							}
 							else if( !st.IsStatic )
@@ -525,7 +550,15 @@ spiperf.Begin();
 									break;
 								}
 
-								iko = st.Invoke( callthis, callpar );
+								try
+								{
+									iko = st.Invoke( callthis, callpar );
+								}
+								catch( TargetInvocationException e )
+								{
+									interpretedThrow(pc - 1, e.InnerException ?? e);
+									break;
+								}
 								if( seorig.type == StackType.Address  && callthis is not BoxedCilboxEnum ) // enums are immutable
 								{
 									seorig.DereferenceLoadAddress( callthis );
@@ -537,7 +570,15 @@ spiperf.Begin();
 							}
 							else
 							{
-								iko = st.Invoke( null, callpar );
+								try
+								{
+									iko = st.Invoke( null, callpar );
+								}
+								catch( TargetInvocationException e )
+								{
+									interpretedThrow(pc - 1, e.InnerException ?? e);
+									break;
+								}
 							}
 
 							// Possibly copy back any references.
@@ -556,7 +597,10 @@ spiperf.Begin();
 
 							if( !isVoid )
 							{
-								stackBuffer[++sp].Load( iko );
+								if( iko is char retChar )
+									stackBuffer[++sp].LoadUshort( (ushort)retChar );
+								else
+									stackBuffer[++sp].Load( iko );
 							}
 							if( isJmp )
 							{
@@ -1159,7 +1203,8 @@ spiperf.Begin();
 						}
 						else
 						{
-							stackBuffer[++sp].Load( parentClass.staticFields[ldsm.fieldIndex] );
+							CilboxClass declaringClass = ldsm.interpretiveFieldClass >= 0 ? box.classesList[ldsm.interpretiveFieldClass] : parentClass;
+							stackBuffer[++sp].Load( declaringClass.staticFields[ldsm.fieldIndex] );
 						}
 						break;
 					}
@@ -1177,7 +1222,8 @@ spiperf.Begin();
 						}
 						else
 						{
-							stackBuffer[++sp] = StackElement.CreateAddressReference( (Array)(parentClass.staticFields), (uint)ldsam.fieldIndex );
+							CilboxClass declaringClass = ldsam.interpretiveFieldClass >= 0 ? box.classesList[ldsam.interpretiveFieldClass] : parentClass;
+							stackBuffer[++sp] = StackElement.CreateAddressReference( (Array)(declaringClass.staticFields), (uint)ldsam.fieldIndex );
 						}
 						break;
 					}
@@ -1196,7 +1242,8 @@ spiperf.Begin();
 						}
 						else
 						{
-							parentClass.staticFields[stsm.fieldIndex] = obj;
+							CilboxClass declaringClass = stsm.interpretiveFieldClass >= 0 ? box.classesList[stsm.interpretiveFieldClass] : parentClass;
+							declaringClass.staticFields[stsm.fieldIndex] = obj;
 						}
 						break;
 					}
@@ -1320,6 +1367,36 @@ spiperf.Begin();
 							break;
 						}
 						stackBuffer[++sp].LoadObject( a.GetValue(index) );
+						break;
+					}
+					case 0xa3: // ldelem <typeTok>
+					{
+						uint otyp = BytecodeAsU32( ref pc );
+						int index = stackBuffer[sp--].i;
+						StackElement arrSE = stackBuffer[sp--];
+
+						if (arrSE.o == null)
+						{
+							interpretedThrow(pc - 1, new NullReferenceException());
+							break;
+						}
+						Array array = (Array)arrSE.AsObject();
+						if (index < 0 || index >= array.Length)
+						{
+							interpretedThrow(pc - 1, new IndexOutOfRangeException());
+							break;
+						}
+
+						CilMetadataTokenInfo elemMeta = box.metadatas[otyp];
+						var value = array.GetValue( index );
+						var targetElementType = elemMeta.nativeType;
+
+						if( targetElementType != null && targetElementType != typeof(object) && value != null && !targetElementType.IsInstanceOfType( value ) )
+						{
+							value = Convert.ChangeType( value, targetElementType );
+						}
+
+						stackBuffer[++sp].LoadObject( value );
 						break;
 					}
 					case 0x9b: case 0x9c: case 0x9d: case 0x9e: case 0x9f: // stelem
@@ -1671,7 +1748,7 @@ spiperf.End();
 				exceptionRegister = new StackElement() { type = StackType.Object, o = thrownObj };
 				if (!hasExceptionClauses)
 				{
-					throw new CilboxUnhandledInterpretedException("Exception thrown with no handlers: " + thrownObj.ToString(), thrownObj, parentClass.className, methodName, currentInstruction);
+					throw new CilboxUnhandledInterpretedException("Exception thrown with no handlers: " + (thrownObj?.ToString() ?? "(null)"), thrownObj, parentClass.className, methodName, currentInstruction);
 				}
 
 				CilboxExceptionHandlingClause found = null;
@@ -1726,7 +1803,7 @@ spiperf.End();
 
 				if (found == null)
 				{
-					throw new CilboxUnhandledInterpretedException("No handlers matched exception: " + thrownObj.ToString(), thrownObj, parentClass.className, methodName, currentInstruction);
+					throw new CilboxUnhandledInterpretedException("No handlers matched exception: " + (thrownObj?.ToString() ?? "(null)"), thrownObj, parentClass.className, methodName, currentInstruction);
 				}
 
 				leaveRegionEnqueueFinallys(currentInstruction, found.HandlerOffset, true);
@@ -1966,6 +2043,7 @@ spiperf.End();
 		public MetaTokenType type;
 		public bool isValid;
 		public int fieldIndex; // Only used for fields of cilbox objects.
+		public int interpretiveFieldClass = -1;
 		public bool isFieldWhiteListed = false;
 		public FieldInfo nativeField; // For whitelisted fields on non-cilbox objects.
 
@@ -2074,7 +2152,7 @@ spiperf.End();
 		{
 #if UNITY_EDITOR
 			var pfm = new ProfilerMarker( "Initialize Cilbox" );
-			pfm.Auto();
+			using var pfmScope = pfm.Auto();
 #endif
 
 			if( initialized ) return;
@@ -2150,6 +2228,8 @@ spiperf.End();
 					if( sm.fieldHasIndex )
 					{
 						t.fieldIndex = sm.fieldIndex;
+						if( classes.TryGetValue( t.declaringTypeName, out int fieldClassId ) )
+							t.interpretiveFieldClass = fieldClassId;
 					}
 					else
 					{
@@ -3162,6 +3242,11 @@ spiperf.End();
 		OnTriggerEnter,
 		OnTriggerExit,
 		OnCollisionEnter,
-		OnCollisionExit
+		OnCollisionExit,
+		LateUpdate,
+		OnTriggerStay,
+		OnCollisionStay,
+		OnRenderObject,
+		OnWillRenderObject
 	}
 }
