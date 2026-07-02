@@ -378,6 +378,7 @@ namespace Cilbox
 					if( dict.TryGetValue( "fo", out seFO ) &&
 						Int32.TryParse( seFO.AsString(), out iFO ) &&
 						objectSlots != null &&
+						iFO >= 0 &&
 						iFO < objectSlots.Count )
 					{
 						if (dict.TryGetValue("or", out var seOr))

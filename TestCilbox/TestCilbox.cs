@@ -352,6 +352,8 @@ namespace TestCilbox
 				Validator.AddCount($"CilboxDisabled_{box.GetType().FullName}");
 			};
 
+			ValidateNegativeFieldsObjectIndex();
+
 			GameObject go = new GameObject("MyObjectToProxy");
 			TestCilboxBehaviour b = go.CreateComponent<TestCilboxBehaviour>();
 
@@ -421,6 +423,7 @@ namespace TestCilbox
 				Validator.Validate( "Cycle Root Has Child", "True" );
 				Validator.Validate( "Cycle Child Has Root", "True" );
 				Validator.Validate( "Cycle Child BackRef Same", "True" );
+				Validator.Validate( "Negative fieldsObjects index", "ignored" );
 
 				Validator.Validate( "private instance filed", "555");
 				Validator.Validate( "public instance field", "556" );
@@ -811,6 +814,38 @@ namespace TestCilbox
 			Validator.Validate( "StargClamp", "210" );
 
 			return -1 * Validator.NumValidationErrors();
+		}
+
+		private static void ValidateNegativeFieldsObjectIndex()
+		{
+			Cilbox.CilboxProxy proxy = new Cilbox.CilboxProxy();
+			proxy.fieldsObjects = new List<UnityEngine.Object>();
+
+			Dictionary<string, Serializee> dict = new Dictionary<string, Serializee>();
+			dict["t"] = new Serializee("obj");
+			dict["fo"] = new Serializee("-1");
+			Serializee serialized = new Serializee(dict);
+
+			MethodInfo method = typeof(Cilbox.CilboxProxy).GetMethod(
+				"LoadObjectFromSerializee",
+				BindingFlags.Instance | BindingFlags.NonPublic);
+			if( method == null )
+			{
+				Validator.Set("Negative fieldsObjects index", "missing method");
+				return;
+			}
+
+			try
+			{
+				object[] args = new object[] { serialized, null, "badField", typeof(UnityEngine.Object), true, null };
+				object result = method.Invoke(proxy, args);
+				bool loaded = result is bool b && b;
+				Validator.Set("Negative fieldsObjects index", loaded ? "loaded" : "ignored");
+			}
+			catch (Exception e)
+			{
+				Validator.Set("Negative fieldsObjects index", e.GetType().Name);
+			}
 		}
 	}
 }
