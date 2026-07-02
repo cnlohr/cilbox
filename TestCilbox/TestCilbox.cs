@@ -760,6 +760,9 @@ namespace TestCilbox
 			Validator.Validate("ThrowFromOtherBehaviour2Finally", "finally");
 			Validator.Validate("ThrowFromOtherConstructor", "caught");
 
+			Validator.Validate( "Char Trailing Eq", "2" );
+			Validator.Validate( "Char Code A", "65" );
+
 			Validator.ValidateCount($"CilboxDisabled_{cb.GetType().FullName}", 1 );
 
 			if( runPerf )
