@@ -3219,6 +3219,11 @@ spiperf.End();
 		OnTriggerEnter,
 		OnTriggerExit,
 		OnCollisionEnter,
-		OnCollisionExit
+		OnCollisionExit,
+		LateUpdate,
+		OnTriggerStay,
+		OnCollisionStay,
+		OnRenderObject,
+		OnWillRenderObject
 	}
 }
