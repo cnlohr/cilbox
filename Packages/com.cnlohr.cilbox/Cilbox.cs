@@ -1198,7 +1198,8 @@ spiperf.Begin();
 						}
 						else
 						{
-							stackBuffer[++sp].Load( parentClass.staticFields[ldsm.fieldIndex] );
+							CilboxClass declaringClass = ldsm.interpretiveFieldClass >= 0 ? box.classesList[ldsm.interpretiveFieldClass] : parentClass;
+							stackBuffer[++sp].Load( declaringClass.staticFields[ldsm.fieldIndex] );
 						}
 						break;
 					}
@@ -1216,7 +1217,8 @@ spiperf.Begin();
 						}
 						else
 						{
-							stackBuffer[++sp] = StackElement.CreateAddressReference( (Array)(parentClass.staticFields), (uint)ldsam.fieldIndex );
+							CilboxClass declaringClass = ldsam.interpretiveFieldClass >= 0 ? box.classesList[ldsam.interpretiveFieldClass] : parentClass;
+							stackBuffer[++sp] = StackElement.CreateAddressReference( (Array)(declaringClass.staticFields), (uint)ldsam.fieldIndex );
 						}
 						break;
 					}
@@ -1235,7 +1237,8 @@ spiperf.Begin();
 						}
 						else
 						{
-							parentClass.staticFields[stsm.fieldIndex] = obj;
+							CilboxClass declaringClass = stsm.interpretiveFieldClass >= 0 ? box.classesList[stsm.interpretiveFieldClass] : parentClass;
+							declaringClass.staticFields[stsm.fieldIndex] = obj;
 						}
 						break;
 					}
@@ -2044,6 +2047,7 @@ spiperf.End();
 		public MetaTokenType type;
 		public bool isValid;
 		public int fieldIndex; // Only used for fields of cilbox objects.
+		public int interpretiveFieldClass = -1;
 		public bool isFieldWhiteListed = false;
 		public FieldInfo nativeField; // For whitelisted fields on non-cilbox objects.
 
@@ -2231,6 +2235,8 @@ spiperf.End();
 					if( st.ContainsKey("index") )
 					{
 						t.fieldIndex = Convert.ToInt32(st["index"].AsString());
+						if( classes.TryGetValue( t.declaringTypeName, out int fieldClassId ) )
+							t.interpretiveFieldClass = fieldClassId;
 					}
 					else
 					{

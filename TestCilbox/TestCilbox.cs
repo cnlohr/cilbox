@@ -756,6 +756,7 @@ namespace TestCilbox
 			Validator.Validate("WriteFloat_2", "99");
 			Validator.Validate("NativeStaticFloat ref written", "99");
 			Validator.Validate("ReadInt_2", "1114");
+			Validator.Validate("Cross Class Static Field", "321");
 
 			Validator.Validate("NativeOutVec3", "(12, 8, 0)");
 			Validator.Validate("CilOutVec3", "(1, 2, 3)");
