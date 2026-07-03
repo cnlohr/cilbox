@@ -53,6 +53,7 @@ namespace TestCilbox
 			"System.TimeSpan",
 			"System.UInt16",
 			"System.UInt32",
+			"System.UInt64",
 			"System.ValueTuple",
 			"System.Void",
 			"TestCilbox.Outer+Middle+Inner",
@@ -754,6 +755,11 @@ namespace TestCilbox
 			Validator.Validate("Long Array With Data 0", "-1");
 			Validator.Validate("Long Array With Data 1", "9876543210");
 			Validator.Validate("Long Array With Data 2", long.MinValue.ToString());
+			Validator.Validate("Long Array Signed Compare", "True");
+			Validator.Validate("Long Array Boxed", long.MinValue.ToString());
+
+			Validator.Validate("Ulong Array Assigned 0", ulong.MaxValue.ToString());
+			Validator.Validate("Ulong Array Assigned 1", "42");
 
 			Validator.Validate("Char Array With Data Length", "3");
 			Validator.Validate("Char Array With Data 0", "a");

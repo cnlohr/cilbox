@@ -120,58 +120,6 @@ namespace Cilbox
 		public StackElement LoadUlongType( ulong e, StackType t ) { this.e = e; type = t; return this; }
 		public StackElement LoadLongType( long l, StackType t ) { this.l = l; type = t; return this; }
 
-		// ldelem/stelem: the compiler can emit the same opcode for several compatible element
-		// types (e.g. stelem.i2 for short[]/ushort[]/char[], stelem.i8 for long[]/ulong[]), so
-		// dispatch on the array's actual element type instead of the opcode variant.  TypeCode
-		// is used because isinst cannot tell apart arrays of same-size primitives (int[]/uint[],
-		// enum arrays, etc).  Enum arrays land on their underlying type's TypeCode, which matches
-		// how enums are represented on the stack.
-		public void LoadArrayElement( Array arr, int index )
-		{
-			switch( Type.GetTypeCode( arr.GetType().GetElementType() ) )
-			{
-			case TypeCode.Boolean: LoadLongType( ((bool[])arr)[index] ? 1 : 0, StackType.Boolean ); break;
-			case TypeCode.SByte:   LoadSByte( ((sbyte[])arr)[index] ); break;
-			case TypeCode.Byte:    LoadByte( ((byte[])arr)[index] ); break;
-			case TypeCode.Int16:   LoadShort( ((short[])arr)[index] ); break;
-			case TypeCode.UInt16:  LoadUshort( ((ushort[])arr)[index] ); break;
-			case TypeCode.Char:    LoadUshort( ((char[])arr)[index] ); break;
-			case TypeCode.Int32:   LoadInt( ((int[])arr)[index] ); break;
-			case TypeCode.UInt32:  LoadUint( ((uint[])arr)[index] ); break;
-			case TypeCode.Int64:   LoadLong( ((long[])arr)[index] ); break;
-			case TypeCode.UInt64:  LoadUlong( ((ulong[])arr)[index] ); break;
-			case TypeCode.Single:  LoadFloat( ((float[])arr)[index] ); break;
-			case TypeCode.Double:  LoadDouble( ((double[])arr)[index] ); break;
-			default:
-				if( arr is nint[] nintArr ) LoadNint( nintArr[index] );
-				else Load( arr.GetValue( index ) );
-				break;
-			}
-		}
-
-		public void StoreToArray( Array arr, int index )
-		{
-			switch( Type.GetTypeCode( arr.GetType().GetElementType() ) )
-			{
-			case TypeCode.Boolean: ((bool[])arr)[index] = l != 0; break;
-			case TypeCode.SByte:   ((sbyte[])arr)[index] = (sbyte)i; break;
-			case TypeCode.Byte:    ((byte[])arr)[index] = (byte)u; break;
-			case TypeCode.Int16:   ((short[])arr)[index] = (short)i; break;
-			case TypeCode.UInt16:  ((ushort[])arr)[index] = (ushort)u; break;
-			case TypeCode.Char:    ((char[])arr)[index] = (char)u; break;
-			case TypeCode.Int32:   ((int[])arr)[index] = i; break;
-			case TypeCode.UInt32:  ((uint[])arr)[index] = u; break;
-			case TypeCode.Int64:   ((long[])arr)[index] = l; break;
-			case TypeCode.UInt64:  ((ulong[])arr)[index] = e; break;
-			case TypeCode.Single:  ((float[])arr)[index] = f; break;
-			case TypeCode.Double:  ((double[])arr)[index] = d; break;
-			default:
-				if( arr is nint[] nintArr ) nintArr[index] = (nint)l;
-				else arr.SetValue( AsObject(), index );
-				break;
-			}
-		}
-
 		public Type GetInnerType()
 		{
 			if( type == StackType.Object )

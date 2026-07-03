@@ -1353,10 +1353,34 @@ spiperf.Begin();
 							interpretedThrow(pc - 1, new IndexOutOfRangeException());
 							break;
 						}
-						// The compiler can emit one opcode variant for several element types
-						// (e.g. ldelem.i8 for both long[] and ulong[]), so load based on the
-						// array's actual element type rather than the opcode variant.
-						stackBuffer[sp].LoadArrayElement( arr, index );
+						switch( b - 0x90 )
+						{
+						// The opcode determines the stack type.  The hard casts also accept CLR-compatible
+						// arrays (signedness variants like int[]/uint[], enum arrays as their underlying
+						// type), so they need no per-array-type handling.
+						case 0: stackBuffer[sp].LoadSByte( ((sbyte[])arr)[index] ); break; // ldelem.i1
+						case 1: stackBuffer[sp].LoadByte( ((byte[])arr)[index] ); break; // ldelem.u1
+						case 2: stackBuffer[sp].LoadShort( ((short[])arr)[index] ); break; // ldelem.i2
+						case 3: // ldelem.u2 (used for UInt16/Char element arrays; char[] does not cast to ushort[])
+							if( arr is char[] charArr )
+								stackBuffer[sp].LoadUshort( charArr[index] );
+							else
+								stackBuffer[sp].LoadUshort( ((ushort[])arr)[index] );
+							break;
+						case 4: stackBuffer[sp].LoadInt( ((int[])arr)[index] ); break; // ldelem.i4
+						case 5: stackBuffer[sp].LoadUint( ((uint[])arr)[index] ); break; // ldelem.u4
+						case 6: // ldelem.i8: the only variant without an unsigned counterpart, emitted for
+							// long[] and ulong[] alike.  A (ulong[]) cast also succeeds on a long[], so
+							// only here the element type must decide the signedness of the stack type.
+							if( Type.GetTypeCode( arr.GetType().GetElementType() ) == TypeCode.UInt64 )
+								stackBuffer[sp].LoadUlong( ((ulong[])arr)[index] );
+							else
+								stackBuffer[sp].LoadLong( ((long[])arr)[index] );
+							break;
+						case 7: stackBuffer[sp].LoadNint( ((nint[])arr)[index] ); break; // ldelem.i
+						case 8: stackBuffer[sp].LoadFloat( ((float[])arr)[index] ); break; // ldelem.r4
+						case 9: stackBuffer[sp].LoadDouble( ((double[])arr)[index] ); break; // ldelem.r8
+						}
 						break;
 					}
 					case 0x9a: // Ldelem_Ref
@@ -1424,10 +1448,35 @@ spiperf.Begin();
 							interpretedThrow(pc - 1, new IndexOutOfRangeException());
 							break;
 						}
-						// Same as ldelem: one opcode variant can cover several element types
-						// (e.g. stelem.ref for object[] and string[]), so store based on the
-						// array's actual element type rather than the opcode variant.
-						valSE.StoreToArray( asArr, index );
+						switch( b - 0x9b )
+						{
+						case 0: asArr.SetValue( (nint)valSE.l, index ); break; // stelem.i
+						case 1: asArr.SetValue( (byte)(SByte)valSE.i, index ); break; // stelem.i1
+						case 2: // stelem.i2 (used for Int16/UInt16/Char element arrays)
+							if( arrSE.o is ushort[] ushortArr )
+								ushortArr[index] = (ushort)valSE.u;
+							else if( arrSE.o is char[] charArr )
+								charArr[index] = (char)valSE.u;
+							else
+								asArr.SetValue( (short)valSE.i, index );
+							break;
+						case 3: // stelem.i4 (used for Int32/UInt32 element arrays)
+							if( arrSE.o is uint[] uintArr )
+								uintArr[index] = valSE.u;
+							else
+								asArr.SetValue( valSE.i, index );
+							break;
+						case 4: // stelem.i8 (used for Int64/UInt64 element arrays; SetValue can't
+							// put a boxed long into a ulong[], so store through the array cast)
+							if( Type.GetTypeCode( asArr.GetType().GetElementType() ) == TypeCode.UInt64 )
+								((ulong[])asArr)[index] = valSE.e;
+							else
+								((long[])asArr)[index] = valSE.l;
+							break;
+						case 5: ((float[])arrSE.AsObject())[index] = valSE.f; break; // stelem.r4
+						case 6: ((double[])arrSE.AsObject())[index] = valSE.d; break; // stelem.r8
+						case 7: ((object[])arrSE.AsObject())[index] = valSE.AsObject(); break; // stelem.ref
+						}
 						break;
 					}
 					case 0xa4: // stelem <typeTok>

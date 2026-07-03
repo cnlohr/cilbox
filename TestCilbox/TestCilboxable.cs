@@ -547,6 +547,17 @@ namespace TestCilbox
 			Validator.Set("Long Array With Data 0", longWithData[0].ToString() );
 			Validator.Set("Long Array With Data 1", longWithData[1].ToString() );
 			Validator.Set("Long Array With Data 2", longWithData[2].ToString() );
+			// Forces ldelem.i8 + signed comparison; fails if elements are loaded as unsigned.
+			Validator.Set("Long Array Signed Compare", (longWithData[0] < longWithData[1]).ToString() );
+			// Forces ldelem.i8 + box; boxing uses the stack type, so this fails if the
+			// element was loaded with an unsigned stack type.
+			Validator.Set("Long Array Boxed", ((object)longWithData[2]).ToString() );
+
+			ulong[] ulongAssigned = new ulong[2];
+			ulongAssigned[0] = ulong.MaxValue;
+			ulongAssigned[1] = 42UL;
+			Validator.Set("Ulong Array Assigned 0", ulongAssigned[0].ToString() );
+			Validator.Set("Ulong Array Assigned 1", ulongAssigned[1].ToString() );
 
 			char[] charWithData = new char[3];
 			charWithData[0] = 'a';
