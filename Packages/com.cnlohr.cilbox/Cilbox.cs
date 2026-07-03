@@ -74,6 +74,8 @@ namespace Cilbox
 			methodName = name;
 			parentClass = cclass;
 			Dictionary<String, Serializee> methodProps = payload.AsMap();
+			if( methodProps.TryGetValue( "name", out Serializee methodNameSer ) )
+				methodName = methodNameSer.AsString();
 
 			Serializee [] vl = methodProps["locals"].AsArray();
 			methodLocals = new String[vl.Length];
@@ -2005,7 +2007,7 @@ spiperf.End();
 			{
 				methods[id] = new CilboxMethod();
 				methods[id].Load( this, k.Key, k.Value );
-				methodNameToIndex[(String)k.Key] = id;
+				methodNameToIndex[methods[id].methodName] = id;
 				methodFullSignatureToIndex[methods[id].fullSignature] = id;
 				id++;
 			}
@@ -3004,9 +3006,10 @@ spiperf.End();
 							MethodProps["isVoid"] = new Serializee( (m is MethodInfo)?(((MethodInfo)m).ReturnType == typeof(void) ? "1" : "0" ): (isCtor ? "1" : "0") );
 							MethodProps["isCtor"] = new Serializee( isCtor ? "1" : "0" );
 							MethodProps["isStatic"] = new Serializee( m.IsStatic ? "1" : "0" );
+							MethodProps["name"] = new Serializee( methodName );
 							MethodProps["fullSignature"] = new Serializee( m.ToString() );
 
-							methods[methodName] = new Serializee( MethodProps );
+							methods[m.ToString()] = new Serializee( MethodProps );
 							perfMethod.End();
 						}
 					}
