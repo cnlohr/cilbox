@@ -1220,4 +1220,49 @@ namespace TestCilbox
 	{
 		public int derivedTag = 5;
 	}
+
+	[Cilboxable]
+	public class IsolationFaultBehaviour : MonoBehaviour
+	{
+		public int marker = 42;
+		public void Start()
+		{
+			Validator.Set("Isolation Fault Started", "yes");
+			throw new Exception("Injected interpreted fault");
+		}
+		public void Update()
+		{
+			Validator.Set("Isolation Fault Post", "ran");
+		}
+		public int GetMarker()
+		{
+			Validator.Set("Isolation Fault Method Ran", "yes");
+			return marker;
+		}
+	}
+
+	[Cilboxable]
+	public class IsolationSiblingBehaviour : MonoBehaviour
+	{
+		public void Update()
+		{
+			Validator.Set("Isolation Sibling Post", "ran");
+		}
+	}
+
+	[Cilboxable]
+	public class IsolationSurvivorBehaviour : MonoBehaviour
+	{
+		public IsolationFaultBehaviour target;
+		public void Update()
+		{
+			Validator.Set("Isolation Survivor Ran", "yes");
+			{
+				try { Validator.Set("Isolation Reach Method", "reached:" + target.GetMarker()); }
+				catch( Exception ) { Validator.Set("Isolation Reach Method", "blocked"); }
+				try { Validator.Set("Isolation Reach Field", "reached:" + target.marker); }
+				catch( Exception ) { Validator.Set("Isolation Reach Field", "blocked"); }
+			}
+		}
+	}
 }

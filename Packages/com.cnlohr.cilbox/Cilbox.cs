@@ -172,6 +172,8 @@ namespace Cilbox
 
 		public object Interpret( CilboxProxy ths, object [] parametersIn )
 		{
+			if( ths != null && ths.disabled ) return null;
+
 			int plen = parametersIn?.Length ?? 0;
 			int thisOffset = isStatic ? 0 : 1;
 
@@ -200,17 +202,9 @@ namespace Cilbox
 			catch( Exception e )
 			{
 				parentClass.box.InterpreterExit();
-
-				if (e is CilboxUnhandledInterpretedException uhe)
-				{
-					// strip the throwee just in case, and re-throw a normal runtime exception
-					string exceptionTypeName = uhe.Throwee?.GetType().FullName ?? "null";
-					string reason = $"Exception of type {exceptionTypeName} was unhandled in interpreted code";
-					parentClass.box.DisableWithReason(reason); // CilboxUnhandledInterpretedException bypasses the box disable
-					throw new CilboxInterpreterRuntimeException(reason, uhe.ClassName, uhe.MethodName, uhe.PC);
-				}
-
-				Debug.Log( e.ToString() );
+				if( ths != null ) ths.DisableProxy();
+				else parentClass.box.DisableWithReason(e.ToString());
+				if( e is CilboxUnhandledInterpretedException uhe && uhe.Throwee is System.Exception te ) throw te;
 				throw;
 			}
 			parentClass.box.InterpreterExit();
@@ -251,7 +245,6 @@ namespace Cilbox
 			bool cont = true;
 			int pc = 0;
 			CilMetadataTokenInfo constrainedMeta = null;
-			try
 			{
 				do
 				{
@@ -420,16 +413,23 @@ spiperf.Begin();
 									if( !targetMethod.isStatic )
 										stackBuffer[nextParameterStart] = stackBuffer[sp--];
 
-									try
+									if( !targetMethod.isStatic && stackBuffer[nextParameterStart].AsObject() is CilboxProxy dispatchProxy && dispatchProxy.disabled )
 									{
-										if (!isVoid && !ctorAsCall)
-											stackBuffer[++sp] = targetMethod.InterpretInner(stackBufferIn.Slice(nextStackHead), stackBufferIn.Slice(nextParameterStart, numParams + staticOffset));
-										else
-											targetMethod.InterpretInner(stackBufferIn.Slice(nextStackHead), stackBufferIn.Slice(nextParameterStart, numParams + staticOffset));
+										interpretedThrow( currentInstruction, new System.Exception( "Attempted to invoke a method on a disabled interpreted behaviour" ) );
 									}
-									catch (CilboxUnhandledInterpretedException e)
+									else
 									{
-										interpretedThrow(currentInstruction, e.Throwee);
+										try
+										{
+											if (!isVoid && !ctorAsCall)
+												stackBuffer[++sp] = targetMethod.InterpretInner(stackBufferIn.Slice(nextStackHead), stackBufferIn.Slice(nextParameterStart, numParams + staticOffset));
+											else
+												targetMethod.InterpretInner(stackBufferIn.Slice(nextStackHead), stackBufferIn.Slice(nextParameterStart, numParams + staticOffset));
+										}
+										catch (CilboxUnhandledInterpretedException e)
+										{
+											interpretedThrow(currentInstruction, e.Throwee);
+										}
 									}
 								}
 
@@ -1032,6 +1032,12 @@ spiperf.Begin();
 							break;
 						}
 
+						if( opths is CilboxProxy fieldProxy && fieldProxy.disabled )
+						{
+							interpretedThrow( pc - 1, new System.Exception( "Attempted to access a field on a disabled interpreted behaviour" ) );
+							break;
+						}
+
 						if( TryGetInternalObjectData( opths, out _, out StackElement[] internalFields ) )
 						{
 							stackBuffer[++sp] = internalFields[box.metadatas[bc].fieldIndex];
@@ -1063,6 +1069,12 @@ spiperf.Begin();
 							break;
 						}
 
+						if( opths is CilboxProxy fieldProxy && fieldProxy.disabled )
+						{
+							interpretedThrow( pc - 1, new System.Exception( "Attempted to access a field on a disabled interpreted behaviour" ) );
+							break;
+						}
+
 						if( TryGetInternalObjectData( opths, out _, out StackElement[] internalFields ) )
 						{
 							stackBuffer[++sp] = StackElement.CreateAddressReference((Array)(internalFields), (uint)box.metadatas[bc].fieldIndex);
@@ -1080,6 +1092,12 @@ spiperf.Begin();
 						if (opths == null)
 						{
 							interpretedThrow(pc - 1, new NullReferenceException());
+							break;
+						}
+
+						if( opths is CilboxProxy fieldProxy && fieldProxy.disabled )
+						{
+							interpretedThrow( pc - 1, new System.Exception( "Attempted to access a field on a disabled interpreted behaviour" ) );
 							break;
 						}
 
@@ -1670,23 +1688,6 @@ spiperf.End();
 #endif
 				}
 				while( cont );
-			}
-			catch (CilboxUnhandledInterpretedException)
-			{
-				// don't break program flow for interpreted exceptions; we want to pass flow back to the outer call.
-				throw;
-			}
-			catch( Exception e )
-			{
-				string fullError = $"Breakwarn: {e.ToString()} Class: {parentClass.className}, Function: {methodName}, Bytecode: {pc}";
-				box.DisableWithReason(fullError);
-
-				if (e is CilboxInterpreterRuntimeException)
-				{
-					throw;
-				}
-
-				throw new CilboxInterpreterRuntimeException($"Breakwarn: Unhandled exception", e, parentClass.className, methodName, pc);
 			}
 #if UNITY_EDITOR
 			perfMarkerInterpret.End();

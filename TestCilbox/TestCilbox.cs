@@ -390,6 +390,13 @@ namespace TestCilbox
 			GameObject secInheritsGo = new GameObject("SecInheritsProhibitedToProxy");
 			SecInheritsProhibited secInherits = secInheritsGo.CreateComponent<SecInheritsProhibited>();
 
+			GameObject isoFaultGo = new GameObject("IsolationFaultToProxy");
+			IsolationFaultBehaviour isoFault = isoFaultGo.CreateComponent<IsolationFaultBehaviour>();
+			IsolationSiblingBehaviour isoSibling = isoFaultGo.CreateComponent<IsolationSiblingBehaviour>();
+			GameObject isoSurvivorGo = new GameObject("IsolationSurvivorToProxy");
+			IsolationSurvivorBehaviour isoSurvivor = isoSurvivorGo.CreateComponent<IsolationSurvivorBehaviour>();
+			isoSurvivor.target = isoFault;
+
 			GameObject cbobj = new GameObject("BasicCilbox");
 			Cilbox.Cilbox cb = cbobj.AddComponent<CilboxTester>();
 			cb.exportDebuggingData = true;
@@ -487,6 +494,7 @@ namespace TestCilbox
 			proxy.GetType().GetMethod("FixedUpdate",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
 			Validator.Validate( "Execution after timeout", "disabled" );
 
+			Validator.Set( "Proxy Disabled After Timeout", proxy.disabled.ToString() );
 			cb.disabled = false;
 			proxy.GetType().GetMethod("FixedUpdate",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
 
@@ -494,8 +502,8 @@ namespace TestCilbox
 			Validator.Set("Real timeoutLengthUs", cb.timeoutLengthUs.ToString() );
 			Validator.Validate("Real timeoutLengthUs", cb.MaxTimeoutLengthUs.ToString() );
 
-			Validator.Validate( "Manual Recover After Timeout", "recovered" );
-			Validator.Validate( "FixedUpdate", "called" );
+			Validator.Validate( "Proxy Disabled After Timeout", "True" );
+			Validator.Validate( "Execution after timeout", "disabled" );
 
 			Validator.Validate("Dispose", "disposed" );
 			Validator.Validate("TryFinally", "finally");
@@ -813,7 +821,7 @@ namespace TestCilbox
 			Validator.Validate( "Char Trailing Eq", "2" );
 			Validator.Validate( "Char Code A", "65" );
 
-			Validator.ValidateCount($"CilboxDisabled_{cb.GetType().FullName}", 1 );
+			Validator.ValidateCount($"CilboxDisabled_{cb.GetType().FullName}", 0 );
 
 			if( runPerf )
 			{
@@ -835,6 +843,48 @@ namespace TestCilbox
 			Validator.Set("Sec BaseClasses Omits Prohibited Ancestor", (secInheritsCls != null && System.Array.IndexOf(secInheritsCls.baseClassNames, "TestCilbox.SecProhibitedBase") < 0).ToString());
 			Validator.Validate("Sec BaseClasses Has Cilboxable Ancestor", "True");
 			Validator.Validate("Sec BaseClasses Omits Prohibited Ancestor", "True");
+
+			cb.disabled = false;
+			Cilbox.CilboxProxy isoFaultProxy = null;
+			Cilbox.CilboxProxy isoSiblingProxy = null;
+			foreach( Cilbox.CilboxProxy p in isoFaultGo.GetComponents<Cilbox.CilboxProxy>() )
+			{
+				if( p.className.Contains( "IsolationFaultBehaviour" ) ) isoFaultProxy = p;
+				else if( p.className.Contains( "IsolationSiblingBehaviour" ) ) isoSiblingProxy = p;
+			}
+			Cilbox.CilboxProxy isoSurvivorProxy = isoSurvivorGo.GetComponents<Cilbox.CilboxProxy>()[0];
+			isoFaultProxy.RuntimeProxyLoad();
+			isoSiblingProxy.RuntimeProxyLoad();
+			isoSurvivorProxy.RuntimeProxyLoad();
+			Validator.Set( "Isolation Survivor Target Resolved", (GetProxyFieldObject( isoSurvivorProxy, "target" ) != null).ToString() );
+			Validator.Set( "Isolation Fault Post", "skipped" );
+			Validator.Set( "Isolation Sibling Post", "skipped" );
+			try
+			{
+				InvokeProxyMethod( isoFaultProxy, "Start" );
+				Validator.Set( "Isolation Fault Threw", "no" );
+			}
+			catch( TargetInvocationException )
+			{
+				Validator.Set( "Isolation Fault Threw", "yes" );
+			}
+			Validator.Set( "Isolation Fault Proxy Disabled", isoFaultProxy.disabled.ToString() );
+			Validator.Set( "Isolation Sibling Proxy Disabled", isoSiblingProxy.disabled.ToString() );
+			Validator.Set( "Isolation Box Disabled After Fault", cb.disabled.ToString() );
+			InvokeProxyMethod( isoSurvivorProxy, "Update" );
+			InvokeProxyMethod( isoFaultProxy, "Update" );
+			InvokeProxyMethod( isoSiblingProxy, "Update" );
+			Validator.Validate( "Isolation Fault Started", "yes" );
+			Validator.Validate( "Isolation Fault Threw", "yes" );
+			Validator.Validate( "Isolation Fault Proxy Disabled", "True" );
+			Validator.Validate( "Isolation Sibling Proxy Disabled", "False" );
+			Validator.Validate( "Isolation Box Disabled After Fault", "False" );
+			Validator.Validate( "Isolation Survivor Ran", "yes" );
+			Validator.Validate( "Isolation Survivor Target Resolved", "True" );
+			Validator.Validate( "Isolation Fault Post", "skipped" );
+			Validator.Validate( "Isolation Sibling Post", "ran" );
+			Validator.Validate( "Isolation Reach Method", "blocked" );
+			Validator.Validate( "Isolation Reach Field", "blocked" );
 
 			return -1 * Validator.NumValidationErrors();
 		}
