@@ -1019,7 +1019,17 @@ spiperf.Begin();
 						else if( ti.nativeTypeIsStackType )
 						{
 							if( StackElement.TypeToStackType.TryGetValue( ti.Name, out StackType stackType ) && ti.nativeTypeStackType == stackType )
-								oRet = se.AsObject();
+							{
+								if( se.type == StackType.Object ) // boxed value: keep it only if it's genuinely the target type; else oRet stays null (isinst -> pushes null, castclass -> throws below)
+								{
+									if( se.o != null && ti.nativeType != null && ti.nativeType.IsInstanceOfType( se.o ) )
+										oRet = se.o;
+								}
+								else if( se.type == stackType )
+								{
+									oRet = se.AsObject();
+								}
+							}
 						}
 						else if( se.o != null && se.o.GetType() == ti.nativeType )
 							oRet = se.o;
@@ -1337,6 +1347,8 @@ spiperf.Begin();
 							stackBuffer[sp].LoadObject( meta.cilboxEnum.BoxValue( stackBuffer[sp].l ) );
 						else if( meta.nativeType != null && meta.nativeType.IsEnum )
 							stackBuffer[sp].LoadObject( Enum.ToObject(meta.nativeType, stackBuffer[sp].l) );
+						else if( meta.nativeTypeIsStackType && meta.nativeType != null )
+							stackBuffer[sp].LoadObject( stackBuffer[sp].CoerceToObject( meta.nativeType ) );
 						else
 							stackBuffer[sp].LoadObject( stackBuffer[sp].AsObject() );
 						break;
@@ -1554,6 +1566,13 @@ spiperf.Begin();
 						{
 							stackBuffer[sp].Unbox( stackBuffer[sp].AsObject(), metaType.nativeTypeStackType );
 						}
+						else if( metaType.nativeType != null && !metaType.nativeType.IsEnum )
+						{
+							object ubObj = stackBuffer[sp].AsObject();
+							if( ubObj != null && !metaType.nativeType.IsInstanceOfType( ubObj ) )
+								throw new InvalidCastException( $"unbox.any: {ubObj.GetType()} is not assignable to {metaType.nativeType}" );
+							stackBuffer[sp].LoadObject( ubObj );
+						}
 						else
 						{
 							throw new CilboxInterpreterRuntimeException($"Scary Unbox (that we don't have code for) from {otyp} ORIG {metaType.ToString()}", parentClass.className, methodName, pc);
@@ -1636,6 +1655,13 @@ spiperf.Begin();
 									case StackType.Ulong:	stackBuffer[sp].LoadInt( sa.e > sb.e ? 1 : 0 ); break;
 									case StackType.Float:	stackBuffer[sp].LoadInt( sa.f > sb.f ? 1 : 0 ); break;
 									case StackType.Double:	stackBuffer[sp].LoadInt( sa.d > sb.d ? 1 : 0 ); break;
+									case StackType.Object:
+										// cgt.un on object refs is how Roslyn emits `x != null` (an identity test, not an ordering); mirror ceq's guarded object case, fail on anything else
+										if( sa.type == StackType.Object && sb.type == StackType.Object )
+											stackBuffer[sp].LoadInt( sa.o != sb.o ? 1 : 0 );
+										else
+											throw new CilboxInterpreterRuntimeException($"CGT.UN Unimplemented type promotion unequal {sa.type} != {sb.type}", parentClass.className, methodName, pc);
+										break;
 									default: throw new CilboxInterpreterRuntimeException($"CEQ Unimplemented type promotion ({promoted})", parentClass.className, methodName, pc);
 								} break;
 							case 0x04: // CLT

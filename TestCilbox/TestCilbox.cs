@@ -862,6 +862,14 @@ namespace TestCilbox
 
 			Validator.Validate( "StargClamp", "210" );
 
+			Validator.Validate( "Box Bool RoundTrip", "True" );
+
+			Validator.Validate( "isinst BoxedFloat is bool", "False" );
+			Validator.Validate( "isinst BoxedFloat is int", "False" );
+			Validator.Validate( "isinst BoxedFloat is float", "True" );
+			Validator.Validate( "isinst BoxedInt is bool", "False" );
+			Validator.Validate( "isinst BoxedInt is int", "True" );
+
 			Cilbox.CilboxProxy getCompDriverProxy = getCompDriverGo.GetComponents<Cilbox.CilboxProxy>()[0];
 			InvokeProxyMethod( getCompDriverProxy, "Start" );
 			Validator.Validate( "GetComponent Polymorphic Tag", "100" );

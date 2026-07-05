@@ -676,6 +676,19 @@ namespace TestCilbox
 			Validator.Set("Empty String Field Length", emptyStringField != null ? emptyStringField.Length.ToString() : "null");
 
 			Validator.Set("StargClamp", StargClamp(5).ToString());
+
+			bool boxFlag = true;
+			object boxBoxed = boxFlag;
+			bool boxBack = (bool)boxBoxed;
+			Validator.Set("Box Bool RoundTrip", boxBack.ToString());
+
+			object boxedFloatArg = 2.5f;
+			Validator.Set("isinst BoxedFloat is bool", (boxedFloatArg is bool).ToString());
+			Validator.Set("isinst BoxedFloat is int", (boxedFloatArg is int).ToString());
+			Validator.Set("isinst BoxedFloat is float", (boxedFloatArg is float).ToString());
+			object boxedIntArg = 7;
+			Validator.Set("isinst BoxedInt is bool", (boxedIntArg is bool).ToString());
+			Validator.Set("isinst BoxedInt is int", (boxedIntArg is int).ToString());
 		}
 
 		public void Update()
