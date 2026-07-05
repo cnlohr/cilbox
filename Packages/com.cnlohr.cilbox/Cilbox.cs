@@ -1398,26 +1398,39 @@ spiperf.Begin();
 							interpretedThrow(pc - 1, new NullReferenceException());
 							break;
 						}
-						if (index < 0 || index >= ((Array)stackBuffer[sp].o).Length)
+						Array arr = (Array)stackBuffer[sp].o;
+						if (index < 0 || index >= arr.Length)
 						{
 							interpretedThrow(pc - 1, new IndexOutOfRangeException());
 							break;
 						}
 						switch( b - 0x90 )
 						{
-						// Does this way work universally?  Can we assume the compiler knows what it's doing?
-						// Previously it looked more like a.GetValue( index ).
-						case 0: stackBuffer[sp].LoadSByte( (sbyte)(((sbyte[])stackBuffer[sp].o)[index]) ); break; // ldelem.i1
-						case 1: stackBuffer[sp].LoadByte( (byte)(((byte[])stackBuffer[sp].o)[index]) ); break; // ldelem.u1
-						case 2: stackBuffer[sp].LoadShort( (short)(((short[])stackBuffer[sp].o)[index]) ); break; // ldelem.i2
-						case 3: stackBuffer[sp].LoadUshort( (ushort)(((ushort[])stackBuffer[sp].o)[index]) ); break; // ldelem.u2
-						case 4: stackBuffer[sp].LoadInt( (int)(((int[])stackBuffer[sp].o)[index]) ); break; // ldelem.i4
-						case 5: stackBuffer[sp].LoadUint( (uint)(((uint[])stackBuffer[sp].o)[index]) ); break; // ldelem.u4
-						case 6: stackBuffer[sp].LoadUlong( (ulong)(((ulong[])stackBuffer[sp].o)[index]) ); break; // ldelem.u8 / ldelem.i8
-						case 7: stackBuffer[sp].LoadNint( (nint)(((nint[])stackBuffer[sp].o)[index]) ); break; // ldelem.i
-						case 8: stackBuffer[sp].LoadFloat( (float)(((float[])stackBuffer[sp].o)[index]) ); break; // ldelem.r4
-						case 9: stackBuffer[sp].LoadDouble( (double)(((double[])stackBuffer[sp].o)[index]) ); break; // ldelem.r8
-
+						// The opcode determines the stack type.  The hard casts also accept CLR-compatible
+						// arrays (signedness variants like int[]/uint[], enum arrays as their underlying
+						// type), so they need no per-array-type handling.
+						case 0: stackBuffer[sp].LoadSByte( ((sbyte[])arr)[index] ); break; // ldelem.i1
+						case 1: stackBuffer[sp].LoadByte( ((byte[])arr)[index] ); break; // ldelem.u1
+						case 2: stackBuffer[sp].LoadShort( ((short[])arr)[index] ); break; // ldelem.i2
+						case 3: // ldelem.u2 (used for UInt16/Char element arrays; char[] does not cast to ushort[])
+							if( arr is char[] charArr )
+								stackBuffer[sp].LoadUshort( charArr[index] );
+							else
+								stackBuffer[sp].LoadUshort( ((ushort[])arr)[index] );
+							break;
+						case 4: stackBuffer[sp].LoadInt( ((int[])arr)[index] ); break; // ldelem.i4
+						case 5: stackBuffer[sp].LoadUint( ((uint[])arr)[index] ); break; // ldelem.u4
+						case 6: // ldelem.i8: the only variant without an unsigned counterpart, emitted for
+							// long[] and ulong[] alike.  A (ulong[]) cast also succeeds on a long[], so
+							// only here the element type must decide the signedness of the stack type.
+							if( Type.GetTypeCode( arr.GetType().GetElementType() ) == TypeCode.UInt64 )
+								stackBuffer[sp].LoadUlong( ((ulong[])arr)[index] );
+							else
+								stackBuffer[sp].LoadLong( ((long[])arr)[index] );
+							break;
+						case 7: stackBuffer[sp].LoadNint( ((nint[])arr)[index] ); break; // ldelem.i
+						case 8: stackBuffer[sp].LoadFloat( ((float[])arr)[index] ); break; // ldelem.r4
+						case 9: stackBuffer[sp].LoadDouble( ((double[])arr)[index] ); break; // ldelem.r8
 						}
 						break;
 					}
@@ -1504,7 +1517,13 @@ spiperf.Begin();
 							else
 								asArr.SetValue( valSE.i, index );
 							break;
-						case 4: asArr.SetValue( valSE.l, index ); break; // stelem.i8
+						case 4: // stelem.i8 (used for Int64/UInt64 element arrays; SetValue can't
+							// put a boxed long into a ulong[], so store through the array cast)
+							if( Type.GetTypeCode( asArr.GetType().GetElementType() ) == TypeCode.UInt64 )
+								((ulong[])asArr)[index] = valSE.e;
+							else
+								((long[])asArr)[index] = valSE.l;
+							break;
 						case 5: ((float[])arrSE.AsObject())[index] = valSE.f; break; // stelem.r4
 						case 6: ((double[])arrSE.AsObject())[index] = valSE.d; break; // stelem.r8
 						case 7: ((object[])arrSE.AsObject())[index] = valSE.AsObject(); break; // stelem.ref

@@ -53,6 +53,7 @@ namespace TestCilbox
 			"System.TimeSpan",
 			"System.UInt16",
 			"System.UInt32",
+			"System.UInt64",
 			"System.ValueTuple",
 			"System.Void",
 			"TestCilbox.Outer+Middle+Inner",
@@ -779,6 +780,26 @@ namespace TestCilbox
 			Validator.Validate("Object Array Element Access With Data 0", "beta");
 			Validator.Validate("Object Array Element Access With Data 1", "64");
 			Validator.Validate("Object Array Element Access With Data 2", "delta");
+
+			Validator.Validate("Long Array With Data Length", "3");
+			Validator.Validate("Long Array With Data 0", "-1");
+			Validator.Validate("Long Array With Data 1", "9876543210");
+			Validator.Validate("Long Array With Data 2", long.MinValue.ToString());
+			Validator.Validate("Long Array Signed Compare", "True");
+			Validator.Validate("Long Array Boxed", long.MinValue.ToString());
+
+			Validator.Validate("Ulong Array Assigned 0", ulong.MaxValue.ToString());
+			Validator.Validate("Ulong Array Assigned 1", "42");
+
+			Validator.Validate("Char Array With Data Length", "3");
+			Validator.Validate("Char Array With Data 0", "a");
+			Validator.Validate("Char Array With Data 1", "4660");
+			Validator.Validate("Char Array With Data 2", "Z");
+
+			Validator.Validate("String Array Assigned Length", "3");
+			Validator.Validate("String Array Assigned 0", "red");
+			Validator.Validate("String Array Assigned 1", "green");
+			Validator.Validate("String Array Assigned 2", "blue");
 
 			// Boxing enums
 			Validator.Validate("Boxed MyEnum", "Value2");
