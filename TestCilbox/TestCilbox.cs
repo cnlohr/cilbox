@@ -96,6 +96,8 @@ namespace TestCilbox
 			"UnityEngine.Quaternion.z",
 			"UnityEngine.Quaternion.w",
 			"TestCilbox.TestUtil.StaticFloat",
+			"UnityEngine.Component.gameObject",
+			"UnityEngine.Behaviour.enabled",
 		};
 
 		static public HashSet<String> GetWhiteListTypes() { return whiteListType; }
@@ -380,6 +382,12 @@ namespace TestCilbox
 				PerfPeerBehaviour perfPeer = perfPeerGo.CreateComponent<PerfPeerBehaviour>();
 				perfRoot.peer = perfPeer;
 			}
+
+			GameObject inheritGo = new GameObject("InheritFieldToProxy");
+			InheritFieldDerived inheritDerived = inheritGo.CreateComponent<InheritFieldDerived>();
+
+			GameObject secFieldGo = new GameObject("SecFieldDerivedToProxy");
+			SecFieldDerived secFieldDerived = secFieldGo.CreateComponent<SecFieldDerived>();
 
 			GameObject getCompRowGo = new GameObject("GetComponentRowToProxy");
 			GetComponentRow getCompRow = getCompRowGo.CreateComponent<GetComponentRow>();
@@ -811,6 +819,20 @@ namespace TestCilbox
 			Validator.Validate("ThrowFromOtherBehaviour2", "caught");
 			Validator.Validate("ThrowFromOtherBehaviour2Finally", "finally");
 			Validator.Validate("ThrowFromOtherConstructor", "caught");
+
+			Cilbox.CilboxProxy inheritProxy = inheritGo.GetComponents<Cilbox.CilboxProxy>()[0];
+			InvokeProxyMethod( inheritProxy, "Start" );
+			Validator.Validate( "Inherit Base Field", "555" );
+			Validator.Validate( "Inherit Derived Field", "222" );
+
+			// Security (PR #95): an inherited PRIVATE field of a non-whitelisted type is rejected at load (type -> null), while a legal inherited field is kept.
+			Cilbox.CilboxClass secFieldCls = cb.GetClass("TestCilbox.SecFieldDerived");
+			int secIllegalIdx = secFieldCls != null ? System.Array.IndexOf(secFieldCls.instanceFieldNames, "secretIllegal") : -1;
+			int secLegalIdx = secFieldCls != null ? System.Array.IndexOf(secFieldCls.instanceFieldNames, "secretLegal") : -1;
+			Validator.Set("Sec Inherited Illegal Field Rejected", (secIllegalIdx >= 0 && secFieldCls.instanceFieldTypes[secIllegalIdx] == null).ToString());
+			Validator.Set("Sec Inherited Legal Field Kept", (secLegalIdx >= 0 && secFieldCls.instanceFieldTypes[secLegalIdx] != null).ToString());
+			Validator.Validate("Sec Inherited Illegal Field Rejected", "True");
+			Validator.Validate("Sec Inherited Legal Field Kept", "True");
 
 			Validator.Validate( "NativeStructCtor Vector2", "<3.5, 4.5>" );
 			Validator.Validate( "NativeStructCtor Quaternion x", "0.5" );

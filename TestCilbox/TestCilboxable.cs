@@ -1181,6 +1181,49 @@ namespace TestCilbox
 		}
 	}
 	[Cilboxable]
+	public class InheritFieldBase : MonoBehaviour
+	{
+		private int baseField = 111;
+		public void SetBaseField(int v) { baseField = v; }
+		public int GetBaseField() { return baseField; }
+	}
+
+	[Cilboxable]
+	public class InheritFieldDerived : InheritFieldBase
+	{
+		private int derivedField = 222;
+		public void Start()
+		{
+			SetBaseField(555);
+			Validator.Set("Inherit Base Field", GetBaseField().ToString());
+			Validator.Set("Inherit Derived Field", derivedField.ToString());
+		}
+	}
+	// Security (PR #95): base-first enumeration now includes inherited PRIVATE fields. A field whose TYPE
+	// is not whitelisted must still be rejected at load (its type resolves to null / the slot stays inert),
+	// so widening the enumeration can never expose an illegal-typed inherited field to interpreted code.
+	public class SecIllegalFieldType
+	{
+		public int payload = 7;
+	}
+
+	[Cilboxable]
+	public class SecFieldBase : MonoBehaviour
+	{
+		// Read via reflection at bake, never referenced in code; suppress unused/unassigned warnings.
+#pragma warning disable 0169, 0649, 0414
+		private SecIllegalFieldType secretIllegal;
+		private int secretLegal = 42;
+#pragma warning restore 0169, 0649, 0414
+	}
+
+	[Cilboxable]
+	public class SecFieldDerived : SecFieldBase
+	{
+		public int ownField = 1;
+	}
+
+	[Cilboxable]
 	public class GetComponentRowBase : MonoBehaviour
 	{
 		public int baseTag = 100;

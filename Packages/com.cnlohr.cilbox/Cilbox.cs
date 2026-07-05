@@ -3062,7 +3062,7 @@ spiperf.End();
 						if( lst == 0 )
 							fi = type.GetFields( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static );
 						else
-							fi = type.GetFields( BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance );
+							fi = CilboxUtil.GetInstanceFieldsBaseFirst( type );
 						foreach( var f in fi )
 						{
 							Dictionary< String, Serializee > dictField = new Dictionary< String, Serializee >();
