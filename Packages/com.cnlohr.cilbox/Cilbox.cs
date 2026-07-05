@@ -382,6 +382,25 @@ spiperf.Begin();
 								if( targetMethod == null )
 									throw new CilboxInterpreterRuntimeException($"Function {dt.Name} not found", parentClass.className, methodName, pc);
 
+								// callvirt (0x6F) dispatches on the receiver's runtime type; plain call (0x28) and base.X() must stay
+								// bound to the token's method, and statics/ctors have no virtual receiver -- so only re-resolve here.
+								if( b == 0x6F && !targetMethod.isStatic && !targetMethod.isConstructor )
+								{
+									// Args are still on the stack, so the receiver 'this' sits just below them, at sp - (parameter count).
+									int vparams = targetMethod.signatureParameters.Length;
+									object oThis = stackBuffer[sp - vparams].AsObject( box );
+									// Receiver's actual runtime class: interpreted proxy or heap object (null for a native/null receiver).
+									CilboxClass rtClass = (oThis as CilboxProxy)?.cls;
+									if( rtClass == null ) rtClass = (oThis as CilboxHeapInstance)?.cls;
+									// If that class overrides this method (same signature, more-derived), re-bind the call to the override.
+									if( rtClass != null && rtClass != targetClass &&
+										rtClass.methodFullSignatureToIndex.TryGetValue( targetMethod.fullSignature, out uint vidx ) )
+									{
+										targetClass = rtClass;
+										targetMethod = targetClass.methods[(int)vidx];
+									}
+								}
+
 								isVoid = targetMethod.isVoid;
 								int staticOffset = (targetMethod.isStatic?0:1);
 								int numParams = targetMethod.signatureParameters.Length;
@@ -1652,6 +1671,32 @@ spiperf.Begin();
 								throw new CilboxInterpreterRuntimeException($"Cannot create references to functions outside this cilbox ({dt.Name})", parentClass.className, methodName, pc);
 							stackBuffer[++sp].LoadObject( box.classesList[dt.interpretiveMethodClass].methods[dt.interpretiveMethod] );
 							break;
+						case 0x07: // ldvirtftn: function pointer to the receiver's runtime-class override (for a delegate over a virtual method)
+						{
+							// ldvirtftn is like ldftn (0x06) but resolves the target by the receiver's runtime type: it pushes a
+							// pointer to the virtual override of <method> for the object on top of the stack (used to build a delegate).
+							uint bcv = BytecodeAsU32( ref pc );
+							CilMetadataTokenInfo dtv = box.metadatas[bcv];
+							// We can only make pointers to methods that live inside this cilbox.
+							if( dtv.isNative )
+								throw new CilboxInterpreterRuntimeException($"Cannot create references to functions outside this cilbox ({dtv.Name})", parentClass.className, methodName, pc);
+							// Start from the token's method (the base declaration) -- the fallback if the receiver doesn't override it.
+							CilboxClass vClass = box.classesList[dtv.interpretiveMethodClass];
+							CilboxMethod vMethod = vClass.methods[dtv.interpretiveMethod];
+							// Pop the receiver and find its runtime class.
+							object vThis = stackBuffer[sp--].AsObject( box );
+							CilboxClass vrtClass = (vThis as CilboxProxy)?.cls;
+							if( vrtClass == null ) vrtClass = (vThis as CilboxHeapInstance)?.cls;
+							// If the runtime class overrides the method (same signature, more-derived), point vMethod at the override.
+							if( vrtClass != null && vrtClass != vClass && vMethod != null &&
+								vrtClass.methodFullSignatureToIndex.TryGetValue( vMethod.fullSignature, out uint vmidx ) )
+							{
+								vMethod = vrtClass.methods[(int)vmidx];
+							}
+							// Push the resolved method as the function pointer (later consumed to build the delegate).
+							stackBuffer[++sp].LoadObject( vMethod );
+							break;
+						}
 						case 0x15: // initobj <typeTok>
 						{
 							uint typeToken = BytecodeAsU32( ref pc );

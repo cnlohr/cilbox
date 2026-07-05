@@ -927,6 +927,23 @@ namespace TestCilbox
 	}
 
 	[Cilboxable]
+	public class VirtualDispatchBase : MonoBehaviour
+	{
+		public string RunVirtual() { return Describe(); }
+		protected virtual string Describe() { return "base"; }
+	}
+
+	[Cilboxable]
+	public class VirtualDispatchDerived : VirtualDispatchBase
+	{
+		protected override string Describe() { return "derived"; }
+		public void Start()
+		{
+			Validator.Set("Virtual Dispatch", RunVirtual());
+		}
+	}
+
+	[Cilboxable]
 	public class CycleRootBehaviour : MonoBehaviour
 	{
 		public CycleChildBehaviour child;
