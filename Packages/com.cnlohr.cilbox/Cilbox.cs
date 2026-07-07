@@ -126,23 +126,22 @@ namespace Cilbox
 				handlerOffsetToClauseMap = new Dictionary<int, CilboxExceptionHandlingClause>();
 				for (int e = 0; e < ehc.Length; e++)
 				{
-					Dictionary< String, Serializee > thisehc = ehc[e].AsMap();
+					SerializedExceptionHandler seh = SerializedExceptionHandler.FromSerializee(ehc[e]);
 					CilboxExceptionHandlingClause clause = new CilboxExceptionHandlingClause();
-					clause.Flags = (ExceptionHandlingClauseOptions)Convert.ToInt32(thisehc["flags"].AsString());
-					clause.TryOffset = Convert.ToInt32(thisehc["tryOff"].AsString());
-					clause.TryLength = Convert.ToInt32(thisehc["tryLen"].AsString());
+					clause.Flags = (ExceptionHandlingClauseOptions)seh.flags;
+					clause.TryOffset = seh.tryOffset;
+					clause.TryLength = seh.tryLength;
 					clause.TryEndOffset = clause.TryOffset + clause.TryLength;
-					clause.HandlerOffset = Convert.ToInt32(thisehc["hOff"].AsString());
-					clause.HandlerLength = Convert.ToInt32(thisehc["hLen"].AsString());
+					clause.HandlerOffset = seh.handlerOffset;
+					clause.HandlerLength = seh.handlerLength;
 					clause.HandlerEndOffset = clause.HandlerOffset + clause.HandlerLength;
-					if (thisehc.TryGetValue("cType", out Serializee cTypeSer))
+					if (seh.hasCatchType)
 					{
-						SerializedTypeDescriptor td = SerializedTypeDescriptor.FromSerializee(cTypeSer);
-						clause.CatchType = parentClass.box.usage.GetNativeTypeFromDescriptor(td);
+						clause.CatchType = parentClass.box.usage.GetNativeTypeFromDescriptor(seh.catchType);
 						if (clause.CatchType == null)
 						{
 							// Check if it's a Cilboxable type
-							String typeName = thisehc["cType"].AsMap()["n"].AsString();
+							String typeName = seh.catchType.typeName;
 							if (parentClass.box.classes.ContainsKey(typeName))
 							{
 								clause.CatchTypeName = typeName;
@@ -3069,18 +3068,19 @@ spiperf.End();
 								for( int k = 0; k < exceptions.Count; k++ )
 								{
 									ExceptionHandlingClause c = exceptions[k];
-									Dictionary< String, Serializee > exc = new Dictionary< String, Serializee >();
-									exc["flags"] = new Serializee( ((int)c.Flags).ToString() );
-									exc["tryOff"] = new Serializee( c.TryOffset.ToString() );
-									exc["tryLen"] = new Serializee( c.TryLength.ToString() );
-									exc["hOff"] = new Serializee( c.HandlerOffset.ToString() );
-									exc["hLen"] = new Serializee( c.HandlerLength.ToString() );
+									SerializedExceptionHandler seh =  new SerializedExceptionHandler();
+									seh.flags = (int)c.Flags;
+									seh.tryOffset = c.TryOffset;
+									seh.tryLength = c.TryLength;
+									seh.handlerOffset = c.HandlerOffset;
+									seh.handlerLength = c.HandlerLength;
 
 									if( c.Flags == ExceptionHandlingClauseOptions.Clause && c.CatchType != null )
 									{
-										exc["cType"] = SerializedTypeDescriptorBuilder.FromNativeType( c.CatchType ).ToSerializee();
+										seh.hasCatchType = true;
+										seh.catchType = SerializedTypeDescriptorBuilder.FromNativeType( c.CatchType );
 									}
-									excArray[k] = new Serializee( exc );
+									excArray[k] = seh.ToSerializee();
 								}
 								MethodProps["eh"] = new Serializee( excArray );
 							}

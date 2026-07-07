@@ -73,6 +73,48 @@ namespace Cilbox
 		}
 	}
 
+	public class SerializedExceptionHandler
+	{
+		public int flags;
+		public int tryOffset;
+		public int tryLength;
+		public int handlerOffset;
+		public int handlerLength;
+		public bool hasCatchType;
+		public SerializedTypeDescriptor catchType;
+
+		public Serializee ToSerializee()
+		{
+			Dictionary<String, Serializee> ret = new Dictionary<String, Serializee>();
+			ret["flags"] = new Serializee(flags.ToString());
+			ret["tryOff"] = new Serializee(tryOffset.ToString());
+			ret["tryLen"] = new Serializee(tryLength.ToString());
+			ret["hOff"] = new Serializee(handlerOffset.ToString());
+			ret["hLen"] = new Serializee(handlerLength.ToString());
+			if (hasCatchType)
+				ret["cType"] = catchType.ToSerializee();
+			return new Serializee(ret);
+		}
+
+		public static SerializedExceptionHandler FromSerializee(Serializee s)
+		{
+			Dictionary<String, Serializee> m = s.AsMap();
+			SerializedExceptionHandler eh = new SerializedExceptionHandler();
+			eh.flags = Int32.Parse(m["flags"].AsString());
+			eh.tryOffset = Int32.Parse(m["tryOff"].AsString());
+			eh.tryLength = Int32.Parse(m["tryLen"].AsString());
+			eh.handlerOffset = Int32.Parse(m["hOff"].AsString());
+			eh.handlerLength = Int32.Parse(m["hLen"].AsString());
+			if (m.TryGetValue("cType", out Serializee cType))
+			{
+				eh.hasCatchType = true;
+				eh.catchType = SerializedTypeDescriptor.FromSerializee( cType );
+			}
+
+			return eh;
+		}
+	}
+
 	/// <summary>
 	/// Helper to build a SerializedTypeDescriptor from a native System.Type.
 	/// Used by the editor compiler to build type descriptors from native System.Type.
