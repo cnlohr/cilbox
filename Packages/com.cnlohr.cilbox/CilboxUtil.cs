@@ -945,17 +945,18 @@ namespace Cilbox
 						metaLine += Convert.ToBase64String( st["data"].AsBlob() );
 						break;
 					case MetaTokenType.mtField:
-						Type t = b.usage.GetNativeTypeFromSerializee( st["dt"] );
+						SerializedTypeDescriptor td = SerializedTypeDescriptor.FromSerializee( st["dt"] );
+						Type t = b.usage.GetNativeTypeFromDescriptor(td);
 						if( Int32.Parse( st["isStatic"].AsString() ) > 0 ) metaLine += "static ";
 						String tname = t?.ToString();
 						if( t == null )
-							tname = "NR:" + st["dt"].AsMap()["n"].AsString() + " ";
+							tname = "NR:" + td.typeName + " ";
 						metaLine += tname + st["name"].AsString();
 						break;
 					case MetaTokenType.mtType:
 					{
-						Serializee typ = st["dt"];
-						Type nt = b.usage.GetNativeTypeFromSerializee( typ );
+						SerializedTypeDescriptor td2 = SerializedTypeDescriptor.FromSerializee( st["dt"] );
+						Type nt = b.usage.GetNativeTypeFromDescriptor(td2);
 						StackType seType = StackElement.StackTypeFromType( nt );
 						if( seType < StackType.Object )
 						{
@@ -968,7 +969,7 @@ namespace Cilbox
 								bool bFound = false;
 								foreach( CilboxClass c in b.classesList )
 								{
-									if( c.className == typ.AsMap()["n"].AsString() )
+									if( c.className == td2.typeName )
 									{
 										metaLine += $"PROXY: {c.className}";
 										bFound = true;
@@ -976,7 +977,7 @@ namespace Cilbox
 								}
 
 								if( !bFound )
-									throw new Exception( $"Type {typ.AsMap()["n"].AsString()} not available." );
+									throw new Exception( $"Type {td2.typeName} not available." );
 							}
 							else
 							{
@@ -1029,7 +1030,7 @@ namespace Cilbox
 				UnityEngine.SceneManagement.Scene _scene = (UnityEngine.SceneManagement.Scene)scene;
 				if( !_scene.IsValid())
 				{
-					Debug.LogWarning($"Scene {_scene.name} is not valid. Returning empty MonoBehaviour array.");					
+					Debug.LogWarning($"Scene {_scene.name} is not valid. Returning empty MonoBehaviour array.");
 					return Array.Empty<MonoBehaviour>();
 				}
 
@@ -1092,54 +1093,6 @@ namespace Cilbox
 				t = t.DeclaringType;
 			}
 			return false;
-		}
-
-		// This does not check any rules, so it can be static.
-		public static Serializee GetSerializeeFromNativeType( Type t )
-		{
-			Dictionary< String, Serializee > ret = new Dictionary< String, Serializee >();
-			// Originally I did this to try to narrow down the search.  Now it is not as practical.
-			ret["a"] = new Serializee( t.Assembly.GetName().Name );
-			if( t.IsGenericType )
-			{
-				String genericDefName = t.GetGenericTypeDefinition().FullName;
-				StringBuilder typeNameBuilder = new StringBuilder();
-
-				// The following section strips out arity (`1, `2, etc) from the generic type definition name.
-				// This way we do not need to whitelist each generic arity of a type; We just need to whitelist the base name.
-				// Extreme example: Namespace.Outer`1+Middle`2+Inner`1 would be stripped to Namespace.Outer+Middle+Inner
-				for (int i = 0; i < genericDefName.Length; i++)
-				{
-					if (genericDefName[i] != '`')
-					{
-						typeNameBuilder.Append(genericDefName[i]);
-						continue;
-					}
-
-					int j = i + 1;
-					while (j < genericDefName.Length && char.IsDigit(genericDefName[j]))
-						j++;
-
-					if (j == genericDefName.Length || genericDefName[j] == '+' || genericDefName[j] == '[')
-						i = j - 1;
-				}
-				string baseName = typeNameBuilder.ToString();
-
-				ret["n"] = new Serializee( baseName );
-				ret["gn"] = new Serializee( genericDefName ); // Store the generic name so it does not have to be rebuilt
-				Type [] ta = t.GenericTypeArguments;
-				Serializee [] sg = new Serializee[ta.Length];
-				for( int i = 0; i < ta.Length; i++ )
-					sg[i] = GetSerializeeFromNativeType( ta[i] );
-				ret["g"] = new Serializee( sg );
-			}
-			else
-			{
-				ret["n"] = new Serializee( t.FullName );
-				if( t.IsEnum && HasCilboxableAttribute(t) )
-					ret["ut"] = GetSerializeeFromNativeType( t.GetEnumUnderlyingType() );
-			}
-			return new Serializee( ret );
 		}
 
 

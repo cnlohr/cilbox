@@ -111,7 +111,8 @@ namespace Cilbox
 				return new Serializee(instanceFields);
 			}
 
-			bool hasCilboxable = CilboxUtil.HasCilboxableAttribute( fv.GetType() );
+			Type fvType = fv.GetType();
+			bool hasCilboxable = CilboxUtil.HasCilboxableAttribute( fvType );
 
 
 			if( fName != null )
@@ -127,10 +128,10 @@ namespace Cilbox
 			StackType st;
 
 			// Serialize enum field as underlying type
-			if( fv.GetType().IsEnum )
+			if( fvType.IsEnum )
 			{
-				object underlying = Convert.ChangeType( fv, fv.GetType().GetEnumUnderlyingType() );
-				if( StackElement.TypeToStackType.TryGetValue( underlying.GetType().ToString(), out st ) && st < StackType.Object )
+				object underlying = Convert.ChangeType( fv, fvType.GetEnumUnderlyingType() );
+				if( StackElement.TypeToStackType.TryGetValue( fvType.ToString(), out st ) && st < StackType.Object )
 				{
 					instanceFields["d"] = new Serializee(underlying.ToString());
 					instanceFields["t"] = new Serializee("e" + st);
@@ -157,16 +158,15 @@ namespace Cilbox
 				instanceFields["d"] = new Serializee(fv.ToString());
 				instanceFields["t"] = new Serializee("s");
 			}
-			else if( StackElement.TypeToStackType.TryGetValue( fv.GetType().ToString(), out st ) && st < StackType.Object )
+			else if( StackElement.TypeToStackType.TryGetValue( fvType.ToString(), out st ) && st < StackType.Object )
 			{
 				instanceFields["d"] = new Serializee(fv.ToString());
 				instanceFields["t"] = new Serializee("e" + st);
 			}
-			else if( fv.GetType().IsArray )
+			else if( fvType.IsArray )
 			{
 				instanceFields["t"] = new Serializee( "a" );
-				Type type = fv.GetType().GetElementType();
-				instanceFields["at"] = CilboxUtil.GetSerializeeFromNativeType( type );
+				instanceFields["at"] = SerializedTypeDescriptorBuilder.FromNativeType(fvType.GetElementType()).ToSerializee();
 				Array arr = (Array)fv;
 				int len = arr.Length;
 				instanceFields["al"] = new Serializee( len.ToString() );
@@ -185,8 +185,7 @@ namespace Cilbox
 				string json = JsonUtility.ToJson(fv);
 				instanceFields["t"] = new Serializee( "j" );
 				instanceFields["d"] = new Serializee(json);
-				Type type = fv.GetType();
-				instanceFields["at"] = CilboxUtil.GetSerializeeFromNativeType( type );
+				instanceFields["at"] = SerializedTypeDescriptorBuilder.FromNativeType(fvType).ToSerializee();
 			}
 
 
@@ -433,7 +432,8 @@ namespace Cilbox
 						dict.TryGetValue( "ad", out seAD ) &&
 						Int32.TryParse( seAL.AsString(), out aLen ) )
 					{
-						Type t = box.usage.GetNativeTypeFromSerializee( seAT );
+						SerializedTypeDescriptor tdAT = SerializedTypeDescriptor.FromSerializee( seAT );
+						Type t = box.usage.GetNativeTypeFromDescriptor(tdAT);
 						bool isCilboxElementType = false;
 
 						if (t == null)
@@ -492,7 +492,8 @@ namespace Cilbox
 						dict.TryGetValue( "at", out seAT ) &&
 						dict.TryGetValue( "d", out seD ) )
 					{
-						Type t = box.usage.GetNativeTypeFromSerializee( seAT ); // This makes sure we're allowed to have this type.
+						SerializedTypeDescriptor tdAT = SerializedTypeDescriptor.FromSerializee( seAT );
+						Type t = box.usage.GetNativeTypeFromDescriptor(tdAT); // This makes sure we're allowed to have this type.
 						oOut = JsonUtility.FromJson(seD.AsString(), t);
 						return true;
 					}
