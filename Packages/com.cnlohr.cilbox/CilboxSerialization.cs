@@ -246,6 +246,84 @@ namespace Cilbox
 		}
 	}
 
+	public class SerializedClass
+	{
+		public string className;
+		public SerializedField[] staticFields;
+		public SerializedField[] instanceFields;
+		public SerializedMethod[] methods;
+		public string[] baseClassNames;
+
+		// className is the enclosing Map key. Master classProps order:
+		// staticFields, instanceFields, methods (methods is a Map keyed by
+		// method name, which collapses overloads to last-value/first-position).
+		public Serializee ToSerializee()
+		{
+			Dictionary<String, Serializee> ret = new Dictionary<String, Serializee>();
+
+			Serializee[] sf = new Serializee[staticFields.Length];
+			for( int i = 0; i < staticFields.Length; i++ )
+				sf[i] = staticFields[i].ToClassFieldSerializee();
+			ret["staticFields"] = new Serializee( sf );
+
+			Serializee[] inf = new Serializee[instanceFields.Length];
+			for( int i = 0; i < instanceFields.Length; i++ )
+				inf[i] = instanceFields[i].ToClassFieldSerializee();
+			ret["instanceFields"] = new Serializee( inf );
+
+			Dictionary<String, Serializee> mm = new Dictionary<String, Serializee>();
+			for( int i = 0; i < methods.Length; i++ )
+				mm[methods[i].fullSignature] = methods[i].ToSerializee();
+			ret["methods"] = new Serializee( mm );
+
+			List<Serializee> bcn = new List<Serializee>();
+			foreach (string bc in baseClassNames)
+			{
+				bcn.Add(new Serializee(bc));
+			}
+			ret["baseClasses"] = new Serializee(bcn.ToArray());
+
+			return new Serializee( ret );
+		}
+
+		public static SerializedClass FromSerializee( Serializee s, String className )
+		{
+			Dictionary<String, Serializee> m = s.AsMap();
+			SerializedClass sc = new SerializedClass();
+			sc.className = className;
+
+			Serializee[] sf = m["staticFields"].AsArray();
+			sc.staticFields = new SerializedField[sf.Length];
+			for( int i = 0; i < sf.Length; i++ )
+				sc.staticFields[i] = SerializedField.FromClassFieldSerializee( sf[i] );
+
+			Serializee[] inf = m["instanceFields"].AsArray();
+			sc.instanceFields = new SerializedField[inf.Length];
+			for( int i = 0; i < inf.Length; i++ )
+				sc.instanceFields[i] = SerializedField.FromClassFieldSerializee( inf[i] );
+
+			Dictionary<String, Serializee> mm = m["methods"].AsMap();
+			sc.methods = new SerializedMethod[mm.Count];
+			int mi = 0;
+			foreach( KeyValuePair<String, Serializee> kv in mm )
+				sc.methods[mi++] = SerializedMethod.FromSerializee( kv.Value, kv.Key );
+
+			if (m.TryGetValue("baseClasses", out Serializee baseClassesSer))
+			{
+				Serializee [] bcArr = baseClassesSer.AsArray();
+				sc.baseClassNames = new String[bcArr.Length];
+				for( int bci = 0; bci < bcArr.Length; bci++ )
+					sc.baseClassNames[bci] = bcArr[bci].AsString();
+			}
+			else
+			{
+				sc.baseClassNames = new String[0];
+			}
+
+			return sc;
+		}
+	}
+
 	/// <summary>
 	/// Helper to build a SerializedTypeDescriptor from a native System.Type.
 	/// Used by the editor compiler to build type descriptors from native System.Type.

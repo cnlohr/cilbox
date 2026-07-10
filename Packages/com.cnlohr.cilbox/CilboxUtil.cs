@@ -781,7 +781,8 @@ namespace Cilbox
 				{
 					CilboxClass c = classesList[clsid++];
 
-					c.LoadCilboxClass( b, v.Key, v.Value );
+					SerializedClass sc = SerializedClass.FromSerializee( v.Value, v.Key );
+					c.LoadCilboxClass( b, sc );
 
 					CLog.WriteLine( $"Class: {c.className}" );
 
