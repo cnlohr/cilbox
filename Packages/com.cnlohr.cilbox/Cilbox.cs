@@ -69,62 +69,39 @@ namespace Cilbox
 		ProfilerMarker perfMarkerInterpret;
 #endif
 
-		public void Load( CilboxClass cclass, String name, Serializee payload )
+		public void Load( CilboxClass cclass, SerializedMethod sm )
 		{
-			methodName = name;
 			parentClass = cclass;
-			Dictionary<String, Serializee> methodProps = payload.AsMap();
-			if( methodProps.TryGetValue( "name", out Serializee methodNameSer ) )
-				methodName = methodNameSer.AsString();
+			methodName = sm.methodName;
+			byteCode = sm.body;
+			MaxStackSize = sm.maxStack;
+			isVoid = sm.isVoid;
+			isStatic = sm.isStatic;
+			fullSignature = sm.fullSignature;
+			isConstructor = sm.isCtor;
 
-			Serializee [] vl = methodProps["locals"].AsArray();
-			methodLocals = new String[vl.Length];
-			typeLocals = new Type[vl.Length];
-			int iid = 0;
-			for( int i = 0; i < vl.Length; i++ )
+			methodLocals = new String[sm.locals.Length];
+			typeLocals = new Type[sm.locals.Length];
+			for( int i = 0; i < sm.locals.Length; i++ )
 			{
-				SerializedField local = SerializedField.FromMethodFieldSerializee( vl[i] );
-				methodLocals[iid] = local.name;
-				typeLocals[iid] = parentClass.box.usage.GetNativeTypeFromDescriptor( local.type );
-				iid++;
+				methodLocals[i] = sm.locals[i].name;
+				typeLocals[i] = parentClass.box.usage.GetNativeTypeFromDescriptor( sm.locals[i].type );
+			}
+			signatureParameters = new String[sm.parameters.Length];
+			typeParameters = new Type[sm.parameters.Length];
+			for( int p = 0; p < sm.parameters.Length; p++ )
+			{
+				signatureParameters[p] = sm.parameters[p].name;
+				typeParameters[p] = parentClass.box.usage.GetNativeTypeFromDescriptor( sm.parameters[p].type );
 			}
 
-			byteCode = methodProps["body"].AsBlob();
-
-			MaxStackSize = Convert.ToInt32((methodProps["maxStack"].AsString()));
-			isVoid = Convert.ToInt32((methodProps["isVoid"].AsString())) != 0;
-			isStatic = Convert.ToInt32((methodProps["isStatic"].AsString())) != 0;
-			fullSignature = methodProps["fullSignature"].AsString();
-			if( methodProps.TryGetValue("isCtor", out Serializee isCtorSer) )
+			if (sm.exceptionHandlers.Length > 0)
 			{
-				isConstructor = Convert.ToInt32(isCtorSer.AsString()) != 0;
-			}
-			else
-			{
-				// Backward compatibility for payloads generated before isCtor existed.
-				isConstructor = methodName == ".ctor" || methodName == ".cctor" || fullSignature.StartsWith("Void .ctor(") || fullSignature.StartsWith("Void .cctor(");
-			}
-
-			Serializee [] od = methodProps["parameters"].AsArray();
-			signatureParameters = new String[od.Length];
-			typeParameters = new Type[od.Length];
-			int sn = 0;
-			for( int p = 0; p < od.Length; p ++ )
-			{
-				SerializedField thisp = SerializedField.FromMethodFieldSerializee( od[p] );
-				signatureParameters[sn] = thisp.name;
-				typeParameters[sn] = parentClass.box.usage.GetNativeTypeFromDescriptor( thisp.type );
-				sn++;
-			}
-
-			if (methodProps.TryGetValue("eh", out Serializee ehArray))
-			{
-				Serializee[] ehc = ehArray.AsArray();
-				exceptionClauses = new CilboxExceptionHandlingClause[ehc.Length];
+				exceptionClauses = new CilboxExceptionHandlingClause[sm.exceptionHandlers.Length];
 				handlerOffsetToClauseMap = new Dictionary<int, CilboxExceptionHandlingClause>();
-				for (int e = 0; e < ehc.Length; e++)
+				for (int e = 0; e < sm.exceptionHandlers.Length; e++)
 				{
-					SerializedExceptionHandler seh = SerializedExceptionHandler.FromSerializee(ehc[e]);
+					SerializedExceptionHandler seh = sm.exceptionHandlers[e];
 					CilboxExceptionHandlingClause clause = new CilboxExceptionHandlingClause();
 					clause.Flags = (ExceptionHandlingClauseOptions)seh.flags;
 					clause.TryOffset = seh.tryOffset;
@@ -2108,7 +2085,8 @@ spiperf.End();
 			foreach( var k in deserMethods )
 			{
 				methods[id] = new CilboxMethod();
-				methods[id].Load( this, k.Key, k.Value );
+				SerializedMethod method = SerializedMethod.FromSerializee(k.Value, k.Key);
+				methods[id].Load( this, method );
 				methodNameToIndex[methods[id].methodName] = id;
 				methodFullSignatureToIndex[methods[id].fullSignature] = id;
 				id++;
@@ -2827,8 +2805,8 @@ spiperf.End();
 
 							ProfilerMarker perfMethod = new ProfilerMarker(m.ToString()); perfMethod.Begin();
 
-							String methodName = m.Name;
-							Dictionary< String, Serializee > MethodProps = new Dictionary< String, Serializee >();
+							SerializedMethod serializedMethod = new SerializedMethod();
+							serializedMethod.methodName = m.Name;
 							MethodBody mb = m.GetMethodBody();
 							if( mb == null )
 							{
@@ -3055,12 +3033,12 @@ spiperf.End();
 							}
 
 							bytecodeLength += byteCode.Length;
-							MethodProps["body"] = Serializee.CreateFromBlob(byteCode);
+							serializedMethod.body = byteCode;
 
 							IList<ExceptionHandlingClause> exceptions = mb.ExceptionHandlingClauses;
 							if( exceptions.Count > 0 )
 							{
-								Serializee [] excArray = new Serializee[exceptions.Count];
+								SerializedExceptionHandler[] excArray = new SerializedExceptionHandler[exceptions.Count];
 								for( int k = 0; k < exceptions.Count; k++ )
 								{
 									ExceptionHandlingClause c = exceptions[k];
@@ -3076,42 +3054,41 @@ spiperf.End();
 										seh.hasCatchType = true;
 										seh.catchType = SerializedTypeDescriptorBuilder.FromNativeType( c.CatchType );
 									}
-									excArray[k] = seh.ToSerializee();
+									excArray[k] = seh;
 								}
-								MethodProps["eh"] = new Serializee( excArray );
+								serializedMethod.exceptionHandlers = excArray;
 							}
 
-							Serializee [] localVars = new Serializee[mb.LocalVariables.Count];
+							SerializedField[] localVars = new SerializedField[mb.LocalVariables.Count];
 							for( int i = 0; i < mb.LocalVariables.Count; i++ )
 							{
 								LocalVariableInfo lvi = mb.LocalVariables[i];
 								SerializedField local = new SerializedField();
 								local.name = lvi.ToString();
 								local.type = SerializedTypeDescriptorBuilder.FromNativeType( lvi.LocalType );
-								localVars[i] = local.ToMethodFieldSerializee();
+								localVars[i] = local;
 							}
-							MethodProps["locals"] = new Serializee( localVars );
+							serializedMethod.locals = localVars;
 
 							ParameterInfo [] parameters = m.GetParameters();
 
-							Serializee [] parameterList = new Serializee[parameters.Length];
+							SerializedField[] parameterList = new SerializedField[parameters.Length];
 							for( int i = 0; i < parameters.Length; i++ )
 							{
 								SerializedField tpi = new SerializedField();
 								tpi.name = parameters[i].Name;
 								tpi.type = SerializedTypeDescriptorBuilder.FromNativeType( parameters[i].ParameterType );
-								parameterList[i] = tpi.ToMethodFieldSerializee();
+								parameterList[i] = tpi;
 							}
-							MethodProps["parameters"] = new Serializee( parameterList );
-							MethodProps["maxStack"] = new Serializee( mb.MaxStackSize.ToString() );
+							serializedMethod.parameters = parameterList;
+							serializedMethod.maxStack = mb.MaxStackSize;
 							bool isCtor = m.IsConstructor;
-							MethodProps["isVoid"] = new Serializee( (m is MethodInfo)?(((MethodInfo)m).ReturnType == typeof(void) ? "1" : "0" ): (isCtor ? "1" : "0") );
-							MethodProps["isCtor"] = new Serializee( isCtor ? "1" : "0" );
-							MethodProps["isStatic"] = new Serializee( m.IsStatic ? "1" : "0" );
-							MethodProps["name"] = new Serializee( methodName );
-							MethodProps["fullSignature"] = new Serializee( m.ToString() );
+							serializedMethod.isVoid = m is MethodInfo ? ((MethodInfo)m).ReturnType == typeof(void) : isCtor;
+							serializedMethod.isCtor = isCtor;
+							serializedMethod.isStatic = m.IsStatic;
+							serializedMethod.fullSignature = m.ToString();
 
-							methods[m.ToString()] = new Serializee( MethodProps );
+							methods[m.ToString()] = serializedMethod.ToSerializee();
 							perfMethod.End();
 						}
 					}
