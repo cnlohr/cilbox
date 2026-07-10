@@ -73,6 +73,38 @@ namespace Cilbox
 		}
 	}
 
+	public class SerializedField
+	{
+		public string name;
+		public SerializedTypeDescriptor type;
+
+		// The same struct is serialized with two different type-key schemes:
+		//  - class fields use "type"
+		//  - method locals / parameters use "dt"
+		private Serializee ToSerializeeWithTypeKey( String typeKey )
+		{
+			Dictionary<String, Serializee> ret = new Dictionary<String, Serializee>();
+			ret["name"] = new Serializee( name );
+			ret[typeKey] = type.ToSerializee();
+			return new Serializee( ret );
+		}
+
+		public Serializee ToClassFieldSerializee() => ToSerializeeWithTypeKey( "type" );
+		public Serializee ToMethodFieldSerializee() => ToSerializeeWithTypeKey( "dt" );
+
+		private static SerializedField FromSerializeeWithTypeKey( Serializee s, String typeKey )
+		{
+			Dictionary<String, Serializee> m = s.AsMap();
+			SerializedField f = new SerializedField();
+			f.name = m["name"].AsString();
+			f.type = SerializedTypeDescriptor.FromSerializee( m[typeKey] );
+			return f;
+		}
+
+		public static SerializedField FromClassFieldSerializee( Serializee s ) => FromSerializeeWithTypeKey( s, "type" );
+		public static SerializedField FromMethodFieldSerializee( Serializee s ) => FromSerializeeWithTypeKey( s, "dt" );
+	}
+
 	public class SerializedExceptionHandler
 	{
 		public int flags;

@@ -83,10 +83,9 @@ namespace Cilbox
 			int iid = 0;
 			for( int i = 0; i < vl.Length; i++ )
 			{
-				Dictionary< String, Serializee > local = vl[i].AsMap();
-				methodLocals[iid] = local["name"].AsString();
-				SerializedTypeDescriptor td = SerializedTypeDescriptor.FromSerializee( local["dt"] );
-				typeLocals[iid] = parentClass.box.usage.GetNativeTypeFromDescriptor( td );
+				SerializedField local = SerializedField.FromMethodFieldSerializee( vl[i] );
+				methodLocals[iid] = local.name;
+				typeLocals[iid] = parentClass.box.usage.GetNativeTypeFromDescriptor( local.type );
 				iid++;
 			}
 
@@ -112,10 +111,9 @@ namespace Cilbox
 			int sn = 0;
 			for( int p = 0; p < od.Length; p ++ )
 			{
-				Dictionary< String, Serializee > thisp = od[p].AsMap();
-				signatureParameters[sn] = thisp["name"].AsString();
-				SerializedTypeDescriptor td  = SerializedTypeDescriptor.FromSerializee( thisp["dt"] );
-				typeParameters[sn] = parentClass.box.usage.GetNativeTypeFromDescriptor(td);
+				SerializedField thisp = SerializedField.FromMethodFieldSerializee( od[p] );
+				signatureParameters[sn] = thisp.name;
+				typeParameters[sn] = parentClass.box.usage.GetNativeTypeFromDescriptor( thisp.type );
 				sn++;
 			}
 
@@ -2078,10 +2076,9 @@ spiperf.End();
 			staticFieldTypes = new Type[sfnum];
 			for( int k = 0; k < sfnum; k++ )
 			{
-				Dictionary< String, Serializee > field = staticFields[k].AsMap();
-				String fieldName = staticFieldNames[id] = field["name"].AsString();
-				SerializedTypeDescriptor td = SerializedTypeDescriptor.FromSerializee(field["type"]);
-				Type t = staticFieldTypes[id] = box.usage.GetNativeTypeFromDescriptor( td );
+				SerializedField field = SerializedField.FromClassFieldSerializee(staticFields[k]);
+				String fieldName = staticFieldNames[id] = field.name;
+				Type t = staticFieldTypes[id] = box.usage.GetNativeTypeFromDescriptor( field.type );
 
 				//staticFieldIDs[id] = Cilbox.FindInternalMetadataID( className, 4, fieldName );
 				this.staticFields[id] = CilboxUtil.DeserializeDataForProxyField( t, "" );
@@ -2096,10 +2093,9 @@ spiperf.End();
 			id = 0;
 			for( int k = 0; k < ifnum; k++ )
 			{
-				Dictionary< String, Serializee > field = instanceFields[k].AsMap();
-				String fieldName = instanceFieldNames[id] = field["name"].AsString();
-				SerializedTypeDescriptor td = SerializedTypeDescriptor.FromSerializee(field["type"]);
-				instanceFieldTypes[id] = box.usage.GetNativeTypeFromDescriptor( td );
+				SerializedField field = SerializedField.FromClassFieldSerializee(instanceFields[k]);
+				String fieldName = instanceFieldNames[id] = field.name;
+				instanceFieldTypes[id] = box.usage.GetNativeTypeFromDescriptor( field.type );
 				id++;
 			}
 
@@ -3089,10 +3085,10 @@ spiperf.End();
 							for( int i = 0; i < mb.LocalVariables.Count; i++ )
 							{
 								LocalVariableInfo lvi = mb.LocalVariables[i];
-								Dictionary< String, Serializee > local = new Dictionary< String, Serializee >();
-								local["name"] = new Serializee( lvi.ToString() );
-								local["dt"] = SerializedTypeDescriptorBuilder.FromNativeType( lvi.LocalType ).ToSerializee();
-								localVars[i] = new Serializee( local );
+								SerializedField local = new SerializedField();
+								local.name = lvi.ToString();
+								local.type = SerializedTypeDescriptorBuilder.FromNativeType( lvi.LocalType );
+								localVars[i] = local.ToMethodFieldSerializee();
 							}
 							MethodProps["locals"] = new Serializee( localVars );
 
@@ -3101,10 +3097,10 @@ spiperf.End();
 							Serializee [] parameterList = new Serializee[parameters.Length];
 							for( int i = 0; i < parameters.Length; i++ )
 							{
-								Dictionary< String, Serializee > tpi = new Dictionary< String, Serializee >();
-								tpi["name"] = new Serializee( parameters[i].Name );
-								tpi["dt"] = SerializedTypeDescriptorBuilder.FromNativeType(parameters[i].ParameterType ).ToSerializee();
-								parameterList[i] = new Serializee( tpi );
+								SerializedField tpi = new SerializedField();
+								tpi.name = parameters[i].Name;
+								tpi.type = SerializedTypeDescriptorBuilder.FromNativeType( parameters[i].ParameterType );
+								parameterList[i] = tpi.ToMethodFieldSerializee();
 							}
 							MethodProps["parameters"] = new Serializee( parameterList );
 							MethodProps["maxStack"] = new Serializee( mb.MaxStackSize.ToString() );
@@ -3159,10 +3155,10 @@ spiperf.End();
 							fi = CilboxUtil.GetInstanceFieldsBaseFirst( type );
 						foreach( var f in fi )
 						{
-							Dictionary< String, Serializee > dictField = new Dictionary< String, Serializee >();
-							dictField["name"] = new Serializee( f.Name );
-							dictField["type"] = SerializedTypeDescriptorBuilder.FromNativeType( f.FieldType ).ToSerializee();
-							fields.Add( new Serializee( dictField ) );
+							SerializedField dictField = new SerializedField();
+							dictField.name = f.Name;
+							dictField.type = SerializedTypeDescriptorBuilder.FromNativeType( f.FieldType );
+							fields.Add( dictField.ToClassFieldSerializee() );
 
 							// Fill in our metadata with a class-specific field ID, if this field ID was used in code anywhere.
 							uint mdid;
