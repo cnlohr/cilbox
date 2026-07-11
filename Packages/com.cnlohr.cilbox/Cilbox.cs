@@ -2256,12 +2256,21 @@ spiperf.End();
 			int clsid = 0;
 			classes = new Dictionary< String, int >();
 			classesList = new CilboxClass[classData.Count];
+			SerializedClass[] scArr = new SerializedClass[classData.Count];
 			foreach( var v in classData )
 			{
 				CilboxClass cls = new CilboxClass();
+				SerializedClass sc  = SerializedClass.FromSerializee(v.Value, v.Key);
+				scArr[clsid] = sc;
 				classesList[clsid] = cls;
-				classes[(String)v.Key] = clsid;
+				classes[sc.className] = clsid;
 				clsid++;
+			}
+
+			// Actually load classes in a 2nd pass so we know which classes are Cilbox types first
+			for (int i = 0; i < clsid; i++)
+			{
+				classesList[i].LoadCilboxClass( this, scArr[i] );
 			}
 
 			cilboxEnums = new Dictionary<string, CilboxEnum>();
@@ -2283,13 +2292,6 @@ spiperf.End();
 					}
 					cilboxEnums[kv.Key] = ce;
 				}
-			}
-
-			clsid = 0;
-			foreach (var v in classData)
-			{
-				SerializedClass sc = SerializedClass.FromSerializee(v.Value, v.Key);
-				classesList[clsid++].LoadCilboxClass( this, sc );
 			}
 
 			foreach( var v in metaData )
