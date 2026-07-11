@@ -2029,67 +2029,42 @@ spiperf.End();
 
 		public String [] baseClassNames = new String[0];
 
-		public bool LoadCilboxClass( Cilbox box, String className, Serializee classData )
+		public bool LoadCilboxClass( Cilbox box, SerializedClass sc )
 		{
 			this.box = box;
-			this.className = className;
+			this.className = sc.className;
+			this.baseClassNames = sc.baseClassNames;
 
-			Dictionary<String, Serializee> classProps = classData.AsMap();
-
-			if( classProps.TryGetValue( "baseClasses", out Serializee baseClassesSer ) )
-			{
-				// deserialize the cilboxable base-class name list (for polymorphic GetComponent<Base> matching)
-				Serializee [] bcArr = baseClassesSer.AsArray();
-				baseClassNames = new String[bcArr.Length];
-				for( int bci = 0; bci < bcArr.Length; bci++ )
-					baseClassNames[bci] = bcArr[bci].AsString();
-			}
-
-			uint id = 0;
-			Serializee [] staticFields = classProps["staticFields"].AsArray();
-			int sfnum = staticFields.Length;
+			int sfnum = sc.staticFields.Length;
 			this.staticFields = new object[sfnum];
 			staticFieldNames = new String[sfnum];
 			staticFieldTypes = new Type[sfnum];
 			for( int k = 0; k < sfnum; k++ )
 			{
-				SerializedField field = SerializedField.FromClassFieldSerializee(staticFields[k]);
-				String fieldName = staticFieldNames[id] = field.name;
-				Type t = staticFieldTypes[id] = box.usage.GetNativeTypeFromDescriptor( field.type );
-
-				//staticFieldIDs[id] = Cilbox.FindInternalMetadataID( className, 4, fieldName );
-				this.staticFields[id] = CilboxUtil.DeserializeDataForProxyField( t, "" );
-				id++;
+				staticFieldNames[k] = sc.staticFields[k].name;
+				Type t = staticFieldTypes[k] = box.usage.GetNativeTypeFromDescriptor( sc.staticFields[k].type );
+				this.staticFields[k] = CilboxUtil.DeserializeDataForProxyField( t, "" );
 			}
 
-			Serializee [] instanceFields = classProps["instanceFields"].AsArray();
-			int ifnum = instanceFields.Length;
+			int ifnum = sc.instanceFields.Length;
 			instanceFieldNames = new String[ifnum];
 			instanceFieldTypes = new Type[ifnum];
-
-			id = 0;
 			for( int k = 0; k < ifnum; k++ )
 			{
-				SerializedField field = SerializedField.FromClassFieldSerializee(instanceFields[k]);
-				String fieldName = instanceFieldNames[id] = field.name;
-				instanceFieldTypes[id] = box.usage.GetNativeTypeFromDescriptor( field.type );
-				id++;
+				instanceFieldNames[k] = sc.instanceFields[k].name;
+				instanceFieldTypes[k] = box.usage.GetNativeTypeFromDescriptor( sc.instanceFields[k].type );
 			}
 
-			id = 0;
-			Dictionary< String, Serializee > deserMethods = classProps["methods"].AsMap();
-			int mnum = deserMethods.Count;
+			int mnum = sc.methods.Length;
 			methods = new CilboxMethod[mnum];
 			methodNameToIndex = new Dictionary< String, uint >();
 			methodFullSignatureToIndex = new Dictionary< String, uint >();
-			foreach( var k in deserMethods )
+			for( uint k = 0; k < mnum; k++ )
 			{
-				methods[id] = new CilboxMethod();
-				SerializedMethod method = SerializedMethod.FromSerializee(k.Value, k.Key);
-				methods[id].Load( this, method );
-				methodNameToIndex[methods[id].methodName] = id;
-				methodFullSignatureToIndex[methods[id].fullSignature] = id;
-				id++;
+				methods[k] = new CilboxMethod();
+				methods[k].Load( this, sc.methods[k] );
+				methodNameToIndex[methods[k].methodName] = k;
+				methodFullSignatureToIndex[methods[k].fullSignature] = k;
 			}
 
 			// These imports are for things like Start(), Update(), Awake(), etc...
@@ -2281,12 +2256,21 @@ spiperf.End();
 			int clsid = 0;
 			classes = new Dictionary< String, int >();
 			classesList = new CilboxClass[classData.Count];
+			SerializedClass[] scArr = new SerializedClass[classData.Count];
 			foreach( var v in classData )
 			{
 				CilboxClass cls = new CilboxClass();
+				SerializedClass sc  = SerializedClass.FromSerializee(v.Value, v.Key);
+				scArr[clsid] = sc;
 				classesList[clsid] = cls;
-				classes[(String)v.Key] = clsid;
+				classes[sc.className] = clsid;
 				clsid++;
+			}
+
+			// Actually load classes in a 2nd pass so we know which classes are Cilbox types first
+			for (int i = 0; i < clsid; i++)
+			{
+				classesList[i].LoadCilboxClass( this, scArr[i] );
 			}
 
 			cilboxEnums = new Dictionary<string, CilboxEnum>();
@@ -2309,10 +2293,6 @@ spiperf.End();
 					cilboxEnums[kv.Key] = ce;
 				}
 			}
-
-			clsid = 0;
-			foreach( var v in classData )
-				classesList[clsid++].LoadCilboxClass( this, v.Key, v.Value );
 
 			foreach( var v in metaData )
 			{
@@ -2723,7 +2703,7 @@ spiperf.End();
 			uint mdcount = 1; // token 0 is invalid.
 			int bytecodeLength = 0;
 			Dictionary< String, Serializee > classes = new Dictionary<String, Serializee>();
-			Dictionary< String, Serializee > allClassMethods = new Dictionary< String, Serializee >();
+			Dictionary< String, SerializedMethod[] > allClassMethods = new Dictionary< String, SerializedMethod[] >();
 
 			perf.End(); perf = new ProfilerMarker( "Main Getting Types" ); perf.Begin();
 
@@ -2783,7 +2763,7 @@ spiperf.End();
 
 					ProfilerMarker perfType = new ProfilerMarker(type.ToString()); perfType.Begin();
 
-					Dictionary< String, Serializee > methods = new Dictionary< String, Serializee >();
+					List< SerializedMethod > methods = new List< SerializedMethod >();
 
 					int mtyp; // Which round of methods are we getting.
 					// Iterate twice. Once for methods, then for constructors.
@@ -3088,12 +3068,12 @@ spiperf.End();
 							serializedMethod.isStatic = m.IsStatic;
 							serializedMethod.fullSignature = m.ToString();
 
-							methods[m.ToString()] = serializedMethod.ToSerializee();
+							methods.Add( serializedMethod );
 							perfMethod.End();
 						}
 					}
 
-					allClassMethods[type.FullName] = new Serializee( methods );
+					allClassMethods[type.FullName] = methods.ToArray();
 					perfType.End();
 				}
 			}
@@ -3116,14 +3096,15 @@ spiperf.End();
 
 					ProfilerMarker perfType = new ProfilerMarker(type.ToString()); perfType.Begin();
 
-					Dictionary< String, Serializee > classProps = new Dictionary< String, Serializee >();
+					SerializedClass serializedClass  = new SerializedClass();
+					serializedClass.className = type.FullName;
 
 					// This portion extracts the index information from the current type, and
 					// Writes it back in where it was needed above in the Method call.
 					//
 					for( int lst = 0; lst < 2; lst++ )
 					{
-						List< Serializee > fields = new List< Serializee >();
+						List< SerializedField > fields = new List< SerializedField >();
 						int sfid = 0;
 						FieldInfo[] fi;
 						if( lst == 0 )
@@ -3135,7 +3116,7 @@ spiperf.End();
 							SerializedField dictField = new SerializedField();
 							dictField.name = f.Name;
 							dictField.type = SerializedTypeDescriptorBuilder.FromNativeType( f.FieldType );
-							fields.Add( dictField.ToClassFieldSerializee() );
+							fields.Add( dictField );
 
 							// Fill in our metadata with a class-specific field ID, if this field ID was used in code anywhere.
 							uint mdid;
@@ -3148,19 +3129,22 @@ spiperf.End();
 							}
 							sfid++;
 						}
-						classProps[(lst == 0 )?"staticFields":"instanceFields"] = new Serializee( fields.ToArray() );
+						if( lst == 0 )
+							serializedClass.staticFields = fields.ToArray();
+						else
+							serializedClass.instanceFields = fields.ToArray();
 					}
 
-					classProps["methods"] = allClassMethods[type.FullName];
+					serializedClass.methods = allClassMethods[type.FullName];
 
 					// Only [Cilboxable] ancestors are recorded: a native/prohibited base is never emitted, so GetComponent<T>
 					// base-matching can never name a non-sandboxed class (and a match only ever yields an interpreted proxy).
-					List< Serializee > baseClassChain = new List< Serializee >();
+					List< string > baseClassChain = new List< string >();
 					for( Type bt = type.BaseType; bt != null && bt != typeof( UnityEngine.MonoBehaviour ) && bt != typeof( object ); bt = bt.BaseType )
 						if( CilboxUtil.HasCilboxableAttribute( bt ) )
-							baseClassChain.Add( new Serializee( bt.FullName ) );
-					classProps["baseClasses"] = new Serializee( baseClassChain.ToArray() );
-					classes[type.FullName] = new Serializee( classProps );
+							baseClassChain.Add( bt.FullName );
+					serializedClass.baseClassNames = baseClassChain.ToArray();
+					classes[type.FullName] = serializedClass.ToSerializee();
 					perfType.End();
 				}
 			}
