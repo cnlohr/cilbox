@@ -324,6 +324,61 @@ namespace Cilbox
 		}
 	}
 
+	public class SerializedEnumValue
+	{
+		public string name;
+		public long value;
+
+		public Serializee ToSerializee()
+		{
+			Dictionary<String, Serializee> ret = new Dictionary<String, Serializee>();
+			ret["n"] = new Serializee( name );
+			ret["v"] = new Serializee( value.ToString() );
+			return new Serializee( ret );
+		}
+
+		public static SerializedEnumValue FromSerializee( Serializee s )
+		{
+			Dictionary<String, Serializee> m = s.AsMap();
+			SerializedEnumValue v = new SerializedEnumValue();
+			v.name = m["n"].AsString();
+			v.value = Int64.Parse( m["v"].AsString() );
+			return v;
+		}
+	}
+
+	public class SerializedEnum
+	{
+		public string enumName;
+		public SerializedTypeDescriptor underlyingType;
+		public SerializedEnumValue[] values;
+
+		// enumName is the enclosing Map key. Master enumProps order: ut, values.
+		public Serializee ToSerializee()
+		{
+			Dictionary<String, Serializee> ret = new Dictionary<String, Serializee>();
+			ret["ut"] = underlyingType.ToSerializee();
+			Serializee[] vals = new Serializee[values.Length];
+			for( int i = 0; i < values.Length; i++ )
+				vals[i] = values[i].ToSerializee();
+			ret["values"] = new Serializee( vals );
+			return new Serializee( ret );
+		}
+
+		public static SerializedEnum FromSerializee( Serializee s, String enumName )
+		{
+			Dictionary<String, Serializee> m = s.AsMap();
+			SerializedEnum e = new SerializedEnum();
+			e.enumName = enumName;
+			e.underlyingType = SerializedTypeDescriptor.FromSerializee( m["ut"] );
+			Serializee[] vals = m["values"].AsArray();
+			e.values = new SerializedEnumValue[vals.Length];
+			for( int i = 0; i < vals.Length; i++ )
+				e.values[i] = SerializedEnumValue.FromSerializee( vals[i] );
+			return e;
+		}
+	}
+
 	/// <summary>
 	/// Helper to build a SerializedTypeDescriptor from a native System.Type.
 	/// Used by the editor compiler to build type descriptors from native System.Type.

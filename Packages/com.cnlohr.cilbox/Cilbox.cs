@@ -2274,23 +2274,20 @@ spiperf.End();
 			}
 
 			cilboxEnums = new Dictionary<string, CilboxEnum>();
-			Serializee enumsSer;
-			if (assemblyRoot.TryGetValue("enums", out enumsSer))
+			if (assemblyRoot.TryGetValue("enums", out Serializee enumsSer))
 			{
 				foreach (var kv in enumsSer.AsMap())
 				{
-					var enumProps = kv.Value.AsMap();
+					SerializedEnum se = SerializedEnum.FromSerializee(kv.Value, kv.Key);
 					CilboxEnum ce = new CilboxEnum();
-					ce.enumName = kv.Key;
-					SerializedTypeDescriptor td = SerializedTypeDescriptor.FromSerializee(enumProps["ut"]);
-					ce.underlyingType = StackElement.StackTypeFromType(usage.GetNativeTypeFromDescriptor(td));
+					ce.enumName = se.enumName;
+					ce.underlyingType = StackElement.StackTypeFromType(usage.GetNativeTypeFromDescriptor(se.underlyingType));
 					ce.valueToName = new Dictionary<long, string>();
-					foreach (var entry in enumProps["values"].AsArray())
+					foreach (var entry in se.values)
 					{
-						var e = entry.AsMap();
-						ce.valueToName[Convert.ToInt64(e["v"].AsString())] = e["n"].AsString();
+						ce.valueToName[entry.value] = entry.name;
 					}
-					cilboxEnums[kv.Key] = ce;
+					cilboxEnums[se.enumName] = ce;
 				}
 			}
 
@@ -3158,20 +3155,21 @@ spiperf.End();
 				{
 					if (!type.IsEnum || !CilboxUtil.HasCilboxableAttribute(type))
 						continue;
-					Dictionary< String, Serializee > enumProps = new Dictionary< String, Serializee >();
-					enumProps["ut"] = SerializedTypeDescriptorBuilder.FromNativeType(type.GetEnumUnderlyingType()).ToSerializee();
+					SerializedEnum serializedEnum  = new SerializedEnum();
+					serializedEnum.enumName = type.FullName;
+					serializedEnum.underlyingType = SerializedTypeDescriptorBuilder.FromNativeType(type.GetEnumUnderlyingType());
 					string[] names = Enum.GetNames(type);
 					Array values = Enum.GetValues(type);
-					Serializee[] entries = new Serializee[names.Length];
+					SerializedEnumValue[] entries = new  SerializedEnumValue[names.Length];
 					for (int i = 0; i < names.Length; i++)
 					{
-						Dictionary< String, Serializee > entry = new Dictionary< String, Serializee >();
-						entry["n"] = new Serializee(names[i]);
-						entry["v"] = new Serializee(Convert.ToInt64(values.GetValue(i)).ToString());
-						entries[i] = new Serializee(entry);
+						SerializedEnumValue entry = new SerializedEnumValue();
+						entry.name = names[i];
+						entry.value = Convert.ToInt64(values.GetValue(i));
+						entries[i] = entry;
 					}
-					enumProps["values"] = new Serializee(entries);
-					enumsDict[type.FullName] = new Serializee(enumProps);
+					serializedEnum.values = entries;
+					enumsDict[type.FullName] = serializedEnum.ToSerializee();
 				}
 			}
 
