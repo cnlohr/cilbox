@@ -2295,7 +2295,7 @@ spiperf.End();
 			{
 				SerializedMetadataToken st = SerializedMetadataToken.FromSerializee(v.Value, v.Key);
 				MetaTokenType metatype = (MetaTokenType)st.metaTokenType;
-				CilMetadataTokenInfo t = metadatas[st.mid] = new CilMetadataTokenInfo( metatype );
+				CilMetadataTokenInfo t = metadatas[st.metaTokenIndex] = new CilMetadataTokenInfo( metatype );
 
 				switch( metatype )
 				{
@@ -2322,14 +2322,14 @@ spiperf.End();
 						bool bAllowed = CheckFieldAllowed( t.declaringTypeName, t.Name );
 						if( !bAllowed )
 						{
-							throw new CilboxException( $"Illegal field reference outside of the cilbox. {t.declaringTypeName}.{t.Name} in meta {st.mid}." );
+							throw new CilboxException( $"Illegal field reference outside of the cilbox. {t.declaringTypeName}.{t.Name} in meta {st.metaTokenIndex}." );
 						}
 						t.isFieldWhiteListed = true;
 
 						Type ty = usage.GetNativeTypeFromDescriptor( st.typeDescriptor );
 						if( ty == null )
 						{
-							throw new CilboxException( $"Could not get allowed type for checking field, {t.declaringTypeName} in meta {st.mid}." );
+							throw new CilboxException( $"Could not get allowed type for checking field, {t.declaringTypeName} in meta {st.metaTokenIndex}." );
 						}
 
 						// We have a type for the declaring type, but, we need a field.
@@ -2337,12 +2337,12 @@ spiperf.End();
 
 						if( f == null )
 						{
-							throw new CilboxException( $"Could not find field for object type {t.declaringTypeName}.{t.Name} in meta {st.mid}." );
+							throw new CilboxException( $"Could not find field for object type {t.declaringTypeName}.{t.Name} in meta {st.metaTokenIndex}." );
 						}
 
 						if( !usage.CheckTypeSecurityRecursive( f.FieldType ) )
 						{
-							throw new CilboxException( $"Field for {t.declaringTypeName}.{t.Name} in meta {st.mid} of type {f.FieldType.ToString()} not allowed." );
+							throw new CilboxException( $"Field for {t.declaringTypeName}.{t.Name} in meta {st.metaTokenIndex} of type {f.FieldType.ToString()} not allowed." );
 						}
 
 						t.isFieldWhiteListed = true;
@@ -2829,7 +2829,7 @@ spiperf.End();
 													// Now, encode our array initializer.
 													SerializedMetadataToken thisMeta = new SerializedMetadataToken
 													{
-														mid = (int)mdcount,
+														metaTokenIndex = (int)mdcount,
 														metaTokenType = (int)MetaTokenType.mtArrayInitializer,
 														arrayInitData = bytes,
 													};
@@ -2869,7 +2869,7 @@ spiperf.End();
 												writebackToken = mdcount;
 												SerializedMetadataToken thisMeta = new SerializedMetadataToken
 												{
-													mid = (int)mdcount,
+													metaTokenIndex = (int)mdcount,
 													metaTokenType = (int)MetaTokenType.mtString,
 													stringValue = proxyAssembly.ManifestModule.ResolveString( (int)operand ),
 												};
@@ -2885,7 +2885,7 @@ spiperf.End();
 												MethodBase tmb = proxyAssembly.ManifestModule.ResolveMethod( (int)operand );
 
 												SerializedMetadataToken thisMeta = new SerializedMetadataToken();
-												thisMeta.mid = (int)mdcount;
+												thisMeta.metaTokenIndex = (int)mdcount;
 												thisMeta.metaTokenType = (int)MetaTokenType.mtMethod;
 
 												// "Generic constructors are not supported in the .NET Framework version 2.0"
@@ -2945,7 +2945,7 @@ spiperf.End();
 												}
 
 												SerializedMetadataToken thisMeta = new SerializedMetadataToken();
-												thisMeta.mid = (int)mdcount;
+												thisMeta.metaTokenIndex = (int)mdcount;
 												thisMeta.metaTokenType = (int)MetaTokenType.mtField;
 												thisMeta.typeDescriptor = SerializedTypeDescriptorBuilder.FromNativeType( rf.DeclaringType );
 												thisMeta.name = rf.Name;
@@ -2961,7 +2961,7 @@ spiperf.End();
 												writebackToken = mdcount;
 												Type ty = proxyAssembly.ManifestModule.ResolveType( (int)operand );
 												SerializedMetadataToken thisMeta = new SerializedMetadataToken();
-												thisMeta.mid = (int)mdcount;
+												thisMeta.metaTokenIndex = (int)mdcount;
 												thisMeta.metaTokenType = (int)MetaTokenType.mtType;
 												thisMeta.typeDescriptor = SerializedTypeDescriptorBuilder.FromNativeType( ty );
 												assemblyMetadata[mdcount++] = thisMeta;
@@ -3151,7 +3151,7 @@ spiperf.End();
 			Dictionary< String, Serializee > assemblyMetadataDict = new Dictionary< String, Serializee >();
 			foreach (var v in assemblyMetadata)
 			{
-				assemblyMetadataDict[v.Value.mid.ToString()] = v.Value.ToSerializee();
+				assemblyMetadataDict[v.Value.metaTokenIndex.ToString()] = v.Value.ToSerializee();
 			}
 
 			Dictionary< String, Serializee > assemblyRoot = new Dictionary< String, Serializee >();

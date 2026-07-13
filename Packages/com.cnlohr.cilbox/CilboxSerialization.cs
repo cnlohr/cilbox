@@ -326,7 +326,9 @@ namespace Cilbox
 
 	public class SerializedMetadataToken
 	{
-		public int mid;
+		// metaTokenIndex is a sequential index for the token particular to this Cilbox.
+		// Bytecode operands for this Cilbox reference this value instead of the original CIL one.
+		public int metaTokenIndex;
 		public byte metaTokenType; // MetaTokenType enum value
 
 		// mtString
@@ -413,7 +415,7 @@ namespace Cilbox
 		{
 			Dictionary<String, Serializee> m = s.AsMap();
 			SerializedMetadataToken t = new SerializedMetadataToken();
-			t.mid = Int32.Parse( midStr );
+			t.metaTokenIndex = Int32.Parse( midStr );
 			t.metaTokenType = (byte)Int32.Parse( m["mt"].AsString() );
 			MetaTokenType mt = (MetaTokenType)t.metaTokenType;
 
