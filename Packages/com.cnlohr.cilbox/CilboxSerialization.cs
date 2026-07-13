@@ -324,6 +324,156 @@ namespace Cilbox
 		}
 	}
 
+	public class SerializedMetadataToken
+	{
+		// metaTokenIndex is a sequential index for the token particular to this Cilbox.
+		// Bytecode operands for this Cilbox reference this value instead of the original CIL one.
+		public int metaTokenIndex;
+		public byte metaTokenType; // MetaTokenType enum value
+
+		// mtString
+		public string stringValue;
+
+		// mtArrayInitializer
+		public byte[] arrayInitData;
+
+		// mtType, mtField, mtMethod
+		public SerializedTypeDescriptor typeDescriptor;
+
+		// mtField, mtMethod
+		public string name;
+		public bool isStatic;
+
+		// mtField
+		public bool fieldHasIndex;
+		public int fieldIndex;
+
+		// mtMethod
+		public string methodFullSignature;
+		public string methodAssembly;
+		public SerializedTypeDescriptor[] methodParameters;
+		public SerializedTypeDescriptor[] methodGenericArguments;
+
+		public Serializee ToSerializee()
+		{
+			Dictionary<String, Serializee> ret = new Dictionary<String, Serializee>();
+			MetaTokenType mt = (MetaTokenType)metaTokenType;
+			String mtStr = ((int)metaTokenType).ToString();
+
+			switch( mt )
+			{
+				case MetaTokenType.mtArrayInitializer:
+					ret["mt"] = new Serializee( mtStr );
+					ret["data"] = Serializee.CreateFromBlob( arrayInitData );
+					break;
+				case MetaTokenType.mtString:
+					ret["mt"] = new Serializee( mtStr );
+					ret["s"] = new Serializee( stringValue );
+					break;
+				case MetaTokenType.mtMethod:
+					// Master order: [ga], dt, name, [parameters], fullSignature,
+					// isStatic, assembly, mt (mt is written LAST for methods).
+					if( methodGenericArguments != null && methodGenericArguments.Length > 0 )
+					{
+						Serializee[] ga = new Serializee[methodGenericArguments.Length];
+						for( int i = 0; i < methodGenericArguments.Length; i++ )
+							ga[i] = methodGenericArguments[i].ToSerializee();
+						ret["ga"] = new Serializee( ga );
+					}
+					ret["dt"] = typeDescriptor.ToSerializee();
+					ret["name"] = new Serializee( name );
+					if( methodParameters != null && methodParameters.Length > 0 )
+					{
+						Serializee[] par = new Serializee[methodParameters.Length];
+						for( int i = 0; i < methodParameters.Length; i++ )
+							par[i] = methodParameters[i].ToSerializee();
+						ret["parameters"] = new Serializee( par );
+					}
+					ret["fullSignature"] = new Serializee( methodFullSignature );
+					ret["isStatic"] = new Serializee( isStatic ? "1" : "0" );
+					ret["assembly"] = new Serializee( methodAssembly );
+					ret["mt"] = new Serializee( mtStr );
+					break;
+				case MetaTokenType.mtField:
+					// Master order: mt, dt, name, isStatic, [index] (index appended last).
+					ret["mt"] = new Serializee( mtStr );
+					ret["dt"] = typeDescriptor.ToSerializee();
+					ret["name"] = new Serializee( name );
+					ret["isStatic"] = new Serializee( isStatic ? "1" : "0" );
+					if( fieldHasIndex )
+						ret["index"] = new Serializee( fieldIndex.ToString() );
+					break;
+				case MetaTokenType.mtType:
+					ret["mt"] = new Serializee( mtStr );
+					ret["dt"] = typeDescriptor.ToSerializee();
+					break;
+			}
+			return new Serializee( ret );
+		}
+
+		public static SerializedMetadataToken FromSerializee( Serializee s, string midStr )
+		{
+			Dictionary<String, Serializee> m = s.AsMap();
+			SerializedMetadataToken t = new SerializedMetadataToken();
+			t.metaTokenIndex = Int32.Parse( midStr );
+			t.metaTokenType = (byte)Int32.Parse( m["mt"].AsString() );
+			MetaTokenType mt = (MetaTokenType)t.metaTokenType;
+
+			switch( mt )
+			{
+				case MetaTokenType.mtArrayInitializer:
+					t.arrayInitData = m["data"].AsBlob();
+					break;
+				case MetaTokenType.mtString:
+					t.stringValue = m["s"].AsString();
+					break;
+				case MetaTokenType.mtMethod:
+					t.typeDescriptor = SerializedTypeDescriptor.FromSerializee( m["dt"] );
+					t.name = m["name"].AsString();
+					t.methodFullSignature = m["fullSignature"].AsString();
+					t.isStatic = Int32.Parse( m["isStatic"].AsString() ) != 0;
+					t.methodAssembly = m["assembly"].AsString();
+					if( m.TryGetValue( "parameters", out Serializee parS ) )
+					{
+						Serializee[] par = parS.AsArray();
+						t.methodParameters = new SerializedTypeDescriptor[par.Length];
+						for( int i = 0; i < par.Length; i++ )
+							t.methodParameters[i] = SerializedTypeDescriptor.FromSerializee( par[i] );
+					}
+					else
+					{
+						t.methodParameters = new SerializedTypeDescriptor[0];
+					}
+					if( m.TryGetValue( "ga", out Serializee gaS ) )
+					{
+						Serializee[] ga = gaS.AsArray();
+						t.methodGenericArguments = new SerializedTypeDescriptor[ga.Length];
+						for( int i = 0; i < ga.Length; i++ )
+							t.methodGenericArguments[i] = SerializedTypeDescriptor.FromSerializee( ga[i] );
+					}
+					else
+					{
+						t.methodGenericArguments = new SerializedTypeDescriptor[0];
+					}
+					break;
+				case MetaTokenType.mtField:
+					t.typeDescriptor = SerializedTypeDescriptor.FromSerializee( m["dt"] );
+					t.name = m["name"].AsString();
+					t.isStatic = Int32.Parse( m["isStatic"].AsString() ) != 0;
+					if( m.TryGetValue( "index", out Serializee idx ) )
+					{
+						t.fieldHasIndex = true;
+						t.fieldIndex = Int32.Parse( idx.AsString() );
+					}
+					break;
+				case MetaTokenType.mtType:
+					t.typeDescriptor = SerializedTypeDescriptor.FromSerializee( m["dt"] );
+					break;
+			}
+			return t;
+		}
+	}
+
 	public class SerializedEnumValue
 	{
 		public string name;
