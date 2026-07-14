@@ -17,6 +17,7 @@ using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Callbacks;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 #endif
 
@@ -2245,24 +2246,20 @@ spiperf.End();
 			//Debug.Log( "Cilbox Initialize Metadata:" + assemblyData.Length );
 			timeoutLengthUs = desiredTimeoutLengthUs; // make sure min is applied once.
 
-			Dictionary< String, Serializee > assemblyRoot = new Serializee( Convert.FromBase64String( assemblyData ), Serializee.ElementType.Map ).AsMap();
-			Dictionary< String, Serializee > classData = assemblyRoot["classes"].AsMap();
-			Dictionary< String, Serializee > metaData = assemblyRoot["metadata"].AsMap();
+			SerializedAssembly assembly = SerializedAssembly.DeserializeString( assemblyData );
+			SerializedClass[] classData = assembly.classes;
+			SerializedMetadataToken[] metaData = assembly.metadata;
 
-			metadatas = new CilMetadataTokenInfo[metaData.Count+1]; // element 0 is invalid.
+			metadatas = new CilMetadataTokenInfo[metaData.Length + 1]; // element 0 is invalid.
 			metadatas[0] = new CilMetadataTokenInfo( 0 );
 			metadatas[0].Name = "<INVALID>";
 
 			int clsid = 0;
 			classes = new Dictionary< String, int >();
-			classesList = new CilboxClass[classData.Count];
-			SerializedClass[] scArr = new SerializedClass[classData.Count];
-			foreach( var v in classData )
+			classesList = new CilboxClass[classData.Length];
+			foreach( var sc in classData )
 			{
-				CilboxClass cls = new CilboxClass();
-				SerializedClass sc  = SerializedClass.FromSerializee(v.Value, v.Key);
-				scArr[clsid] = sc;
-				classesList[clsid] = cls;
+				classesList[clsid] = new CilboxClass();
 				classes[sc.className] = clsid;
 				clsid++;
 			}
@@ -2270,15 +2267,14 @@ spiperf.End();
 			// Actually load classes in a 2nd pass so we know which classes are Cilbox types first
 			for (int i = 0; i < clsid; i++)
 			{
-				classesList[i].LoadCilboxClass( this, scArr[i] );
+				classesList[i].LoadCilboxClass( this, classData[i] );
 			}
 
 			cilboxEnums = new Dictionary<string, CilboxEnum>();
-			if (assemblyRoot.TryGetValue("enums", out Serializee enumsSer))
+			if (assembly.enums.Length > 0)
 			{
-				foreach (var kv in enumsSer.AsMap())
+				foreach (var se in assembly.enums)
 				{
-					SerializedEnum se = SerializedEnum.FromSerializee(kv.Value, kv.Key);
 					CilboxEnum ce = new CilboxEnum();
 					ce.enumName = se.enumName;
 					ce.underlyingType = StackElement.StackTypeFromType(usage.GetNativeTypeFromDescriptor(se.underlyingType));
@@ -2291,9 +2287,8 @@ spiperf.End();
 				}
 			}
 
-			foreach( var v in metaData )
+			foreach( var st in metaData )
 			{
-				SerializedMetadataToken st = SerializedMetadataToken.FromSerializee(v.Value, v.Key);
 				MetaTokenType metatype = (MetaTokenType)st.metaTokenType;
 				CilMetadataTokenInfo t = metadatas[st.metaTokenIndex] = new CilMetadataTokenInfo( metatype );
 
@@ -2672,7 +2667,7 @@ spiperf.End();
 
 			uint mdcount = 1; // token 0 is invalid.
 			int bytecodeLength = 0;
-			Dictionary< String, Serializee > classes = new Dictionary<String, Serializee>();
+			List<SerializedClass> classes = new List<SerializedClass>();
 			Dictionary< String, SerializedMethod[] > allClassMethods = new Dictionary< String, SerializedMethod[] >();
 
 			perf.End(); perf = new ProfilerMarker( "Main Getting Types" ); perf.Begin();
@@ -3116,14 +3111,14 @@ spiperf.End();
 						if( CilboxUtil.HasCilboxableAttribute( bt ) )
 							baseClassChain.Add( bt.FullName );
 					serializedClass.baseClassNames = baseClassChain.ToArray();
-					classes[type.FullName] = serializedClass.ToSerializee();
+					classes.Add(serializedClass);
 					perfType.End();
 				}
 			}
 
 			perf.End(); perf = new ProfilerMarker( "Assembling" ); perf.Begin();
 
-			Dictionary< String, Serializee > enumsDict = new Dictionary< String, Serializee >();
+			List<SerializedEnum> enums = new List<SerializedEnum>();
 			foreach( System.Reflection.Assembly proxyAssembly in assys )
 			{
 				foreach (Type type in proxyAssembly.GetTypes())
@@ -3144,25 +3139,20 @@ spiperf.End();
 						entries[i] = entry;
 					}
 					serializedEnum.values = entries;
-					enumsDict[type.FullName] = serializedEnum.ToSerializee();
+					enums.Add(serializedEnum);
 				}
 			}
 
-			Dictionary< String, Serializee > assemblyMetadataDict = new Dictionary< String, Serializee >();
-			foreach (var v in assemblyMetadata)
+			SerializedAssembly assembly = new SerializedAssembly
 			{
-				assemblyMetadataDict[v.Value.metaTokenIndex.ToString()] = v.Value.ToSerializee();
-			}
-
-			Dictionary< String, Serializee > assemblyRoot = new Dictionary< String, Serializee >();
-			assemblyRoot["classes"] = new Serializee( classes );
-			assemblyRoot["metadata"] = new Serializee( assemblyMetadataDict );
-			assemblyRoot["enums"] = new Serializee( enumsDict );
-			Serializee assemblySerializee = new Serializee( assemblyRoot );
+				classes = classes.ToArray(),
+				metadata = assemblyMetadata.Values.ToArray(),
+				enums = enums.ToArray(),
+			};
 
 			perf.End(); perf = new ProfilerMarker( "Serializing" ); perf.Begin();
 
-			String sAllAssemblyData = Convert.ToBase64String(assemblySerializee.DumpAsMemory().ToArray() );
+			String sAllAssemblyData = assembly.SerializeString();
 
 			perf.End(); perf = new ProfilerMarker( "Checking If Assembly Changed" ); perf.Begin();
 

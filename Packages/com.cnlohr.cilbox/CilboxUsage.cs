@@ -254,9 +254,9 @@ namespace Cilbox
 // This is no longer done here, but stands as an example of how you could use this function.
 //			if( typeName == "<PrivateImplementationDetails>" && name == "ComputeStringHash" )
 //			{
-//				Dictionary< String, Serializee > exportType = new Dictionary< String, Serializee >();
-//				exportType["n"] = new Serializee( "Cilbox.CilboxPublicUtils" );
-//				return ( "ComputeStringHashProxy", new Serializee( exportType ) );
+//				SerializedTypeDescriptor exportType = new SerializedTypeDescriptor();
+//				exportType.typeName = "Cilbox.CilboxPublicUtils";
+//				return ( "ComputeStringHashProxy", exportType );
 //				//return ( "ComputeStringHashProxy", declaringType );
 //			}
 

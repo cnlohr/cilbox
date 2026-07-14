@@ -529,6 +529,74 @@ namespace Cilbox
 		}
 	}
 
+	public class SerializedAssembly
+	{
+		public SerializedClass[] classes;
+		public SerializedMetadataToken[] metadata;
+		public SerializedEnum[] enums;
+
+		// Root Map order: classes (keyed className), metadata (keyed by string
+		// token index starting at 1), enums (keyed enumName). base64 of the
+		// Serializee buffer, byte-for-byte identical to master's assemblyData.
+		public string SerializeString()
+		{
+			Dictionary<String, Serializee> root = new Dictionary<String, Serializee>();
+
+			Dictionary<String, Serializee> cl = new Dictionary<String, Serializee>();
+			for( int i = 0; i < classes.Length; i++ )
+				cl[classes[i].className] = classes[i].ToSerializee();
+			root["classes"] = new Serializee( cl );
+
+			Dictionary<String, Serializee> md = new Dictionary<String, Serializee>();
+			for( int i = 0; i < metadata.Length; i++ )
+				md[(metadata[i].metaTokenIndex).ToString()] = metadata[i].ToSerializee();
+			root["metadata"] = new Serializee( md );
+
+			Dictionary<String, Serializee> en = new Dictionary<String, Serializee>();
+			for( int i = 0; i < enums.Length; i++ )
+				en[enums[i].enumName] = enums[i].ToSerializee();
+			root["enums"] = new Serializee( en );
+
+			return Convert.ToBase64String( new Serializee( root ).DumpAsMemory().ToArray() );
+		}
+
+		public static SerializedAssembly DeserializeString( string base64 )
+		{
+			SerializedAssembly asm = new SerializedAssembly();
+			Dictionary<String, Serializee> root =
+				new Serializee( Convert.FromBase64String( base64 ), Serializee.ElementType.Map ).AsMap();
+
+			Dictionary<String, Serializee> cl = root["classes"].AsMap();
+			asm.classes = new SerializedClass[cl.Count];
+			int ci = 0;
+			foreach( KeyValuePair<String, Serializee> kv in cl )
+				asm.classes[ci++] = SerializedClass.FromSerializee( kv.Value, kv.Key );
+
+			Dictionary<String, Serializee> md = root["metadata"].AsMap();
+			asm.metadata = new SerializedMetadataToken[md.Count];
+			foreach( KeyValuePair<String, Serializee> kv in md )
+			{
+				var smt = SerializedMetadataToken.FromSerializee(kv.Value, kv.Key);
+				asm.metadata[smt.metaTokenIndex - 1] = smt; // serializee is in a 1-based dict, but store it in a regular 0-based flat array here
+			}
+
+			if( root.TryGetValue( "enums", out Serializee enumsS ) )
+			{
+				Dictionary<String, Serializee> en = enumsS.AsMap();
+				asm.enums = new SerializedEnum[en.Count];
+				int ei = 0;
+				foreach( KeyValuePair<String, Serializee> kv in en )
+					asm.enums[ei++] = SerializedEnum.FromSerializee( kv.Value, kv.Key );
+			}
+			else
+			{
+				asm.enums = new SerializedEnum[0];
+			}
+
+			return asm;
+		}
+	}
+
 	/// <summary>
 	/// Helper to build a SerializedTypeDescriptor from a native System.Type.
 	/// Used by the editor compiler to build type descriptors from native System.Type.

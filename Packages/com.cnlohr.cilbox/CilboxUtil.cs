@@ -761,27 +761,25 @@ namespace Cilbox
 				Dictionary< String, int > classes;
 				CilboxClass [] classesList;
 
-				Dictionary< String, Serializee > assemblyRoot = new Serializee( Convert.FromBase64String( assemblyData ), Serializee.ElementType.Map ).AsMap();
-				Dictionary< String, Serializee > classData = assemblyRoot["classes"].AsMap();
-				Dictionary< String, Serializee > metaData = assemblyRoot["metadata"].AsMap();
+				SerializedAssembly assembly = SerializedAssembly.DeserializeString(assemblyData);
+				SerializedClass[] classData = assembly.classes;
+				SerializedMetadataToken[] metaData = assembly.metadata;
 
 				int clsid = 0;
 				classes = new Dictionary< String, int >();
-				classesList = new CilboxClass[classData.Count];
-				foreach( var v in classData )
+				classesList = new CilboxClass[classData.Length];
+				for( int i = 0; i < classData.Length; i++ )
 				{
-					CilboxClass cls = new CilboxClass();
-					classesList[clsid] = cls;
-					classes[(String)v.Key] = clsid;
+					classesList[clsid] = new CilboxClass();
+					classes[classData[i].className] = clsid;
 					clsid++;
 				}
 
 				clsid = 0;
-				foreach( var v in classData )
+				for( int cid = 0; cid < classData.Length; cid++ )
 				{
 					CilboxClass c = classesList[clsid++];
-
-					SerializedClass sc = SerializedClass.FromSerializee( v.Value, v.Key );
+					SerializedClass sc = classData[cid];
 					c.LoadCilboxClass( b, sc );
 
 					CLog.WriteLine( $"Class: {c.className}" );
@@ -925,38 +923,32 @@ namespace Cilbox
 					}
 				}
 
-				foreach( var v in metaData )
+				foreach( var st in metaData )
 				{
-					int mid = Convert.ToInt32((String)v.Key);
-					Dictionary< String, Serializee > st = v.Value.AsMap();
-					MetaTokenType metatype = (MetaTokenType)Convert.ToInt32(st["mt"].AsString());
-					//CilMetadataTokenInfo t = metadatas[mid] = new CilMetadataTokenInfo( metatype );
+					MetaTokenType metatype = (MetaTokenType)st.metaTokenType;
 
-					//t.type = metatype;
-					//t.Name = "<UNKNOWN>";
-
-					String metaLine = $"\t{mid.ToString("X4")} {metatype.ToString().Substring(2),-7} ";
+					String metaLine = $"\t{st.metaTokenIndex.ToString("X4")} {metatype.ToString().Substring(2),-7} ";
 
 					switch( metatype )
 					{
 					case MetaTokenType.mtString:
-						metaLine += st["s"].AsString();
+						metaLine += st.stringValue;
 						break;
 					case MetaTokenType.mtArrayInitializer:
-						metaLine += Convert.ToBase64String( st["data"].AsBlob() );
+						metaLine += Convert.ToBase64String( st.arrayInitData );
 						break;
 					case MetaTokenType.mtField:
-						SerializedTypeDescriptor td = SerializedTypeDescriptor.FromSerializee( st["dt"] );
+						SerializedTypeDescriptor td = st.typeDescriptor;
 						Type t = b.usage.GetNativeTypeFromDescriptor(td);
-						if( Int32.Parse( st["isStatic"].AsString() ) > 0 ) metaLine += "static ";
+						if( st.isStatic ) metaLine += "static ";
 						String tname = t?.ToString();
 						if( t == null )
 							tname = "NR:" + td.typeName + " ";
-						metaLine += tname + st["name"].AsString();
+						metaLine += tname + st.name;
 						break;
 					case MetaTokenType.mtType:
 					{
-						SerializedTypeDescriptor td2 = SerializedTypeDescriptor.FromSerializee( st["dt"] );
+						SerializedTypeDescriptor td2 = st.typeDescriptor;
 						Type nt = b.usage.GetNativeTypeFromDescriptor(td2);
 						StackType seType = StackElement.StackTypeFromType( nt );
 						if( seType < StackType.Object )
@@ -989,7 +981,7 @@ namespace Cilbox
 					}
 					case MetaTokenType.mtMethod:
 					{
-						metaLine += $"{st["name"].AsString()} {st["fullSignature"].AsString()} {st["assembly"].AsString()}";
+						metaLine += $"{st.name} {st.methodFullSignature} {st.methodAssembly}";
 						break;
 					}
 					}
@@ -1006,7 +998,7 @@ namespace Cilbox
 		}
 
 		// Layout enumeration only -- field TYPES are not gated here. Every field type (inherited privates included) is
-		// validated at load in CilboxClass.LoadCilboxClass (GetNativeTypeFromSerializee -> CheckTypeAllowed), the real boundary.
+		// validated at load in CilboxClass.LoadCilboxClass (GetNativeTypeFromDescriptor -> CheckTypeAllowed), the real boundary.
 		public static FieldInfo[] GetInstanceFieldsBaseFirst( Type type )
 		{
 			List< FieldInfo > ordered = new List< FieldInfo >();
