@@ -762,23 +762,24 @@ namespace Cilbox
 				CilboxClass [] classesList;
 
 				SerializedAssembly assembly = SerializedAssembly.DeserializeString(assemblyData);
+				SerializedClass[] classData = assembly.classes;
+				SerializedMetadataToken[] metaData = assembly.metadata;
 
 				int clsid = 0;
 				classes = new Dictionary< String, int >();
-				classesList = new CilboxClass[assembly.classes.Length];
-				for( int i = 0; i < assembly.classes.Length; i++ )
+				classesList = new CilboxClass[classData.Length];
+				for( int i = 0; i < classData.Length; i++ )
 				{
-					CilboxClass cls = new CilboxClass();
-					classesList[clsid] = cls;
-					classes[assembly.classes[i].className] = clsid;
+					classesList[clsid] = new CilboxClass();
+					classes[classData[i].className] = clsid;
 					clsid++;
 				}
 
 				clsid = 0;
-				for( int cid = 0; cid < assembly.classes.Length; cid++ )
+				for( int cid = 0; cid < classData.Length; cid++ )
 				{
 					CilboxClass c = classesList[clsid++];
-					SerializedClass sc = assembly.classes[cid];
+					SerializedClass sc = classData[cid];
 					c.LoadCilboxClass( b, sc );
 
 					CLog.WriteLine( $"Class: {c.className}" );
@@ -922,7 +923,7 @@ namespace Cilbox
 					}
 				}
 
-				foreach( var st in assembly.metadata )
+				foreach( var st in metaData )
 				{
 					MetaTokenType metatype = (MetaTokenType)st.metaTokenType;
 

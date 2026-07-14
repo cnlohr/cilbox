@@ -2247,15 +2247,17 @@ spiperf.End();
 			timeoutLengthUs = desiredTimeoutLengthUs; // make sure min is applied once.
 
 			SerializedAssembly assembly = SerializedAssembly.DeserializeString( assemblyData );
+			SerializedClass[] classData = assembly.classes;
+			SerializedMetadataToken[] metaData = assembly.metadata;
 
-			metadatas = new CilMetadataTokenInfo[assembly.metadata.Length + 1]; // element 0 is invalid.
+			metadatas = new CilMetadataTokenInfo[metaData.Length + 1]; // element 0 is invalid.
 			metadatas[0] = new CilMetadataTokenInfo( 0 );
 			metadatas[0].Name = "<INVALID>";
 
 			int clsid = 0;
 			classes = new Dictionary< String, int >();
-			classesList = new CilboxClass[assembly.classes.Length];
-			foreach( var sc in assembly.classes )
+			classesList = new CilboxClass[classData.Length];
+			foreach( var sc in classData )
 			{
 				classesList[clsid] = new CilboxClass();
 				classes[sc.className] = clsid;
@@ -2265,7 +2267,7 @@ spiperf.End();
 			// Actually load classes in a 2nd pass so we know which classes are Cilbox types first
 			for (int i = 0; i < clsid; i++)
 			{
-				classesList[i].LoadCilboxClass( this, assembly.classes[i] );
+				classesList[i].LoadCilboxClass( this, classData[i] );
 			}
 
 			cilboxEnums = new Dictionary<string, CilboxEnum>();
@@ -2285,7 +2287,7 @@ spiperf.End();
 				}
 			}
 
-			foreach( var st in assembly.metadata )
+			foreach( var st in metaData )
 			{
 				MetaTokenType metatype = (MetaTokenType)st.metaTokenType;
 				CilMetadataTokenInfo t = metadatas[st.metaTokenIndex] = new CilMetadataTokenInfo( metatype );
