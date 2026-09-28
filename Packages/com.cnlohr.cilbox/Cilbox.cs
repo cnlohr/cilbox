@@ -2119,6 +2119,35 @@ spiperf.End();
 
 			return true;
 		}
+
+		/// <summary>
+		/// Interpret method via Import ID
+		/// </summary>
+		/// <param name="proxy"></param>
+		/// <param name="importId"></param>
+		/// <param name="parameters"></param>
+		/// <returns></returns>
+		public object InterpretMethod(CilboxProxy proxy, ImportFunctionID importId, object [] parameters)
+		{
+			uint index = importFunctionToId[(int)importId];
+			if( index == 0xffffffff ) return null;
+			return methods[index].Interpret(proxy, parameters);
+		}
+
+		/// <summary>
+		/// Interpret method via method name
+		/// Note: This shouldn't be used in high performance situations
+		/// </summary>
+		/// <param name="proxy"></param>
+		/// <param name="methodName"></param>
+		/// <param name="parameters"></param>
+		/// <returns></returns>
+		public object InterpretMethod(CilboxProxy proxy, string methodName, object[] parameters)
+		{
+			uint index = methodNameToIndex[methodName];
+			if( index == 0xffffffff ) return null;
+			return methods[index].Interpret(proxy, parameters);
+		}
 	}
 
 	public class CilboxEnum
@@ -2348,7 +2377,7 @@ spiperf.End();
 					else
 					{
 						Type declaringType = Type.GetType(t.declaringTypeName, false, false);
-						if (declaringType == null) 
+						if (declaringType == null)
 						{
 							throw new CilboxException($"Could not find declaring type {t.declaringTypeName} for field {t.Name} during BoxInitialize");
 						}
@@ -2461,7 +2490,7 @@ spiperf.End();
 					(name, stDt) = usage.HandleEarlyMethodRewrite( name, st.typeDescriptor, genericArguments );
 
 					string declaringTypeName = t.declaringTypeName = usage.GetNativeTypeNameFromDescriptor( stDt );
-					
+
 					SerializedTypeDescriptor [] parametersSer = st.methodParameters;
 
 					// First, see if this is to a class we are responsible for. Like does it come from _this_ class?
@@ -2489,11 +2518,11 @@ spiperf.End();
 					else
 					{
 						Type declaringType = usage.GetNativeTypeFromDescriptor( stDt );
-						if ( declaringType == null ) 
+						if ( declaringType == null )
 						{
 							Debug.LogError( $"Error: Could not find referenced type {useAssembly}/{declaringTypeName}/ {fullSignature}" );
 							break;
-						} 
+						}
 
 						MethodBase m = usage.GetNativeMethodFromTypeAndName( declaringType, name, parametersSer, genericArguments, fullSignature );
 
@@ -2543,17 +2572,6 @@ spiperf.End();
 			int clsid;
 			if( classes.TryGetValue(className, out clsid)) return classesList[clsid];
 			return null;
-		}
-
-		public object InterpretIID( CilboxClass cls, CilboxProxy ths, ImportFunctionID iid, object [] parameters )
-		{
-			if( cls == null ) return null;
-			uint index = cls.importFunctionToId[(uint)iid];
-			if( index == 0xffffffff ) return null;
-
-			object ret = cls.methods[index].Interpret( ths, parameters );
-
-			return ret;
 		}
 
 		public bool InterpreterEntry( CilboxMethod m )
@@ -2634,7 +2652,7 @@ spiperf.End();
 			OnCilboxDisabled?.Invoke(this, reason);
 		}
 
-		// For a given type, returns the type name with ref, array, and generic components removed. For use with type whitelisting. 
+		// For a given type, returns the type name with ref, array, and generic components removed. For use with type whitelisting.
 		public static string GetSanitizedTypeName(Type type)
 		{
 			ReadOnlySpan<char> typeName = type.FullName.AsSpan();
@@ -2662,7 +2680,7 @@ spiperf.End();
 				}
 			}
 
-			// 128 bytes should be safe for a stackalloc (C# uses UTS-16 chars so 64 chars) 
+			// 128 bytes should be safe for a stackalloc (C# uses UTS-16 chars so 64 chars)
 			Span<char> modTypeName = charCnt < 65 ? stackalloc char[charCnt] : new char[charCnt];
 
 			// Copy typeName to modTypeName in chunks, skipping over unwanted characters
@@ -2670,7 +2688,7 @@ spiperf.End();
 			int destCnt = 0;
 			int srcCopyStart = 0;
 
-			
+
 			for (int sIdx = 0; sIdx < sourceCnt; sIdx++) {
 				// remove generic type counts, these start with a ` followed by one or more digits expressing how many generic type parameters there are
 				if (typeName[sIdx] == '`') {
@@ -2682,7 +2700,7 @@ spiperf.End();
 					for (; sIdx < sourceCnt; sIdx++) {
 						if (!char.IsDigit(typeName[sIdx])) break;
 					}
-					srcCopyStart = sIdx; 
+					srcCopyStart = sIdx;
 				}
 			}
 			if (srcCopyStart < sourceCnt)

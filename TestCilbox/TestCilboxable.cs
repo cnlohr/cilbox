@@ -1010,6 +1010,12 @@ namespace TestCilbox
 			y *= 2;
 			return y;
 		}
+
+		public int CustomMethodByName()
+		{
+			Validator.Set("CustomMethodByName", "ran");
+			return 5;
+		}
 	}
 
 
