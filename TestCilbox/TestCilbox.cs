@@ -992,6 +992,13 @@ namespace TestCilbox
 			Validator.Validate( "Isolation Reach Method", "blocked" );
 			Validator.Validate( "Isolation Reach Field", "blocked" );
 
+			CilboxClass tcb = cb.GetClass($"{nameof(TestCilbox)}.{nameof(TestCilboxBehaviour)}");
+			proxy.disabled = false;
+			object res = tcb.InterpretMethod(proxy, "CustomMethodByName", Array.Empty<object>());
+			Validator.Validate("CustomMethodByName", "ran");
+			Validator.Set("CustomMethodByName Result", $"{(int)res}");
+			Validator.Validate("CustomMethodByName Result", "5");
+
 			return -1 * Validator.NumValidationErrors();
 		}
 
