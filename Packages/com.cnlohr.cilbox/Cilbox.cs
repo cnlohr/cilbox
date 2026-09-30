@@ -2365,21 +2365,23 @@ spiperf.End();
 				case MetaTokenType.mtField:
 					// The type has been "sealed" so-to-speak. In that we have an index for it.
 					t.Name = st.name;
-					t.declaringTypeName = usage.GetNativeTypeNameFromDescriptor( st.typeDescriptor );
+					
 					t.fieldIsStatic = st.isStatic;
 
 					if( st.fieldHasIndex )
 					{
+						t.declaringTypeName = usage.GetNativeTypeNameFromDescriptor( st.typeDescriptor );
 						t.fieldIndex = st.fieldIndex;
 						if( classes.TryGetValue( t.declaringTypeName, out int fieldClassId ) )
 							t.interpretiveFieldClass = fieldClassId;
 					}
 					else
 					{
-						Type declaringType = Type.GetType(t.declaringTypeName, false, false);
-						if (declaringType == null)
+						Type declaringType = usage.GetNativeTypeFromDescriptor( st.typeDescriptor );
+						t.declaringTypeName = declaringType.FullName;
+						if (declaringType == null) 
 						{
-							throw new CilboxException($"Could not find declaring type {t.declaringTypeName} for field {t.Name} during BoxInitialize");
+							throw new CilboxException($"Could not find declaring type {t.declaringTypeName} for field {t.Name} in meta {st.metaTokenIndex}.");
 						}
 
 						bool bAllowed = CheckFieldAllowed( declaringType, t.Name );
@@ -2389,14 +2391,8 @@ spiperf.End();
 						}
 						t.isFieldWhiteListed = true;
 
-						Type ty = usage.GetNativeTypeFromDescriptor( st.typeDescriptor );
-						if( ty == null )
-						{
-							throw new CilboxException( $"Could not get allowed type for checking field, {t.declaringTypeName} in meta {st.metaTokenIndex}." );
-						}
-
 						// We have a type for the declaring type, but, we need a field.
-						FieldInfo f = ty.GetField( t.Name, BindingFlags.Static | BindingFlags.Public | BindingFlags.Instance );
+						FieldInfo f = declaringType.GetField( t.Name, BindingFlags.Static | BindingFlags.Public | BindingFlags.Instance );
 
 						if( f == null )
 						{
