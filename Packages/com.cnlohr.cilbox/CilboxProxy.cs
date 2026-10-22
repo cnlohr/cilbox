@@ -28,6 +28,12 @@ namespace Cilbox
 
 		public bool disabled = false;
 
+		[NonSerialized] internal LinkedListNode<CilboxProxy> registryNode;
+
+		protected bool DidAwake = false;
+		protected bool DidStart = false;
+		protected bool DidEnable = false;
+
 		public void DisableProxy()
 		{
 			if( disabled ) return;
@@ -93,6 +99,9 @@ namespace Cilbox
 			serializedObjectData = proxy.SerializeString();
 
 			buildTimeGuid = Guid.NewGuid().ToString();
+
+			// Non-persistent; this is so the proxy can be loaded correctly in the editor during Play mode.
+			box.RegisterProxy(this);
 		}
 
 
@@ -176,10 +185,6 @@ namespace Cilbox
 		}
 
 #endif
-		void Awake()
-		{
-			// You cannot do anything in Awake()  Box is not set yet.
-		}
 
 		public void RuntimeProxyLoad()
 		{
@@ -493,22 +498,71 @@ namespace Cilbox
 			refElement.LoadObject(null);
 		}
 
+		public void TryAwake() { if (!proxyWasSetup || DidAwake || !gameObject.activeInHierarchy) return; DoAwake(); }
+		public void TryOnEnable() { if (!proxyWasSetup || !DidAwake || DidEnable || !enabled || !gameObject.activeInHierarchy) return; DoOnEnable(); }
+		public void TryStart() { if (!proxyWasSetup || !DidAwake || DidStart || !enabled || !gameObject.activeInHierarchy) return; DoStart(); }
 
-		void Start() {
-			RuntimeProxyLoad();
+		protected virtual void DoAwake()
+		{
+			DidAwake = true;
+			cls.InterpretMethod(this, ImportFunctionID.Awake, null);
+		}
+		protected virtual void DoStart()
+		{
+			DidStart = true;
+			cls.InterpretMethod(this, ImportFunctionID.Start, null);
+		}
+		protected virtual void DoOnEnable()
+		{
+			DidEnable = true;
+			cls.InterpretMethod(this, ImportFunctionID.OnEnable, null);
+		}
 
-			if( proxyWasSetup ) {
-				// Call Awake after initialization.
-				cls.InterpretMethod(this, ImportFunctionID.Awake, null);
-				cls.InterpretMethod(this, ImportFunctionID.Start, null);
+		void Awake()
+		{
+			// During normal scene load, box will be available.
+			// When pressing "Play" in the editor, the component is added in PostprocessScene, and Awake is immediately called.
+			// In this case, no serialized data is set yet, so we need to register later via PostprocessScene.
+			if(box == null)
+				return;
+			box.RegisterProxy(this);
+		}
+		void Start()
+		{
+			if (box is { DidBoot: true })
+			{
+				TryStart();
 			}
 		}
+		void OnEnable()
+		{
+			if (box is { DidBoot: true })
+			{
+				TryOnEnable();
+			}
+		}
+		void OnDisable()
+		{
+			if (!DidEnable) return;
+			DidEnable = false;
+			cls.InterpretMethod(this, ImportFunctionID.OnDisable, null);
+		}
+		void OnDestroy()
+		{
+			try
+			{
+				if (DidAwake)
+					cls.InterpretMethod(this, ImportFunctionID.OnDestroy, null);
+			}
+			finally
+			{
+				if (box) box.UnregisterProxy(this);
+			}
+		}
+
 		void FixedUpdate() { if( proxyWasSetup ) cls.InterpretMethod(this, ImportFunctionID.FixedUpdate, null); }
 		void Update() { if( proxyWasSetup ) cls.InterpretMethod(this, ImportFunctionID.Update, null); }
 		void LateUpdate() { if( proxyWasSetup ) cls.InterpretMethod(this, ImportFunctionID.LateUpdate, null); }
-		void OnEnable() { if( proxyWasSetup ) cls.InterpretMethod(this, ImportFunctionID.OnEnable, null); }
-		void OnDisable() { if( proxyWasSetup ) cls.InterpretMethod(this, ImportFunctionID.OnDisable, null); }
-		void OnDestroy() { if( proxyWasSetup ) cls.InterpretMethod(this, ImportFunctionID.OnDestroy, null); }
 		void OnTriggerEnter(Collider c) { if (proxyWasSetup) cls.InterpretMethod(this, ImportFunctionID.OnTriggerEnter, new object[] { c }); }
 		void OnTriggerExit(Collider c) { if (proxyWasSetup) cls.InterpretMethod(this, ImportFunctionID.OnTriggerExit, new object[] { c }); }
 		void OnCollisionEnter(Collision c) { if (proxyWasSetup) cls.InterpretMethod(this, ImportFunctionID.OnCollisionEnter, new object[] { c }); }

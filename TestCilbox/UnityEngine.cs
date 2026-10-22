@@ -167,6 +167,7 @@ namespace UnityEngine
 		public static void LogError( String s ) { Console.WriteLine( s ); }
 		public static void LogWarning( String s ) { Console.WriteLine( s ); }
 		public static void Log( String s ) { Console.WriteLine( s ); }
+		public static void LogException(Exception e) { Console.WriteLine( e ); }
 	}
 
 	public enum HideFlags
@@ -241,6 +242,8 @@ namespace UnityEngine
 		private readonly Transform _transform = new Transform();
 		public Transform transform => _transform;
 		public SceneManagement.Scene scene => new SceneManagement.Scene();
+		public bool activeSelf = true;
+		public bool activeInHierarchy = true;
 
 		public T[] GetComponentsInChildren<T>( bool something ) { return AllComponents.ToArray().OfType<T>().ToArray(); }
 
@@ -315,6 +318,11 @@ namespace UnityEngine
 				}
 			}
 			return ret.ToArray();
+		}
+
+		public void SetActive(bool value)
+		{
+			this.activeSelf = value;
 		}
 	}
 

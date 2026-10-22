@@ -150,6 +150,8 @@ namespace TestCilbox
 		public static int NumValidationErrors() { return numValidationErrors; }
 		public static Dictionary< String, String > TestOutput = new Dictionary< String, String >();
 		public static Dictionary<String, int> TestCounters = new Dictionary<String, int>();
+		public static List< String > EventLog = new List< String >();
+		public static void Log( String entry ) { EventLog.Add( entry ); }
 		public static void Set( String key, String val ) { TestOutput[key] = val; }
 		public static String Get( String key ) { String ret = null; TestOutput.TryGetValue( key, out ret ); return ret; }
 		public static void AddCount( String key )
@@ -286,6 +288,296 @@ namespace TestCilbox
 		public static TestEnum CallFuncEnum( Func<int,TestEnum> f, int a ) { return f( a ); }
 		public static string CallFuncNull( Func<int,string> f, int a ) { return f( a ); }
 		public static void CallAction( Action<int> a, int v ) { a( v ); }
+
+		// Lets interpreted code stand in for Instantiate()/AddComponent() during the lifecycle tests.
+		public static Action<int> SpawnHook;
+		public static void SimulateInstantiate( int id ) { SpawnHook?.Invoke( id ); }
+	}
+
+
+	// Exercises the virtual Awake/OnEnable/Start lifecycle. The mock has no Unity message loop, so the native
+	// messages Unity would send (Awake, OnEnable, Start, OnDisable, OnDestroy) are delivered by hand in Unity's order.
+	public static class LifecycleTest
+	{
+		static readonly Dictionary<string, GameObject> gos = new Dictionary<string, GameObject>();
+		static readonly Dictionary<string, CilboxProxy> proxies = new Dictionary<string, CilboxProxy>();
+		static readonly List<string> tags = new List<string>();
+
+		static void Make<T>( string tag, bool active = true ) where T : Component, new()
+		{
+			GameObject go = new GameObject( "Lifecycle" + tag );
+			go.activeInHierarchy = active;
+			go.CreateComponent<T>();
+			gos[tag] = go;
+			tags.Add( tag );
+		}
+
+		// Must run before the scene is postprocessed.
+		public static void CreateObjects()
+		{
+			Make<LifecycleProbeA>( "A" );
+			Make<LifecycleProbeB>( "B" );
+			Make<LifecycleProbeFault>( "F" );
+			Make<LifecycleSpawnerAwake>( "S1" );
+			Make<LifecycleSpawnerStart>( "S2" );
+			Make<LifecycleProbeD>( "D" );
+			Make<LifecycleProbeE>( "E" );
+			Make<LifecycleProbeThrowOnDestroy>( "TD" );
+			Make<LifecycleProbeI>( "I", false );
+			Make<LifecycleProbeI2>( "I2", false );
+			Make<LifecycleProbeL1>( "L1" );
+			Make<LifecycleProbeL2>( "L2" );
+			Make<LifecycleProbeZ>( "Z" );
+		}
+
+		static void Native( CilboxProxy p, string message )
+		{
+			p.GetType().GetMethod( message, BindingFlags.Instance | BindingFlags.NonPublic, Type.EmptyTypes ).Invoke( p, new object[0] );
+		}
+
+		static int Count( string entry ) { return Validator.EventLog.FindAll( e => e == entry ).Count; }
+		static int Index( string entry ) { return Validator.EventLog.IndexOf( entry ); }
+
+		static void Expect( string key, bool condition )
+		{
+			Validator.Set( key, condition.ToString() );
+			Validator.Validate( key, "True" );
+		}
+
+		static void ExpectCount( string entry, int count )
+		{
+			string key = "Lifecycle Count " + entry;
+			Validator.Set( key, Count( entry ).ToString() );
+			Validator.Validate( key, count.ToString() );
+		}
+
+		static void ExpectOrder( string label, params string[] entries )
+		{
+			bool ok = true;
+			for( int i = 0; i < entries.Length; i++ )
+			{
+				ok &= Index( entries[i] ) >= 0;
+				if( i > 0 ) ok &= Index( entries[i - 1] ) < Index( entries[i] );
+			}
+			Expect( "Lifecycle Order " + label, ok );
+		}
+
+		// Delivers what Unity does when a GameObject first becomes active: Awake then OnEnable (the latter only if enabled).
+		static void NativeLoad( CilboxProxy p )
+		{
+			if( !p.gameObject.activeInHierarchy ) return;
+			Native( p, "Awake" );
+			if( p.enabled ) Native( p, "OnEnable" );
+		}
+
+		// Delivers the state Unity would be in at scene load, before the Cilbox's own Start.
+		public static void PreBoot( Cilbox.Cilbox cb )
+		{
+			foreach( string tag in tags )
+				proxies[tag] = gos[tag].GetComponents<CilboxProxy>()[0];
+
+			// D starts disabled in the scene. L1 and L2 stand in for objects that don't exist yet.
+			// Z exists but has not been awoken by Unity yet.
+			proxies["D"].enabled = false;
+			foreach( string tag in new[] { "L1", "L2", "Z" } )
+				cb.UnregisterProxy( proxies[tag] );
+
+			foreach( string tag in tags )
+			{
+				if( tag == "L1" || tag == "L2" || tag == "Z" ) continue;
+				NativeLoad( proxies[tag] );
+			}
+
+			// E is enabled at load, then disabled before the Cilbox boots.
+			proxies["E"].enabled = false;
+			Native( proxies["E"], "OnDisable" );
+
+			// A native Start landing before the Cilbox's Start must not run interpreted code.
+			Native( proxies["A"], "Start" );
+
+			Expect( "Lifecycle Nothing Runs Before Boot", Validator.EventLog.Count == 0 && !cb.DidBoot );
+
+			TestUtil.SpawnHook = id => NativeLoad( proxies[id == 1 ? "L1" : "L2"] );
+		}
+
+		public static void Boot( Cilbox.Cilbox cb )
+		{
+			cb.DoCilboxBoot();
+
+			// Unity delivers the remaining native Starts afterwards, to components that are active and enabled.
+			foreach( string tag in tags )
+			{
+				CilboxProxy p = proxies[tag];
+				if( tag != "Z" && p.gameObject.activeInHierarchy && p.enabled ) Native( p, "Start" );
+			}
+
+			Expect( "Lifecycle Did Boot", cb.DidBoot );
+
+			string[] booted = { "A", "B", "S1", "S2", "TD" };
+			string[] awoken = { "A", "B", "F", "S1", "S2", "D", "E", "TD" };
+
+			foreach( string tag in awoken ) ExpectCount( tag + ".Awake", 1 );
+			foreach( string tag in booted )
+			{
+				ExpectCount( tag + ".OnEnable", 1 );
+				ExpectCount( tag + ".Start", 1 );
+				ExpectOrder( tag + " Awake OnEnable Start", tag + ".Awake", tag + ".OnEnable", tag + ".Start" );
+			}
+
+			// As in Unity, each component's OnEnable follows its own Awake directly (S1 spawns L1 in between),
+			// and every Awake and OnEnable precedes every Start.
+			foreach( string tag in new[] { "A", "B", "S2", "TD" } )
+				Expect( "Lifecycle " + tag + " OnEnable Follows Awake", Index( tag + ".OnEnable" ) == Index( tag + ".Awake" ) + 1 );
+			Expect( "Lifecycle S1 OnEnable Follows Awake And Spawn", Index( "S1.OnEnable" ) == Index( "L1.OnEnable" ) + 1 );
+			int lastAwakeOrEnable = -1, firstStart = int.MaxValue;
+			foreach( string tag in awoken ) lastAwakeOrEnable = Math.Max( lastAwakeOrEnable, Index( tag + ".Awake" ) );
+			foreach( string tag in booted )
+			{
+				lastAwakeOrEnable = Math.Max( lastAwakeOrEnable, Index( tag + ".OnEnable" ) );
+				firstStart = Math.Min( firstStart, Index( tag + ".Start" ) );
+			}
+			Expect( "Lifecycle All Awake And OnEnable Before Any Start", lastAwakeOrEnable < firstStart );
+
+			// Disabled and inactive components stay out of the phases they don't qualify for.
+			ExpectCount( "D.OnEnable", 0 );
+			ExpectCount( "D.Start", 0 );
+			ExpectCount( "E.OnEnable", 0 );
+			ExpectCount( "E.OnDisable", 0 );
+			ExpectCount( "E.Start", 0 );
+			foreach( string tag in new[] { "I", "I2" } )
+			{
+				ExpectCount( tag + ".Awake", 0 );
+				ExpectCount( tag + ".OnEnable", 0 );
+				ExpectCount( tag + ".Start", 0 );
+			}
+
+			// Components created by interpreted code mid-boot get Awake and OnEnable immediately, like Instantiate,
+			// and their Start from the native Start that follows.
+			foreach( string tag in new[] { "L1", "L2" } )
+			{
+				ExpectCount( tag + ".Awake", 1 );
+				ExpectCount( tag + ".OnEnable", 1 );
+				ExpectCount( tag + ".Start", 1 );
+			}
+			Expect( "Lifecycle L1 Spawned Straight After S1 Awake",
+				Index( "L1.Awake" ) == Index( "S1.Awake" ) + 1 && Index( "L1.OnEnable" ) == Index( "S1.Awake" ) + 2 );
+			Expect( "Lifecycle L2 Spawned Straight After S2 Start",
+				Index( "L2.Awake" ) == Index( "S2.Start" ) + 1 && Index( "L2.OnEnable" ) == Index( "S2.Start" ) + 2 );
+			ExpectOrder( "L1", "L1.Awake", "L1.OnEnable", "L1.Start" );
+			ExpectOrder( "L2", "L2.Awake", "L2.OnEnable", "L2.Start" );
+
+			// A fault in one component's Awake disables only that component and doesn't stop the boot.
+			ExpectCount( "F.OnEnable", 0 );
+			ExpectCount( "F.Start", 0 );
+			Expect( "Lifecycle Fault Disabled Only Faulting Proxy", proxies["F"].disabled && !proxies["A"].disabled && !proxies["S2"].disabled );
+			Expect( "Lifecycle Fault Did Not Disable Box", !cb.disabled );
+
+			int logged = Validator.EventLog.Count;
+			cb.DoCilboxBoot();
+			Expect( "Lifecycle Second Boot Is A No-op", Validator.EventLog.Count == logged );
+		}
+
+		// Runs after Boot, with the Cilbox already running.
+		public static void PostBoot( Cilbox.Cilbox cb )
+		{
+			// A component disabled at load and enabled later: OnEnable then Start, once. Its Awake already ran.
+			proxies["D"].enabled = true;
+			Native( proxies["D"], "OnEnable" );
+			Native( proxies["D"], "Start" );
+			ExpectCount( "D.Awake", 1 );
+			ExpectCount( "D.OnEnable", 1 );
+			ExpectCount( "D.Start", 1 );
+			ExpectOrder( "D", "D.Awake", "D.OnEnable", "D.Start" );
+
+			// OnDisable before the interpreted OnEnable ran was skipped above, and enabling later still works.
+			proxies["E"].enabled = true;
+			Native( proxies["E"], "OnEnable" );
+			Native( proxies["E"], "Start" );
+			ExpectCount( "E.OnEnable", 1 );
+			ExpectCount( "E.Start", 1 );
+			ExpectOrder( "E", "E.Awake", "E.OnEnable", "E.Start" );
+
+			// An inactive object that is registered but only becomes active after boot runs the full lifecycle then.
+			gos["I"].activeInHierarchy = true;
+			NativeLoad( proxies["I"] );
+			Native( proxies["I"], "Start" );
+			ExpectCount( "I.Awake", 1 );
+			ExpectCount( "I.OnEnable", 1 );
+			ExpectCount( "I.Start", 1 );
+			ExpectOrder( "I", "I.Awake", "I.OnEnable", "I.Start" );
+
+			// A proxy can be loaded early (e.g. through a field reference) before its Awake. Unity always sends Awake
+			// before OnEnable and Start, so interpreted OnEnable and Start wait for the interpreted Awake.
+			proxies["Z"].RuntimeProxyLoad();
+			Native( proxies["Z"], "OnEnable" );
+			Native( proxies["Z"], "Start" );
+			ExpectCount( "Z.Awake", 0 );
+			ExpectCount( "Z.OnEnable", 0 );
+			ExpectCount( "Z.Start", 0 );
+			NativeLoad( proxies["Z"] );
+			Native( proxies["Z"], "Start" );
+			ExpectCount( "Z.Awake", 1 );
+			ExpectCount( "Z.OnEnable", 1 );
+			ExpectCount( "Z.Start", 1 );
+			ExpectOrder( "Z", "Z.Awake", "Z.OnEnable", "Z.Start" );
+
+			// Unity never sends OnDisable or OnDestroy to a component that hasn't been awoken, so neither is interpreted.
+			// The proxy is still unregistered.
+			int count = cb.ProxyCount;
+			Native( proxies["I2"], "OnDisable" );
+			Native( proxies["I2"], "OnDestroy" );
+			ExpectCount( "I2.OnDisable", 0 );
+			ExpectCount( "I2.OnDestroy", 0 );
+			Expect( "Lifecycle Unawoken Proxy Unregistered On Destroy", cb.ProxyCount == count - 1 );
+
+			// OnDisable pairs with OnEnable, once per enable.
+			Native( proxies["A"], "OnDisable" );
+			Native( proxies["A"], "OnDisable" );
+			ExpectCount( "A.OnDisable", 1 );
+			Native( proxies["A"], "OnEnable" );
+			Native( proxies["A"], "Start" );
+			ExpectCount( "A.OnEnable", 2 );
+			ExpectCount( "A.Start", 1 );
+			Native( proxies["A"], "OnDisable" );
+			ExpectCount( "A.OnDisable", 2 );
+
+			count = cb.ProxyCount;
+			Native( proxies["A"], "OnDestroy" );
+			ExpectCount( "A.OnDestroy", 1 );
+			Expect( "Lifecycle Destroyed Proxy Unregistered", cb.ProxyCount == count - 1 );
+
+			// Unregistering must happen even when the interpreted OnDestroy throws.
+			count = cb.ProxyCount;
+			bool threw = false;
+			try { Native( proxies["TD"], "OnDestroy" ); }
+			catch( TargetInvocationException ) { threw = true; }
+			ExpectCount( "TD.OnDestroy", 1 );
+			Expect( "Lifecycle OnDestroy Fault Propagated", threw );
+			Expect( "Lifecycle Faulting Destroy Still Unregistered", cb.ProxyCount == count - 1 );
+
+			// Registering again is harmless and doesn't re-run anything.
+			count = cb.ProxyCount;
+			int logged = Validator.EventLog.Count;
+			cb.RegisterProxy( proxies["B"] );
+			Expect( "Lifecycle Duplicate Register Ignored", cb.ProxyCount == count && Validator.EventLog.Count == logged );
+
+			// Registration and removal stay cheap with very large numbers of proxies.
+			const int bulk = 100000;
+			CilboxProxy[] dummies = new CilboxProxy[bulk];
+			System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+			for( int i = 0; i < bulk; i++ )
+			{
+				dummies[i] = new CilboxProxy();
+				cb.RegisterProxy( dummies[i] );
+			}
+			Expect( "Lifecycle Bulk Register Count", cb.ProxyCount == count + bulk );
+			for( int i = bulk - 1; i >= 0; i-- )
+				cb.UnregisterProxy( dummies[i] );
+			cb.UnregisterProxy( dummies[0] );
+			sw.Stop();
+			Expect( "Lifecycle Bulk Unregister Count", cb.ProxyCount == count );
+			Expect( "Lifecycle Bulk Is Fast", sw.ElapsedMilliseconds < 5000 );
+		}
 	}
 
 
@@ -430,6 +722,8 @@ namespace TestCilbox
 			IsolationSurvivorBehaviour isoSurvivor = isoSurvivorGo.CreateComponent<IsolationSurvivorBehaviour>();
 			isoSurvivor.target = isoFault;
 
+			LifecycleTest.CreateObjects();
+
 			GameObject cbobj = new GameObject("BasicCilbox");
 			Cilbox.Cilbox cb = cbobj.AddComponent<CilboxTester>();
 			cb.exportDebuggingData = true;
@@ -452,8 +746,15 @@ namespace TestCilbox
 				perfPeerProxy = perfPeerGo.GetComponents<Cilbox.CilboxProxy>()[0];
 			}
 
+			LifecycleTest.PreBoot( cb );
+
+			// The perf behaviours now run their Awake/Start during the Cilbox boot, so they need the long timeout up front.
+			if( runPerf ) cb.timeoutLengthUs = PerfTimeoutUs;
+
 			try
 			{
+				LifecycleTest.Boot( cb );
+				LifecycleTest.PostBoot( cb );
 				cycleRootProxy.RuntimeProxyLoad();
 				Cilbox.CilboxProxy cycleRootChildField = (Cilbox.CilboxProxy)GetProxyFieldObject(cycleRootProxy, "child");
 				Cilbox.CilboxProxy cycleChildRootField = (Cilbox.CilboxProxy)GetProxyFieldObject(cycleChildProxy, "root");
@@ -462,8 +763,6 @@ namespace TestCilbox
 				Validator.Set( "Cycle Root Has Child", (cycleRootChildField != null).ToString() );
 				Validator.Set( "Cycle Child Has Root", (cycleChildRootField != null).ToString() );
 				Validator.Set( "Cycle Child BackRef Same", (ReferenceEquals(cycleRootChildField, cycleChildProxy) && ReferenceEquals(cycleChildRootField, cycleRootProxy)).ToString() );
-				proxy.GetType().GetMethod("Awake",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
-				proxy.GetType().GetMethod("Start",BindingFlags.Instance|BindingFlags.NonPublic,Type.EmptyTypes).Invoke( proxy, new object[0] );
 				Validator.Validate( "Start Test", "OK" );
 				Validator.Validate( "Start Marks", "I" );
 				Validator.Validate( "Arithmatic Test", "15" );
@@ -967,10 +1266,10 @@ namespace TestCilbox
 			Validator.Set( "Isolation Sibling Post", "skipped" );
 			try
 			{
-				InvokeProxyMethod( isoFaultProxy, "Start" );
+				isoFaultProxy.cls.InterpretMethod( isoFaultProxy, "StartTest", Array.Empty<object>() );
 				Validator.Set( "Isolation Fault Threw", "no" );
 			}
-			catch( TargetInvocationException )
+			catch( Exception )
 			{
 				Validator.Set( "Isolation Fault Threw", "yes" );
 			}

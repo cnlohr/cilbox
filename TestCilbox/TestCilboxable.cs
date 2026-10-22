@@ -1401,7 +1401,7 @@ namespace TestCilbox
 	public class IsolationFaultBehaviour : MonoBehaviour
 	{
 		public int marker = 42;
-		public void Start()
+		public void StartTest()
 		{
 			Validator.Set("Isolation Fault Started", "yes");
 			throw new Exception("Injected interpreted fault");
@@ -1440,5 +1440,57 @@ namespace TestCilbox
 				catch( Exception ) { Validator.Set("Isolation Reach Field", "blocked"); }
 			}
 		}
+	}
+
+	[Cilboxable]
+	public class LifecycleProbe : MonoBehaviour
+	{
+		public virtual string Tag() { return "?"; }
+		public virtual void AfterAwake() { }
+		public virtual void AfterStart() { }
+		public virtual void AfterDestroy() { }
+		public void Awake() { Validator.Log( Tag() + ".Awake" ); AfterAwake(); }
+		public void OnEnable() { Validator.Log( Tag() + ".OnEnable" ); }
+		public void Start() { Validator.Log( Tag() + ".Start" ); AfterStart(); }
+		public void OnDisable() { Validator.Log( Tag() + ".OnDisable" ); }
+		public void OnDestroy() { Validator.Log( Tag() + ".OnDestroy" ); AfterDestroy(); }
+	}
+
+	[Cilboxable] public class LifecycleProbeA : LifecycleProbe { public override string Tag() { return "A"; } }
+	[Cilboxable] public class LifecycleProbeB : LifecycleProbe { public override string Tag() { return "B"; } }
+	[Cilboxable] public class LifecycleProbeD : LifecycleProbe { public override string Tag() { return "D"; } }
+	[Cilboxable] public class LifecycleProbeE : LifecycleProbe { public override string Tag() { return "E"; } }
+	[Cilboxable] public class LifecycleProbeI : LifecycleProbe { public override string Tag() { return "I"; } }
+	[Cilboxable] public class LifecycleProbeI2 : LifecycleProbe { public override string Tag() { return "I2"; } }
+	[Cilboxable] public class LifecycleProbeL1 : LifecycleProbe { public override string Tag() { return "L1"; } }
+	[Cilboxable] public class LifecycleProbeL2 : LifecycleProbe { public override string Tag() { return "L2"; } }
+	[Cilboxable] public class LifecycleProbeZ : LifecycleProbe { public override string Tag() { return "Z"; } }
+
+	[Cilboxable]
+	public class LifecycleProbeFault : LifecycleProbe
+	{
+		public override string Tag() { return "F"; }
+		public override void AfterAwake() { throw new Exception( "Injected Awake fault" ); }
+	}
+
+	[Cilboxable]
+	public class LifecycleProbeThrowOnDestroy : LifecycleProbe
+	{
+		public override string Tag() { return "TD"; }
+		public override void AfterDestroy() { throw new Exception( "Injected OnDestroy fault" ); }
+	}
+
+	[Cilboxable]
+	public class LifecycleSpawnerAwake : LifecycleProbe
+	{
+		public override string Tag() { return "S1"; }
+		public override void AfterAwake() { TestUtil.SimulateInstantiate( 1 ); }
+	}
+
+	[Cilboxable]
+	public class LifecycleSpawnerStart : LifecycleProbe
+	{
+		public override string Tag() { return "S2"; }
+		public override void AfterStart() { TestUtil.SimulateInstantiate( 2 ); }
 	}
 }

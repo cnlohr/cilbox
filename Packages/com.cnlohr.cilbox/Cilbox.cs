@@ -2276,6 +2276,11 @@ spiperf.End();
 
 		public long usSpentLastFrame = 0;
 
+		protected readonly LinkedList<CilboxProxy> proxies = new();
+
+		public int ProxyCount => proxies.Count;
+		public bool DidBoot { get; private set; }
+
 		public Cilbox()
 		{
 			initialized = false;
@@ -2294,6 +2299,28 @@ spiperf.End();
 		public void ForceReinit()
 		{
 			initialized = false;
+		}
+
+		public void RegisterProxy(CilboxProxy proxy)
+		{
+			if (proxy.registryNode == null)
+				proxy.registryNode = proxies.AddLast(proxy);
+
+			// Run Awake and OnEnable synchronously if the Cilbox has already booted;
+			// Start will run via the proxy's Start method.
+			if (DidBoot)
+			{
+				proxyPhaseLoad(proxy);
+				proxyPhaseAwakeEnable(proxy);
+			}
+		}
+
+		public void UnregisterProxy(CilboxProxy proxy)
+		{
+			LinkedListNode<CilboxProxy> node = proxy.registryNode;
+			if (node == null || node.List != proxies) return;
+			proxies.Remove(node);
+			proxy.registryNode = null;
 		}
 
 		public void BoxInitialize( bool bSimulate = false )
@@ -2365,7 +2392,7 @@ spiperf.End();
 				case MetaTokenType.mtField:
 					// The type has been "sealed" so-to-speak. In that we have an index for it.
 					t.Name = st.name;
-					
+
 					t.fieldIsStatic = st.isStatic;
 
 					if( st.fieldHasIndex )
@@ -2379,7 +2406,7 @@ spiperf.End();
 					{
 						Type declaringType = usage.GetNativeTypeFromDescriptor( st.typeDescriptor );
 						t.declaringTypeName = declaringType.FullName;
-						if (declaringType == null) 
+						if (declaringType == null)
 						{
 							throw new CilboxException($"Could not find declaring type {t.declaringTypeName} for field {t.Name} in meta {st.metaTokenIndex}.");
 						}
@@ -2632,6 +2659,45 @@ spiperf.End();
 				}
 			}
 			Monitor.Exit( this );
+		}
+
+		private static readonly Action<CilboxProxy> proxyPhaseLoad = p => p.RuntimeProxyLoad();
+		private static readonly Action<CilboxProxy> proxyPhaseAwakeEnable = p => { p.TryAwake(); p.TryOnEnable(); };
+		private static readonly Action<CilboxProxy> proxyPhaseStart = p => p.TryStart();
+
+		private static void RunLifecyclePhase( CilboxProxy[] snapshot, Action<CilboxProxy> phase )
+		{
+			foreach( CilboxProxy proxy in snapshot )
+			{
+				if( !proxy ) continue;
+				try
+				{
+					phase( proxy );
+				}
+				catch( Exception e )
+				{
+					Debug.LogException( e );
+				}
+			}
+		}
+
+		public void DoCilboxBoot()
+		{
+			if( DidBoot ) return;
+
+			DidBoot = true;
+
+			CilboxProxy[] snapshot = new CilboxProxy[proxies.Count];
+			proxies.CopyTo( snapshot, 0 );
+
+			RunLifecyclePhase( snapshot, proxyPhaseLoad );
+			RunLifecyclePhase( snapshot, proxyPhaseAwakeEnable );
+			RunLifecyclePhase( snapshot, proxyPhaseStart );
+		}
+
+		void Start()
+		{
+			DoCilboxBoot();
 		}
 
 		void Update()
